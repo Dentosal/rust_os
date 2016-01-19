@@ -1,0 +1,10 @@
+[package]
+name = "rust_os"
+version = "0.1.0"
+authors = ["Dentosal <hannes.karppila@gmail.com>"]
+
+[lib]
+crate-type = ["staticlib"]  # static and standalone
+
+[dependencies]
+rlibc = "1.0.0"             # raw libc

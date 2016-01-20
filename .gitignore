@@ -3,4 +3,4 @@ Cargo.lock
 .DS_Store
 .vagrant/
 blog_os-master/
-output/
+build/

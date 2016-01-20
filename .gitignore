@@ -1,3 +1,5 @@
 target
 Cargo.lock
 .DS_Store
+.vagrant/
+blog_os-master/

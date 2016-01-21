@@ -1,5 +1,7 @@
-[BITS 16]
+; MASTER BOOT RECORD
+; STAGE 0
 
+[BITS 16]
 [ORG 0x7c00]
 
 boot:
@@ -10,7 +12,7 @@ boot:
     mov ss, ax
     ; initialize stack
     mov sp, 0x7bfe
-    ; load rust code into 0x7e00 so we can jump to it later
+    ; load more code into 0x7e00 so we can jump to it later
     mov ah, 2       ; read
     mov al, 15      ; 15 sectors (15/2 = 7.5 KiB)
     mov ch, 0       ; cylinder & 0xff
@@ -54,9 +56,11 @@ protected_mode:
     mov ss, eax
     ; set up stack
     mov esp, 0x7bfc
-    ; jump into rust
+    ; SCREEN: top left: "0 "
+    mov dword [0xb8000], 0x2f302f20
+
+    ; jump into stage 1
     call 0x7e00
-    jmp $
 
 gdtr:
     dw (gdt_end - gdt) + 1  ; size

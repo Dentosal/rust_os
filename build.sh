@@ -9,7 +9,8 @@ echo "Compiling source files..."
 
 echo "* bootloader"
 # compile bootloader
-nasm src/boot/boot.asm -f bin -o build/boot.bin
+nasm src/boot/boot_stage0.asm -f bin -o build/boot_stage0.bin
+nasm src/boot/boot_stage1.asm -f bin -o build/boot_stage1.bin
 
 echo "* kernel entry point"
 # compile kernel entry point
@@ -29,11 +30,13 @@ echo "Creating disk image..."
 # floppify :] ( or maybe imagify, isofy or harddiskify)
 echo "* create file"
 echo "* bootsector"
-cp build/boot.bin build/disk.img    # create image (boot.bin should be same size as actual floppy)
+cp build/boot_stage0.bin build/disk.img    # create image (boot.bin should be same size as actual floppy)
+dd "if=build/boot_stage1.bin" "of=build/disk.img" "bs=512" "seek=1" "count=1" "conv=notrunc"
 
 echo "* kernel"
-kernel_size=`grep "kernel_size" buildsystem/build.conf | python2 -c 'print(raw_input().split("#",1)[0].split(": ")[1])'`
-dd "if=build/kernel.bin" "of=build/disk.img" "bs=512" "seek=1" "count=$kernel_size" "conv=notrunc"
+kernel_size=`grep "kernel_size" buildsystem/build.conf | python2 -c 'print(raw_input().split("#",1)[0].split(":",1)[1].strip())'`
+kernel_offset=`grep "kernel_offset" buildsystem/build.conf | python2 -c 'print(raw_input().split("#",1)[0].split(":",1)[1].strip())'`
+dd "if=build/kernel.bin" "of=build/disk.img" "bs=512" "seek=$kernel_offset" "count=$kernel_size" "conv=notrunc"
 
 
 # TODO? clean?

@@ -57,7 +57,7 @@ protected_mode:
     ; set up stack
     mov esp, 0x7bfc
     ; SCREEN: top left: "0 "
-    mov dword [0xb8000], 0x2f302f20
+    mov dword [0xb8000], 0x2f202f30
 
     ; jump into stage 1
     call 0x7e00

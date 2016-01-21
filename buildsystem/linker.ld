@@ -1,25 +1,26 @@
-OUTPUT_FORMAT("binary")
 ENTRY(start)
-phys = 0x00010000;
-SECTIONS
-{
-  .text phys : AT(phys) {
-    code = .;
-    *(.text)
-    *(.rodata)
-    . = ALIGN(4096);
-  }
-  .data : AT(phys + (data - code))
+
+SECTIONS {
+  . = 1M;
+
+  .rodata : ALIGN(4K)
   {
-    data = .;
-    *(.data)
-    . = ALIGN(4096);
+    /* ensure that the kernel entry is at the beginning */
+    /* ???:  KEEP(*(.multiboot_header)) */
+    *(.rodata .rodata.*)
   }
-  .bss : AT(phys + (bss - code))
+
+  .text : ALIGN(4K)
   {
-    bss = .;
-    *(.bss)
-    . = ALIGN(4096);
+    *(.text .text.*)
   }
-  end = .;
+
+  .data : ALIGN(4K)
+  {
+    *(.data .data.*)
+  }
+
+  .data.rel.ro : ALIGN(4K) {
+    *(.data.rel.ro.local*) *(.data.rel.ro .data.rel.ro.*)
+  }
 }

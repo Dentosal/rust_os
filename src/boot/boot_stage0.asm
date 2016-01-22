@@ -23,8 +23,8 @@ boot:
     jc error
     ; load protected mode GDT and a null IDT (we don't need interrupts)
     cli
-    lgdt [gdtr]
-    lidt [idtr]
+    lgdt [gdtr32]
+    lidt [idtr32]
     ; set protected mode bit of cr0
     mov eax, cr0
     or eax, 1
@@ -55,22 +55,22 @@ protected_mode:
     mov gs, eax
     mov ss, eax
     ; set up stack
-    mov esp, 0x7bfc
+    mov esp, 0x7c00 ; stack grows downwards
     ; SCREEN: top left: "0 "
     mov dword [0xb8000], 0x2f202f30
 
     ; jump into stage 1
     call 0x7e00
 
-gdtr:
-    dw (gdt_end - gdt) + 1  ; size
-    dd gdt                  ; offset
+gdtr32:
+    dw (gdt32_end - gdt32) + 1  ; size
+    dd gdt32                    ; offset
 
-idtr:
+idtr32:
     dw 0
     dd 0
 
-gdt:
+gdt32:
     ; null entry
     dq 0
     ; code entry
@@ -87,7 +87,7 @@ gdt:
     db 0b10010010   ; access byte - data
     db 0x4f         ; flags/(limit 16:19). flag is set to 32 bit protected mode
     db 0x00         ; base 24:31
-gdt_end:
+gdt32_end:
 
 times (0x200 - 0x2)-($-$$) db 0
 db 0x55

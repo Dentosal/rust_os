@@ -3,10 +3,14 @@ ENTRY(start)
 SECTIONS {
   . = 1M;
 
+  .entry :
+  {
+    /* ensure that the kernel entry code is at the beginning */
+    *(.entry)
+  }
+
   .rodata : ALIGN(4K)
   {
-    /* ensure that the kernel entry is at the beginning */
-    /* ???:  KEEP(*(.multiboot_header)) */
     *(.rodata .rodata.*)
   }
 

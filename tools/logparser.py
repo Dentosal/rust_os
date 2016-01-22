@@ -1,4 +1,4 @@
-import os, sys
+import os, sys, re
 class colors:
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
@@ -49,4 +49,11 @@ while not "Guest state at power off" in content[ind]:
     if ind > len(content) - 1:
         print("Internal script error #2")
         sys.exit(2)
-print "\n".join([" = ".join([q.split("=")[0], apply_colors(q.split("=")[1])]) for i in content[ind+2:ind+4] for q in i.split()[1:] if "=" in q and not q[0]=="=" and not "iopl" in q])
+
+index = ind+2
+while not "{" in content[index]:
+    for register, value in re.findall("([a-zA-Z0-9]+)\\s?=([0-9a-f]+)", content[index].split(" ",1)[1]):
+        if register == "iopl":
+            break
+        print register+(" "*(4-len(register)))+"= "+apply_colors(value)
+    index += 1

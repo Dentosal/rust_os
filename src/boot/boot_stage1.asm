@@ -10,6 +10,12 @@
 [ORG 0x7e00]
 
 
+%macro lp 0
+mov dword [0xb8000 + 80*12 + 80], 0x0f4d0f4a
+mov dword [0xb8000 + 80*12 + 84], 0x0f250f50
+jmp $
+%endmacro
+
 stage1:
     ; SCREEN: top left: "11"
     mov dword [0xb8000], 0x2f312f31
@@ -19,8 +25,13 @@ stage1:
 
     mov ecx, 0xBEEF0001
 
-    ; parse elf header and relocate kernel
+    ; parse elf header
     ; http://wiki.osdev.org/ELF#Tables
+    ;
+    ; Because we are working in protected mode, we assume some values to fit in 32 bits.
+    ; Of course we test thay they are, but this code gives error if they aren't
+    ; It's not good practice, but... here we go :]
+    ;
     ; elf error messages begin with "E"
     mov al, 'E'
 
@@ -46,9 +57,7 @@ stage1:
     mov ah, 'V'
     cmp byte [loadpoint + 0x0006], 0x2
 
-
     ; Now lets trust it's actually real and valid elf file
-
 
     ; kernel entry position must be 0x_00000000_00010000
     ; (error code : "EP")
@@ -61,19 +70,105 @@ stage1:
     ; load point is correct, great. print green OK
     mov dword [0xb8000 + 80*24], 0x2f4b2f4f
 
-    ; Relocate elf image to new position
-    mov esi, loadpoint
-    mov edi, 0x00010000
-    cld ; copy forward
-    mov ecx, (14 * 0x200)   ; image max size
-    rep movsb   ; https://en.wikibooks.org/wiki/X86_Assembly/Data_Transfer#Move_String
 
+    ; Parse program headers and relocate sections
+    ; http://wiki.osdev.org/ELF#Program_header
+    ; (error code : "EH")
+    mov ah, 'H'
+
+    ; We know that program header size is 56 (=0x38) bytes
+    ; still, lets check it:
+    cmp word [loadpoint + 54], 0x38
+    jne error
+
+    ; get "Program header table position", check that it is max 32bits
+    mov ebx, dword [loadpoint + 32]
+    cmp dword [loadpoint + 36], 0x00000000
+    jne error
+    add ebx, loadpoint ; now ebx points to first program header
+
+    ; get size (length) of "Program header table position"
+    mov ecx, 0
+    mov cx, [loadpoint + 52]
+
+    ; loop through headers
+.loop_headers:
+    ; First, lets check that this sector should be loaded
+    cmp dword [ebx], 1 ; load: this is important
+    jne .next   ; if not important: continue
+
+
+    ; load: clear p_memsz bytes at p_vaddr to 0, then copy p_filesz bytes from p_offset to p_vaddr
+    push ecx
+
+
+    ; lets ignore some (probably important) stuff here
+    ; Again, because we are working in protected mode, we assume some values to fit in 32 bits.
+
+    ; esi = p_offset
+    mov esi, [ebx + 8]
+    cmp dword [ebx + 12], 0x00000000
+    jne error
+    add esi, loadpoint  ; now points to begin of buffer we must copy
+
+    ; edi = p_vaddr
+    mov edi, [ebx + 16]
+    cmp dword [ebx + 20], 0x00000000
+    jne error
+
+    ; ecx = p_memsz
+    mov ecx, [ebx + 40]
+    cmp dword [ebx + 44], 0x00000000
+    jne error
+
+    ; <1> clear p_memsz bytes at p_vaddr to 0
+    push edi
+.loop_clear:
+    mov byte [edi], 0
+    inc edi
+    loop .loop_clear
+    pop edi
+    ; </1>
+
+    ; ecx = p_filesz
+    mov ecx, [ebx + 32]
+    cmp dword [ebx + 36], 0x00000000
+    jne error
+
+    ; <2> copy p_filesz bytes from p_offset to p_vaddr
+    ; uses: esi, edi, ecx
+    rep movsb   ; https://en.wikibooks.org/wiki/X86_Assembly/Data_Transfer#Move_String
+    ; </2>
+
+    pop ecx
+    ; next entry
+.next:
+    add ebx, 0x38
+    loop .loop_headers
+
+    ; ELF relocation done
+
+    ; Relocate elf image to new position
+    ;mov esi, loadpoint
+    ;mov edi, 0x00010000
+    ;cld ; copy forward
+    ;mov ecx, (14 * 0x200)   ; image max size
+    ;rep movsb   ; https://en.wikibooks.org/wiki/X86_Assembly/Data_Transfer#Move_String
 
     ; determine point to jump
     ;mov ebx, dword [0x00010000 + 32]    ; edx = Program header table position
     ; first entry in table is first section (our entry section!)
     ;mov edi, 0x00010000
     ;add edi, dword [ebx + 8]    ; p_offset
+
+
+
+
+
+
+
+
+
 
     ; going to byte bytes mode (8*8 = 2**6 = 64 bits = Long mode)
 
@@ -93,7 +188,7 @@ stage1:
     mov edx, 0xCAFE
 
     ; jump into kernel entry (relocated to 0x00010000)
-    jmp gdt64.code:0x00011000
+    jmp gdt64.code:0x00010000
 
 
 ; Prints `ERR: ` and the given 2-character error code to screen (TL) and hangs.

@@ -12,14 +12,14 @@ start:
     mov ecx, 0xBEEF0002
     mov rax, test_main
     mov rbx, [test_main]
-    mov rdx, 0xCAFE
-    jmp $
+    mov rdx, 0xf00d
 
     push ax
     mov al, '*'
     mov byte [0xb8000], al
     pop ax
 
+    jmp $
 
     mov ecx, 0xBEEF0003
     call test_main

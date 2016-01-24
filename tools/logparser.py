@@ -8,7 +8,7 @@ class colors:
     ENDC = '\033[0m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
-HIGHLIGHT = ["cafe", "beef", "dead", "feed"]
+HIGHLIGHT = ["cafe", "beef", "dead", "feed", "f00d"]
 
 def apply_colors(s):
     res = ""

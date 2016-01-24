@@ -1,6 +1,8 @@
 [BITS 64]
 
 global start
+extern rust_main
+extern test_main
 
 section .entry
 start:
@@ -8,19 +10,21 @@ start:
     mov byte [0xb8000], al
 
     mov ecx, 0xBEEF0002
-    mov edx, test_main
-    mov eax, rust_main
+    mov rax, test_main
+    mov rbx, [test_main]
+    mov rdx, 0xCAFE
     jmp $
 
-    extern rust_main
-    extern test_main
-    mov rsi, test_main
-    mov rdi, [test_main]
-    mov eax, start
-    mov ebx, [start]
-    call test_main
-    mov ecx, 0xBEEF0003
+    push ax
+    mov al, '*'
+    mov byte [0xb8000], al
+    pop ax
 
+
+    mov ecx, 0xBEEF0003
+    call test_main
+    mov ecx, 0xBEEF0004
+    jmp $
 
     mov rax, 0x4f724f204f534f4f
     mov [0xb8000], rax

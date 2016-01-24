@@ -5,8 +5,8 @@ extern crate rlibc;
 
 #[no_mangle]
 pub extern fn rust_main() {
-    // let buffer_ptr = (0xb8000) as *mut _;
-    // unsafe { *buffer_ptr = 0xbeef };
+    let buffer_ptr = (0xb8000) as *mut _;
+    unsafe { *buffer_ptr = 0xbeef };
     //
     // loop{}
 }

@@ -47,7 +47,7 @@ if errors:
 while not "Guest state at power off" in content[ind]:
     ind += 1
     if ind > len(content) - 1:
-        print("Internal script error #2")
+        print("Virtual machine still running.")
         sys.exit(2)
 
 index = ind+2

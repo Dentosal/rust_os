@@ -1,0 +1,38 @@
+http://wiki.osdev.org/ELF#Tables
+
+Magic           7f 45 4c 46
+64-bit          02
+Little-endian   01
+Elf version: 1  01
+OS ABI (Sys V)  00
+
+Padding         00 00 00 00 00 00 00 00
+
+
+Executable      02 00
+x86-64 instrcns 3e 00
+Elf version: 1  01 00 00 00
+
+Prgm entry pos  00 00 01 00 00 00 00 00
+
+
+Prgm hdtbl pos  40 00 00 00 00 00 00 00
+
+Sctn hdtbl pos  30 20 00 00 00 00 00 00
+
+
+Flags           00 00 00 00
+Header size     40 00
+Prgm hdtbl e s  38 00
+
+Prgm hdtbl len  02 00
+Sechtbl ent sz  40 00
+Sechtbl len     06 00
+Sechtbl indx    03 00
+
+
+
+00000000  7f 45 4c 46 02 01 01 00  00 00 00 00 00 00 00 00  |.ELF............|
+00000010  02 00 3e 00 01 00 00 00  00 00 00 00 00 00 00 00  |..>.............|
+00000020  40 00 00 00 00 00 00 00  30 20 00 00 00 00 00 00  |@.......0 ......|
+00000030  00 00 00 00 40 00 38 00  02 00 40 00 06 00 03 00  |....@.8...@.....|

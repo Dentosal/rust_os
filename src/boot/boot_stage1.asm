@@ -3,11 +3,11 @@
 
 
 ; Page tables
-%define page_table_section_start 0x00010000
-%define page_table_p4 0x00010000
-%define page_table_p3 0x00011000
-%define page_table_p2 0x00012000
-%define page_table_section_end 0x00013000
+%define page_table_section_start 0x00020000
+%define page_table_p4 0x00020000
+%define page_table_p3 0x00021000
+%define page_table_p2 0x00022000
+%define page_table_section_end 0x00023000
 ; Kernel elf executable initial load point
 %define loadpoint 0x8000
 
@@ -75,14 +75,19 @@ stage1:
     ; load point is correct, great. print green OK
     mov dword [0xb8000 + 80*24], 0x2f4b2f4f
 
-    ; Relocate kernel to new position
+    ; Relocate elf image to new position
     mov esi, loadpoint
     mov edi, 0x00010000
     cld ; copy forward
-    mov ecx, (14 * 0x200)   ; kernel size
-    movsb   ; https://en.wikibooks.org/wiki/X86_Assembly/Data_Transfer#Move_String
+    mov ecx, (14 * 0x200)   ; image max size
+    rep movsb   ; https://en.wikibooks.org/wiki/X86_Assembly/Data_Transfer#Move_String
 
 
+    ; determine point to jump
+    ;mov ebx, dword [0x00010000 + 32]    ; edx = Program header table position
+    ; first entry in table is first section (our entry section!)
+    ;mov edi, 0x00010000
+    ;add edi, dword [ebx + 8]    ; p_offset
 
     ; going to byte bytes mode (8*8 = 2**6 = 64 bits = Long mode)
 
@@ -94,13 +99,15 @@ stage1:
     ; (I think memory access will fail)
 
     ; update selectors
-    mov ax, gdt64.data
-    mov ss, ax  ; stack selector
-    mov ds, ax  ; data selector
-    mov es, ax  ; extra selector
+    mov dx, gdt64.data
+    mov ss, dx  ; stack selector
+    mov ds, dx  ; data selector
+    mov es, dx  ; extra selector
 
-    ; jump into kernel entry (relocated to 0x0000)
-    jmp gdt64.code:0x0000
+    mov edx, 0xCAFE
+
+    ; jump into kernel entry (relocated to 0x00010000)
+    jmp gdt64.code:0x00011000
 
 ; Check for SSE and enable it.
 ; http://os.phil-opp.com/set-up-rust.html#enabling-sse
@@ -218,22 +225,22 @@ error:
     hlt
 
 ; Convert dl to it's ascii hex representation and set color to black/white
-ReprHex:
-	push ax
-	push cx
-
-    mov	al, 0x0F    ; Color: black/white
-    and	al, dl
-    ; convert al to ascii hex (four instructions)
-    add	al, 0x90
-    daa
-    adc	al, 0x40
-    daa
-
-    mov dl, al
-    pop cx
-    pop ax
-    ret
+;ReprHex:
+;	push ax
+;	push cx
+;
+;    mov	al, 0x0F    ; Color: black/white
+;    and	al, dl
+;    ; convert al to ascii hex (four instructions)
+;    add	al, 0x90
+;    daa
+;    adc	al, 0x40
+;    daa
+;
+;    mov dl, al
+;    pop cx
+;    pop ax
+;    ret
 
 
 ; Constant data section

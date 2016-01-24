@@ -4,13 +4,14 @@ global start
 
 section .entry
 start:
-
-    mov ecx, 0xBEEF0001
     mov al, '?'
     mov byte [0xb8000], al
-    jmp start
 
     mov ecx, 0xBEEF0002
+    mov edx, test_main
+    mov eax, rust_main
+    jmp $
+
     extern rust_main
     extern test_main
     mov rsi, test_main

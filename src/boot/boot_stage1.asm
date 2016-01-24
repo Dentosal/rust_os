@@ -72,16 +72,14 @@ stage1:
     cmp dword [loadpoint + 28], 0x00000000
     jne error
 
-    ; load point is 0, great.
+    ; load point is correct, great. print green OK
     mov dword [0xb8000 + 80*24], 0x2f4b2f4f
-    hlt
 
-
-    ; Relocate kernel from loadpoint to 0x0000
+    ; Relocate kernel to new position
     mov esi, loadpoint
-    mov edi, 0
+    mov edi, 0x00010000
     cld ; copy forward
-    mov ecx, (14 * 0x200)
+    mov ecx, (14 * 0x200)   ; kernel size
     movsb   ; https://en.wikibooks.org/wiki/X86_Assembly/Data_Transfer#Move_String
 
 

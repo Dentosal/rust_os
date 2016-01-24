@@ -1,6 +1,9 @@
 ; MASTER BOOT RECORD
 ; STAGE 0
 
+%define loadpoint 0x8000
+; now kernel is located at range(0x8000, 0x9c00)
+
 [BITS 16]
 [ORG 0x7c00]
 
@@ -18,7 +21,7 @@ boot:
     mov ch, 0       ; cylinder & 0xff
     mov cl, 2       ; sector | ((cylinder >> 2) & 0xc0)
     mov dh, 0       ; head
-    mov bx, 0x7e00  ; read buffer
+    mov bx, (loadpoint - 0x200)  ; read buffer (now next stage is located at (loadpoint - 0x200) and kernel just after that)
     int 0x13
     jc error
     ; load protected mode GDT and a null IDT (we don't need interrupts)
@@ -56,11 +59,28 @@ protected_mode:
     mov ss, eax
     ; set up stack
     mov esp, 0x7c00 ; stack grows downwards
+
+    call enable_A20
+
     ; SCREEN: top left: "0 "
     mov dword [0xb8000], 0x2f202f30
 
     ; jump into stage 1
     call 0x7e00
+
+
+; http://wiki.osdev.org/A20_Line
+; Using only "Fast A20" gate
+; Might be a bit unreliable, but it is small :]
+enable_A20:
+    in al, 0x92
+    test al, 2
+    jnz .done
+    or al, 2
+    and al, 0xFE
+    out 0x92, al
+.done:
+    ret
 
 gdtr32:
     dw (gdt32_end - gdt32) + 1  ; size

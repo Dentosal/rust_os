@@ -2,13 +2,14 @@
 ; STAGE 1
 
 
-; Page tables (because cant use resb in flat binary)
-; this must
-%define page_table_section_start 0x00020000
-%define page_table_p4 0x00020000
-%define page_table_p3 0x00021000
-%define page_table_p2 0x00022000
-%define page_table_section_end 0x00023000
+; Page tables
+%define page_table_section_start 0x00010000
+%define page_table_p4 0x00010000
+%define page_table_p3 0x00011000
+%define page_table_p2 0x00012000
+%define page_table_section_end 0x00013000
+; Kernel elf executable initial load point
+%define loadpoint 0x8000
 
 
 [BITS 32]
@@ -18,10 +19,8 @@
 stage1:
     ; SCREEN: top left: "01"
     mov dword [0xb8000], 0x2f312f30
-    mov ecx, 0xBEEF0001
 
     ; "high-level" code block follows
-    call enable_A20
     call check_long_mode
     call set_up_page_tables
     call enable_paging
@@ -29,16 +28,72 @@ stage1:
     ; end of "high-level" code block
 
 
-    ; SCREEN: top left: "2 "
-    mov dword [0xb8000], 0x2f202f32
+    ; SCREEN: top2 left: "2 "
+    mov dword [0xb8000 + 2*80], 0x2f202f32
+
+    mov ecx, 0xBEEF0001
+
+    ; parse elf header and relocate kernel
+    ; http://wiki.osdev.org/ELF#Tables
+    ; elf error messages begin with "E"
+    mov al, 'E'
+
+    ; magic number 0x7f+'ELF'
+    ; if not elf show error message "E!"
+    mov ah, '!'
+    cmp dword [loadpoint + 0], 0x464c457f
+    jne error
+
+    ; bitness and instrucion set (must be 64, so values must be 2 and 0x3e) (error code: "EB")
+    mov ah, 'B'
+    cmp byte [loadpoint + 4], 0x2
+    jne error
+    cmp word [loadpoint + 18], 0x3e
+    jne error
+
+    ; endianess (must be little endian, so value must be 1) (error code: "EE")
+    mov ah, 'E'
+    cmp byte [loadpoint + 5], 0x1
+    jne error
+
+    ; elf version (must be 2) (error code: "EV")
+    mov ah, 'V'
+    cmp byte [loadpoint + 0x0006], 0x2
+
+
+    ; Now lets trust it's actually real and valid elf file
+
+
+    ; kernel entry position must be 0x_00000000_00010000
+    ; (error code : "EP")
+    mov ah, 'P'
+    cmp dword [loadpoint + 24], 0x00010000
+    jne error
+    cmp dword [loadpoint + 28], 0x00000000
+    jne error
+
+    ; load point is 0, great.
+    mov dword [0xb8000 + 80*24], 0x2f4b2f4f
+    hlt
+
+
+    ; Relocate kernel from loadpoint to 0x0000
+    mov esi, loadpoint
+    mov edi, 0
+    cld ; copy forward
+    mov ecx, (14 * 0x200)
+    movsb   ; https://en.wikibooks.org/wiki/X86_Assembly/Data_Transfer#Move_String
+
 
 
     ; going to byte bytes mode (8*8 = 2**6 = 64 bits = Long mode)
-    mov edx, [0x9000]
-    mov ecx, 0xBEEF00FF
 
     ; load GDT
     lgdt [gdt64.pointer]
+
+    ; Now we are in some kind of compatibility mode
+    ; Don't do anything else that update selectors and jump
+    ; (I think memory access will fail)
 
     ; update selectors
     mov ax, gdt64.data
@@ -46,29 +101,8 @@ stage1:
     mov ds, ax  ; data selector
     mov es, ax  ; extra selector
 
-
-
-    ; SCREEN: top left: "23"
-    ;mov dword [0xb8000], 0x2f332f32
-
-    mov ecx, 0xBEEF0001
-
-    ; jump into kernel entry
-    jmp gdt64.code:0x9000
-
-
-; http://wiki.osdev.org/A20_Line
-; Using only "Fast A20" gate
-; Might be a bit unreliable, but it is small :]
-enable_A20:
-    in al, 0x92
-    test al, 2
-    jnz .done
-    or al, 2
-    and al, 0xFE
-    out 0x92, al
-.done:
-    ret
+    ; jump into kernel entry (relocated to 0x0000)
+    jmp gdt64.code:0x0000
 
 ; Check for SSE and enable it.
 ; http://os.phil-opp.com/set-up-rust.html#enabling-sse
@@ -118,6 +152,7 @@ check_long_mode:
 ; http://os.phil-opp.com/entering-longmode.html#set-up-identity-paging
 ; http://wiki.osdev.org/Paging
 ; http://pages.cs.wisc.edu/~remzi/OSTEP/vm-paging.pdf
+; Identity map first 1GiB (0x200000 * 0x200)
 ; using 2MiB pages
 set_up_page_tables:
     ; map first P4 entry to P3 table
@@ -141,8 +176,8 @@ set_up_page_tables:
     mov [page_table_p2 + ecx * 8], eax  ; map entry
 
     inc ecx
-    cmp ecx, 512                ; is the whole P2 table is mapped?
-    jne .map_page_table_p2_loop ; next entry
+    cmp ecx, 0x200                  ; is the whole P2 table is mapped?
+    jne .map_page_table_p2_loop     ; next entry
     ; done
     ret
 
@@ -183,6 +218,25 @@ error:
     mov byte  [0xb800a], al
     mov byte  [0xb800c], ah
     hlt
+
+; Convert dl to it's ascii hex representation and set color to black/white
+ReprHex:
+	push ax
+	push cx
+
+    mov	al, 0x0F    ; Color: black/white
+    and	al, dl
+    ; convert al to ascii hex (four instructions)
+    add	al, 0x90
+    daa
+    adc	al, 0x40
+    daa
+
+    mov dl, al
+    pop cx
+    pop ax
+    ret
+
 
 ; Constant data section
 

@@ -4,10 +4,11 @@
 extern crate rlibc;
 
 #[no_mangle]
-pub extern "C" fn rust_main() {
-    let mut a = ("hello", 42);
-    a.1 += 1;
-    loop {}
+pub extern fn rust_main() {
+    // let buffer_ptr = (0xb8000) as *mut _;
+    // unsafe { *buffer_ptr = 0xbeef };
+    //
+    // loop{}
 }
 
 #[cfg(not(test))]
@@ -17,5 +18,7 @@ extern "C" fn eh_personality() {}
 #[cfg(not(test))]
 #[lang = "panic_fmt"]
 extern "C" fn panic_fmt(fmt: core::fmt::Arguments, file: &str, line: u32) -> ! {
+    let buffer_ptr = (0xb8000) as *mut _;
+    unsafe { *buffer_ptr = 0xbedebead as u32 };
     loop {}
 }

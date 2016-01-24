@@ -1,14 +1,25 @@
 [BITS 64]
 
 global start
-extern rust_main
 
 section .entry
 start:
-    mov ecx, 0xBEEFDEAD
-    mov rbx, 0xbeefbeefbeefbeef
-    mov qword [0xb8000], rbx
-    call rust_main
+
+    mov ecx, 0xBEEF0001
+    mov al, '?'
+    mov byte [0xb8000], al
+    jmp start
+
+    mov ecx, 0xBEEF0002
+    extern rust_main
+    extern test_main
+    mov rsi, test_main
+    mov rdi, [test_main]
+    mov eax, start
+    mov ebx, [start]
+    call test_main
+    mov ecx, 0xBEEF0003
+
 
     mov rax, 0x4f724f204f534f4f
     mov [0xb8000], rax

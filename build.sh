@@ -23,7 +23,7 @@ cargo rustc --target x86_64-unknown-linux-gnu --release -- -Z no-landing-pads
 echo "Linking objects..."
 
 # link
-ld -n --gc-sections -T buildsystem/linker.ld -o build/kernel.bin build/entry.o build/entry2_test.o target/x86_64-unknown-linux-gnu/release/librust_os.a
+ld -n --gc-sections -T buildsystem/linker.ld -o build/kernel.bin build/entry.o target/x86_64-unknown-linux-gnu/release/librust_os.a
 
 echo "Creating disk image..."
 

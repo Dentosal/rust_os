@@ -4,3 +4,4 @@ Cargo.lock
 .vagrant/
 blog_os-master/
 build/
+dump*.txt

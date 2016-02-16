@@ -17,7 +17,7 @@ boot:
     mov sp, 0x7bfe
     ; load more code into 0x7e00 so we can jump to it later
     mov ah, 2       ; read
-    mov al, 15      ; 15 sectors (15/2 = 7.5 KiB)
+    mov al, 20      ; 20 sectors (kernel max size is now 19 sectors = 19*512 bytes)
     mov ch, 0       ; cylinder & 0xff
     mov cl, 2       ; sector | ((cylinder >> 2) & 0xc0)
     mov dh, 0       ; head
@@ -250,4 +250,5 @@ gdt32:
 times (0x200 - 0x2)-($-$$) db 0
 db 0x55
 db 0xaa
-times (0x000b4000 - 0x200) db 0 ; Fill floppy (Standard 1.44M IBM Floppy)
+times (0x10000 - 0x0200) db 0 ; Smaller image
+;times (0x000b4000 - 0x200) db 0 ; Fill floppy (Standard 1.44M IBM Floppy)

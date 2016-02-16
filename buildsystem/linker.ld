@@ -9,13 +9,13 @@ SECTIONS {
     /* ensure that the kernel entry code is at the beginning */
     *(.entry)
   }
-  .rodata : ALIGN(0x1000)
-  {
-    *(.rodata .rodata.*)
-  }
   .text : ALIGN(0x1000)
   {
     *(.text .text.*)
+  }
+  .rodata : ALIGN(0x1000)
+  {
+  *(.rodata .rodata.*)
   }
 
   .data : ALIGN(0x1000)
@@ -23,7 +23,8 @@ SECTIONS {
     *(.data .data.*)
   }
 
-  .data.rel.ro : ALIGN(0x1000) {
+  .data.rel.ro : ALIGN(0x1000)
+  {
     *(.data.rel.ro.local*) *(.data.rel.ro .data.rel.ro.*)
   }
 }

@@ -71,6 +71,7 @@ stage1:
     mov dword [0xb8000 + 80*24], 0x2f4b2f4f
 
 
+    ;;jmp .over
     ; Parse program headers and relocate sections
     ; http://wiki.osdev.org/ELF#Program_header
     ; (error code : "EH")
@@ -81,26 +82,31 @@ stage1:
     cmp word [loadpoint + 54], 0x38
     jne error
 
+
     ; get "Program header table position", check that it is max 32bits
     mov ebx, dword [loadpoint + 32]
     cmp dword [loadpoint + 36], 0x00000000
     jne error
     add ebx, loadpoint ; now ebx points to first program header
 
-    ; get size (length) of "Program header table position"
+    ; get length of program header table
     mov ecx, 0
-    mov cx, [loadpoint + 52]
+    mov cx, [loadpoint + 56]
 
     ; loop through headers
 .loop_headers:
     ; First, lets check that this sector should be loaded
+
+    mov word [0xb8040 + ecx*2], 0x0f2b  ; Print plus-chars to first line to show process
+
     cmp dword [ebx], 1 ; load: this is important
     jne .next   ; if not important: continue
 
 
+    mov word [0xb8040 + ecx*2], 0x0f2a  ; Overwrite plus-chars with asterisks to first line to show process
+
     ; load: clear p_memsz bytes at p_vaddr to 0, then copy p_filesz bytes from p_offset to p_vaddr
     push ecx
-
 
     ; lets ignore some (probably important) stuff here
     ; Again, because we are working in protected mode, we assume some values to fit in 32 bits.
@@ -141,34 +147,22 @@ stage1:
     ; </2>
 
     pop ecx
+
     ; next entry
+    loop .loop_headers
+
+    ; no next entry, done
+    jmp .over
+
 .next:
-    add ebx, 0x38
+    add ebx, 0x38   ; skip entry (0x38 is entry size)
     loop .loop_headers
 
     ; ELF relocation done
-
-    ; Relocate elf image to new position
-    ;mov esi, loadpoint
-    ;mov edi, 0x00010000
-    ;cld ; copy forward
-    ;mov ecx, (14 * 0x200)   ; image max size
-    ;rep movsb   ; https://en.wikibooks.org/wiki/X86_Assembly/Data_Transfer#Move_String
-
-    ; determine point to jump
-    ;mov ebx, dword [0x00010000 + 32]    ; edx = Program header table position
-    ; first entry in table is first section (our entry section!)
-    ;mov edi, 0x00010000
-    ;add edi, dword [ebx + 8]    ; p_offset
-
-
-
-
-
-
-
-
-
+.over:
+    mov edx, 0xFFFF00D7
+    mov eax, [0x00010000]
+    mov ebx, [0x00011000]
 
     ; going to byte bytes mode (8*8 = 2**6 = 64 bits = Long mode)
 
@@ -185,7 +179,7 @@ stage1:
     mov ds, dx  ; data selector
     mov es, dx  ; extra selector
 
-    mov edx, 0xCAFE
+    mov edx, 0x1000CAFE
 
     ; jump into kernel entry (relocated to 0x00010000)
     jmp gdt64.code:0x00010000
@@ -194,12 +188,12 @@ stage1:
 ; Prints `ERR: ` and the given 2-character error code to screen (TL) and hangs.
 ; args: ax=(al,ah)=error_code (2 characters)
 error:
-    mov dword [0xb8000], 0x4f524f45
-    mov dword [0xb8004], 0x4f3a4f52
-    mov dword [0xb8008], 0x4f204f20
-    mov dword [0xb800a], 0x4f204f20
-    mov byte  [0xb800a], al
-    mov byte  [0xb800c], ah
+    mov dword [0xb8000 + 5 * 2*80], 0x4f524f45
+    mov dword [0xb8004 + 5 * 2*80], 0x4f3a4f52
+    mov dword [0xb8008 + 5 * 2*80], 0x4f204f20
+    mov dword [0xb800a + 5 * 2*80], 0x4f204f20
+    mov byte  [0xb800a + 5 * 2*80], al
+    mov byte  [0xb800c + 5 * 2*80], ah
     hlt
 
 ; Convert dl to it's ascii hex representation and set color to black/white
@@ -236,3 +230,8 @@ gdt64:
 
 
 times (0x200-($-$$)) db 0 ; fill sector
+
+
+; ecx = 00001013 -> 00000000
+; esi = 00009000 -> 0000a013
+; edi = 00010000 -> 00011013

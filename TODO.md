@@ -1,2 +1,2 @@
 # Fixme
-* [ ] Relocate kernel ("without=now" causes GPF or PF)
+* [ x ] Relocate kernel ("without=now" causes GPF or PF)

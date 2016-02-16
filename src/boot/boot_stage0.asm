@@ -24,6 +24,12 @@ boot:
     mov bx, (loadpoint - 0x200)  ; read buffer (now next stage is located at (loadpoint - 0x200) and kernel just after that)
     int 0x13
     jc load_error
+    ; hide cursor
+    mov bh, 0
+    mov ah, 2
+    mov dl, 100
+    mov dh, 100
+    int 10h
     ; load protected mode GDT and a null IDT (we don't need interrupts)
     cli
     lgdt [gdtr32]

@@ -1,14 +1,30 @@
-#![feature(lang_items)]
 #![no_std]
+#![feature(lang_items)]
+#![feature(unique)]
+#![feature(const_fn)]
 
 extern crate rlibc;
+extern crate spin;
 
+mod vga_buffer;
+mod terminal;
+
+
+/// The kernel main function
 #[no_mangle]
 pub extern fn rust_main() {
-    let buffer_ptr = (0xb8000) as *mut _;
-    unsafe { *buffer_ptr = 0xbedebead as u32 };
-    //
-    // loop {}
+    use core::fmt::Write;
+
+    let mut tty = terminal::Terminal::new();
+
+    tty.write_byte(b'x');
+    tty.write_byte(b'y');
+    tty.write_byte(b'\n');
+    tty.write_str("Test");
+
+    // FIXME: causes guru meditation: write!(tty, ", some numbers: {} {}", 42, 1.337);
+
+    loop{}
 }
 
 #[cfg(not(test))]

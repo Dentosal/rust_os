@@ -42,9 +42,17 @@ impl Terminal {
     pub fn new() -> Terminal {
         Terminal {
             raw_mode: false,
-            output_color: CellColor::new(Color::White, Color::Black),
+            // output_color: CellColor::new(Color::White, Color::Black),
+            output_color: CellColor::new(Color::Black, Color::White),
             cursor: Cursor {row: 0, col: 0},
             buffer: unsafe { Unique::new(0xb8000 as *mut _) },
+        }
+    }
+    /// Write string to terminal's stdout
+    pub fn write_str(&mut self, string: &str) {
+        let sb = string.as_bytes();
+        for index in 0..sb.len() {
+            self.write_byte(sb[index]);
         }
     }
     /// Write single byte to terminal's stdout
@@ -65,22 +73,11 @@ impl Terminal {
         }
     }
 
-    fn newline(&mut self) {
+    pub fn newline(&mut self) {
         self.cursor.newline();
     }
 
     fn get_buffer(&mut self) -> &mut Buffer {
         unsafe {self.buffer.get_mut()}
-    }
-}
-
-impl ::core::fmt::Write for Terminal {
-    /// Write string to terminal's stdout
-    fn write_str(&mut self, string: &str) -> ::core::fmt::Result {
-        let sb = string.as_bytes();
-        for index in 0..sb.len() {
-            self.write_byte(sb[index]);
-        }
-        Ok(())
     }
 }

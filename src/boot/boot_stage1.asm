@@ -160,10 +160,6 @@ stage1:
 
     ; ELF relocation done
 .over:
-    mov edx, 0xFFFF00D7
-    mov eax, [0x00010000]
-    mov ebx, [0x00011000]
-
     ; going to byte bytes mode (8*8 = 2**6 = 64 bits = Long mode)
 
     ; load GDT

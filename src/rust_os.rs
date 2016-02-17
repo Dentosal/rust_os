@@ -8,6 +8,7 @@ extern crate spin;
 
 mod vga_buffer;
 mod terminal;
+mod util;
 
 
 /// The kernel main function
@@ -16,15 +17,29 @@ pub extern fn rust_main() {
     use core::fmt::Write;
 
     let mut tty = terminal::Terminal::new();
-
-    tty.write_byte(b'x');
-    tty.write_byte(b'y');
     tty.write_byte(b'\n');
-    tty.write_str("Test");
+    tty.write_str("Charset test: ONLY normal ASCII here: !|&^\\()[]{}?+-*/");
+    tty.write_byte(b'\n');
 
-    // FIXME: causes guru meditation: write!(tty, ", some numbers: {} {}", 42, 1.337);
+    // memory dump
+    let addr: u64 = 0x12000;
+    for offset in 0..0x200 {
+        if offset%2 == 0 {
+            tty.write_byte(b' ');
+        }
+        if offset%32 == 0 {
+            tty.write_byte(b'\n');
+        }
 
-    loop{}
+        let mut ptr = (addr+offset) as *mut u8;
+        let value = unsafe { *ptr };
+        let hexval = util::byte_to_hex(value);
+        tty.write_byte(hexval[0]);
+        tty.write_byte(hexval[1]);
+//        tty.write_byte(b' ');
+    }
+
+    loop {}
 }
 
 #[cfg(not(test))]

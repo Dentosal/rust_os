@@ -7,10 +7,10 @@ set -e
 vboxflag=0
 vagrantflag=0
 
-while getopts 'abf:v' flag; do
+while getopts 'abf:vu' flag; do
   case "${flag}" in
-    v) vboxflag=1 ;;
     u) vagrantflag=1 ;;
+    v) vboxflag=1 ;;
     *) error "Unexpected option ${flag}" ;;
   esac
 done

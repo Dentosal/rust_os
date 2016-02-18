@@ -20,11 +20,6 @@ stage1:
     ; SCREEN: top left: "11"
     mov dword [0xb8000], 0x2f312f31
 
-    ; SCREEN: top2 left: "12"
-    mov dword [0xb8000 + 2*80], 0x2f312f32
-
-    mov ecx, 0xBEEF0001
-
     ; parse elf header
     ; http://wiki.osdev.org/ELF#Tables
     ;
@@ -191,24 +186,6 @@ error:
     mov byte  [0xb800a + 5 * 2*80], al
     mov byte  [0xb800c + 5 * 2*80], ah
     hlt
-
-; Convert dl to it's ascii hex representation and set color to black/white
-;ReprHex:
-;	push ax
-;	push cx
-;
-;    mov	al, 0x0F    ; Color: black/white
-;    and	al, dl
-;    ; convert al to ascii hex (four instructions)
-;    add	al, 0x90
-;    daa
-;    adc	al, 0x40
-;    daa
-;
-;    mov dl, al
-;    pop cx
-;    pop ax
-;    ret
 
 
 ; Constant data section

@@ -26,5 +26,5 @@ if [ $vboxflag -eq 1 ]
 then
     VBoxManage startvm "RustOS"
 else
-    qemu-system-x86_64 -d int -no-reboot build/disk.img
+    qemu-system-x86_64 -d int -no-reboot build/disk.img -monitor stdio
 fi

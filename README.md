@@ -1,7 +1,6 @@
 # rust_os
 Testing x86-64 osdev with Rust and nasm.
 
-
 ## Current features:
 * Text output terminal
 * Long mode with Rust
@@ -16,6 +15,9 @@ Testing x86-64 osdev with Rust and nasm.
 * Disk IO
 * Networking
 * Executable programs
+
+# Running
+Have qemu and vagrant installed, and run `./autoboild.sh -u`.
 
 # name
 Todo: rename. Maybe "Dimension 7"?

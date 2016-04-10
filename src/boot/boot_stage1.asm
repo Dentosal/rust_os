@@ -5,6 +5,13 @@
 ; Kernel elf executable initial load point
 %define loadpoint 0x8000
 
+; Page tables
+%define page_table_section_start 0x00020000
+%define page_table_p4 0x00020000
+%define page_table_p3 0x00021000
+%define page_table_p2 0x00022000
+%define page_table_section_end 0x00023000
+
 
 [BITS 32]
 [ORG 0x7e00]
@@ -19,6 +26,11 @@ jmp $
 stage1:
     ; SCREEN: top left: "11"
     mov dword [0xb8000], 0x2f312f31
+
+    ; paging
+    call set_up_page_tables
+    call enable_paging
+
 
     ; parse elf header
     ; http://wiki.osdev.org/ELF#Tables
@@ -66,7 +78,6 @@ stage1:
     mov dword [0xb8000 + 80*24], 0x2f4b2f4f
 
 
-    ;;jmp .over
     ; Parse program headers and relocate sections
     ; http://wiki.osdev.org/ELF#Program_header
     ; (error code : "EH")
@@ -175,6 +186,65 @@ stage1:
     ; jump into kernel entry (relocated to 0x00010000)
     jmp gdt64.code:0x00010000
 
+; set up paging
+; http://os.phil-opp.com/entering-longmode.html#set-up-identity-paging
+; http://wiki.osdev.org/Paging
+; http://pages.cs.wisc.edu/~remzi/OSTEP/vm-paging.pdf
+; Identity map first 1GiB (0x200000 * 0x200)
+; using 2MiB pages
+set_up_page_tables:
+    ; map first P4 entry to P3 table
+    mov eax, page_table_p3
+    or eax, 0b11 ; present & writable
+    mov [page_table_p4], eax
+
+    ; map first P3 entry to P2 table
+    mov eax, page_table_p2
+    or eax, 0b11 ; present & writable
+    mov [page_table_p3], eax
+
+    ; map each P2 entry to a huge 2MiB page
+    mov ecx, 0         ; counter
+
+.map_page_table_p2_loop:
+    ; map ecx-th P2 entry to a huge page that starts at address 2MiB*ecx
+    mov eax, 0x200000                   ; 2MiB
+    mul ecx                             ; page[ecx] start address
+    or eax, 0b10000011                  ; present & writable & huge
+    mov [page_table_p2 + ecx * 8], eax  ; map entry
+
+    inc ecx
+    cmp ecx, 0x200                  ; is the whole P2 table is mapped?
+    jne .map_page_table_p2_loop     ; next entry
+    ; done
+    ret
+
+; enable_paging
+; http://os.phil-opp.com/entering-longmode.html#enable-paging
+; http://wiki.osdev.org/Paging#Enabling
+enable_paging:
+    ; load P4 to cr3 register (cpu uses this to access the P4 table)
+    mov eax, page_table_p4
+    mov cr3, eax
+
+    ; enable PAE-flag in cr4 (Physical Address Extension)
+    mov eax, cr4
+    or eax, 1 << 5
+    mov cr4, eax
+
+    ; set the long mode bit in the EFER MSR (model specific register)
+    mov ecx, 0xC0000080
+    rdmsr
+    or eax, 1 << 8
+    wrmsr
+
+    ; enable paging in the cr0 register
+    mov eax, cr0
+    or eax, 1 << 31
+    mov cr0, eax
+    ret
+
+
 
 ; Prints `ERR: ` and the given 2-character error code to screen (TL) and hangs.
 ; args: ax=(al,ah)=error_code (2 characters)
@@ -203,8 +273,3 @@ gdt64:
 
 
 times (0x200-($-$$)) db 0 ; fill sector
-
-
-; ecx = 00001013 -> 00000000
-; esi = 00009000 -> 0000a013
-; edi = 00010000 -> 00011013

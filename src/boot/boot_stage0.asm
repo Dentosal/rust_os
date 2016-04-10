@@ -2,7 +2,9 @@
 ; STAGE 0
 
 %define loadpoint 0x8000
-; now kernel is located at range(0x8000, 0x9c00)
+; locate kernel at 0x8000->
+%define bootdrive 0x7b00
+; bootdrive location (1 byte)
 
 [BITS 16]
 [ORG 0x7c00]
@@ -13,23 +15,43 @@ boot:
     mov ds, ax
     mov es, ax
     mov ss, ax
+
     ; initialize stack
     mov sp, 0x7bfe
+
+    ; save boot drive
+    mov [bootdrive], dl
+
+    ; get memory map
+    mov di, 0x1000  ; buffer 0x1000->
+    mov si, mmap_error_msg
+    call get_memory_map
+    jc print_error   ; carry flag set on error
+
+    ; reset ds and es, bios probably changed the values
+    xor ax, ax
+    mov ds, ax
+    mov es, ax
+
     ; load more code into 0x7e00 so we can jump to it later
     mov ah, 2       ; read
     mov al, 40      ; 40 sectors (kernel max size is now 39 sectors = 39*512 bytes)
     mov ch, 0       ; cylinder & 0xff
     mov cl, 2       ; sector | ((cylinder >> 2) & 0xc0)
     mov dh, 0       ; head
-    mov bx, (loadpoint - 0x200)  ; read buffer (now next stage is located at (loadpoint - 0x200) and kernel just after that)
+    mov dl, [bootdrive] ; drive number
+    mov bx, (loadpoint - 0x200)  ; read buffer (es:bx) (now next stage is located at (loadpoint - 0x200) and kernel just after that)
+    mov si, disk_error_msg
     int 0x13
-    jc load_error
+    jc print_error
+
     ; hide cursor
     mov bh, 0
     mov ah, 2
     mov dl, 100
     mov dh, 100
     int 10h
+
     ; load protected mode GDT and a null IDT (we don't need interrupts)
     cli
     lgdt [gdtr32]
@@ -41,8 +63,9 @@ boot:
     ; far jump to load CS with 32 bit segment
     jmp 0x08:protected_mode
 
-load_error:
-    mov si, .msg
+
+; in: si = pointer to string
+print_error:
 .loop:
     lodsb
     or al, al
@@ -52,17 +75,61 @@ load_error:
     jmp .loop
 .done:
     jmp $
-    .msg db "could not read disk", 0
+
+disk_error_msg db "E: disk", 0
+mmap_error_msg db "E: mmap", 0
+
+; use the INT 0x15, eax= 0xE820 BIOS function to get a memory map
+; http://wiki.osdev.org/Detecting_Memory_(x86)#BIOS_Function:_INT_0x15.2C_EAX_.3D_0xE820
+; inputs: es:di -> destination buffer for 24 byte entries
+; outputs: bp = entry count, trashes all registers except esi
+get_memory_map:
+	xor ebx, ebx               ; ebx must be 0 to start
+	xor bp, bp                 ; keep an entry count in bp
+	mov edx, 0x0534D4150       ; Place "SMAP" into edx
+	mov eax, 0xe820
+	mov [es:di + 20], dword 1  ; force a valid ACPI 3.X entry
+	mov ecx, 24                ; ask for 24 bytes
+	int 0x15
+	jc short .failed           ; carry set on first call means "unsupported function"
+	mov edx, 0x0534D4150       ; Some BIOSes apparently trash this register?
+	cmp eax, edx               ; on success, eax must have been reset to "SMAP"
+	jne short .failed
+	test ebx, ebx              ; ebx = 0 implies list is only 1 entry long (worthless)
+	je short .failed
+	jmp short .jmpin
+.e820lp:
+	mov eax, 0xe820            ; eax, ecx get trashed on every int 0x15 call
+	mov [es:di + 20], dword 1  ; force a valid ACPI 3.X entry
+	mov ecx, 24                ; ask for 24 bytes again
+	int 0x15
+	jc short .e820f            ; carry set means "end of list already reached"
+	mov edx, 0x0534D4150       ; repair potentially trashed register
+.jmpin:
+	jcxz .skipent              ; skip any 0 length entries
+	cmp cl, 20                 ; got a 24 byte ACPI 3.X response?
+	jbe short .notext
+	test byte [es:di + 20], 1  ; if so: is the "ignore this data" bit clear?
+	je short .skipent
+.notext:
+	mov ecx, [es:di + 8]       ; get lower uint32_t of memory region length
+	or ecx, [es:di + 12]       ; "or" it with upper uint32_t to test for zero
+	jz .skipent                ; if length uint64_t is 0, skip entry
+	inc bp                     ; got a good entry: ++count, move to next storage spot
+	add di, 24
+.skipent:
+	test ebx, ebx              ; if ebx resets to 0, list is complete
+	jne short .e820lp
+.e820f:
+	mov [0x1000-2], bp         ; store the entry count just below the array
+	clc                        ; there is "jc" on end of list to this point, so the carry must be cleared
+	ret
+.failed:
+	stc	                       ; "function unsupported" error exit, set carry
+	ret
+
 
 [BITS 32]
-; Page tables
-%define page_table_section_start 0x00020000
-%define page_table_p4 0x00020000
-%define page_table_p3 0x00021000
-%define page_table_p2 0x00022000
-%define page_table_section_end 0x00023000
-
-
 
 protected_mode:
     ; load all the other segments with 32 bit data segments
@@ -80,8 +147,6 @@ protected_mode:
 
     call enable_A20
     call check_long_mode
-    call set_up_page_tables
-    call enable_paging
     call set_up_SSE
 
 
@@ -150,65 +215,6 @@ check_long_mode:
     mov al, '!'
     mov ah, 'L'
     jmp error
-
-; set up paging
-; http://os.phil-opp.com/entering-longmode.html#set-up-identity-paging
-; http://wiki.osdev.org/Paging
-; http://pages.cs.wisc.edu/~remzi/OSTEP/vm-paging.pdf
-; Identity map first 1GiB (0x200000 * 0x200)
-; using 2MiB pages
-set_up_page_tables:
-    ; map first P4 entry to P3 table
-    mov eax, page_table_p3
-    or eax, 0b11 ; present & writable
-    mov [page_table_p4], eax
-
-    ; map first P3 entry to P2 table
-    mov eax, page_table_p2
-    or eax, 0b11 ; present & writable
-    mov [page_table_p3], eax
-
-    ; map each P2 entry to a huge 2MiB page
-    mov ecx, 0         ; counter
-
-.map_page_table_p2_loop:
-    ; map ecx-th P2 entry to a huge page that starts at address 2MiB*ecx
-    mov eax, 0x200000                   ; 2MiB
-    mul ecx                             ; page[ecx] start address
-    or eax, 0b10000011                  ; present & writable & huge
-    mov [page_table_p2 + ecx * 8], eax  ; map entry
-
-    inc ecx
-    cmp ecx, 0x200                  ; is the whole P2 table is mapped?
-    jne .map_page_table_p2_loop     ; next entry
-    ; done
-    ret
-
-; enable_paging
-; http://os.phil-opp.com/entering-longmode.html#enable-paging
-; http://wiki.osdev.org/Paging#Enabling
-enable_paging:
-    ; load P4 to cr3 register (cpu uses this to access the P4 table)
-    mov eax, page_table_p4
-    mov cr3, eax
-
-    ; enable PAE-flag in cr4 (Physical Address Extension)
-    mov eax, cr4
-    or eax, 1 << 5
-    mov cr4, eax
-
-    ; set the long mode bit in the EFER MSR (model specific register)
-    mov ecx, 0xC0000080
-    rdmsr
-    or eax, 1 << 8
-    wrmsr
-
-    ; enable paging in the cr0 register
-    mov eax, cr0
-    or eax, 1 << 31
-    mov cr0, eax
-    ret
-
 
 
 ; Prints `ERR: ` and the given 2-character error code to screen (TL) and hangs.

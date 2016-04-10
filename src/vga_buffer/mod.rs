@@ -35,6 +35,7 @@ impl CellColor {
 }
 
 /// Character cell: one character and color in screen
+#[derive(Clone, Copy)]
 #[repr(C)]
 pub struct CharCell {
     pub character: u8,

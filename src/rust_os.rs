@@ -18,10 +18,14 @@ use vga_buffer::{Color, CellColor};
 pub extern fn rust_main() {
     use core::fmt::Write;
 
+    // init tty
     let mut tty = terminal::TERMINAL.lock();
     tty.set_color(CellColor::new(Color::Green, Color::Black));
+    tty.init();
     tty.clear();
 
+    // startup message
+    tty.newline();
     tty.write_str("Bootup complete.\n");
     tty.newline();
     tty.write_str("Dimension 7 OS\n");

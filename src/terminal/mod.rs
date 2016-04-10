@@ -45,6 +45,10 @@ pub struct Terminal {
 }
 
 impl Terminal {
+    /// Init terminal
+    pub fn init(&mut self) {
+        self.cursor.newline();
+    }
     /// Clear screen
     pub fn clear(&mut self) {
         self.cursor.set_position(0, 0);
@@ -53,7 +57,7 @@ impl Terminal {
         for col in 0..SCREEN_WIDTH {
             for row in 0..SCREEN_HEIGHT {
                 buffer.chars[row][col] = CharCell {
-                    character: b'.',
+                    character: b' ',
                     color: clear_color,
                 }
             }

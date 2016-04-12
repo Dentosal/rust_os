@@ -63,6 +63,7 @@ stage1:
     ; elf version (must be 2) (error code: "EV")
     mov ah, 'V'
     cmp byte [loadpoint + 0x0006], 0x2
+    jne error
 
     ; Now lets trust it's actually real and valid elf file
 
@@ -180,8 +181,6 @@ stage1:
     mov ss, dx  ; stack selector
     mov ds, dx  ; data selector
     mov es, dx  ; extra selector
-
-    mov edx, 0x1000CAFE
 
     ; jump into kernel entry (relocated to 0x00010000)
     jmp gdt64.code:0x00010000

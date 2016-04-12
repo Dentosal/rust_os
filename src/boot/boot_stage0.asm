@@ -155,7 +155,7 @@ protected_mode:
 
 
     ; jump into stage 1
-    call 0x7e00
+    jmp 0x7e00
 
 
 ; http://wiki.osdev.org/A20_Line

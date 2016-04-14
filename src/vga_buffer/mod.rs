@@ -3,6 +3,7 @@ use spin::Mutex;
 
 const SCREEN_HEIGHT: usize = 25;
 const SCREEN_WIDTH: usize = 80;
+const VGA_BUFFER_ADDRESS: usize = 0xb8000;
 
 /// A VGA color
 #[allow(dead_code)]
@@ -179,7 +180,7 @@ pub static TERMINAL: Mutex<Terminal> = Mutex::new(Terminal {
     raw_mode: false,
     output_color: CellColor::new(Color::White, Color::Black),
     cursor: Cursor {row: 0, col: 0},
-    buffer: unsafe { Unique::new(0xb8000 as *mut _) },
+    buffer: unsafe { Unique::new(VGA_BUFFER_ADDRESS as *mut _) },
 });
 
 

@@ -13,10 +13,11 @@ pub struct Cursor {
     /// Current column
     pub col: usize,
 }
+
 impl Cursor {
     /// Next character
     pub fn next(&mut self) {
-        if self.col < SCREEN_WIDTH-2 {
+        if self.col < SCREEN_WIDTH {
             self.col+=1;
         }
     }
@@ -25,8 +26,13 @@ impl Cursor {
     /// true if terminal should be scrolled
     pub fn newline(&mut self) -> bool {
         self.col = 0;
-        self.row = 24;
-        return true;
+        if self.row < SCREEN_HEIGHT-1 {
+            self.row += 1;
+            false
+        }
+        else {
+            true
+        }
     }
     /// Set position
     pub fn set_position(&mut self, row: usize, col: usize) {
@@ -46,8 +52,9 @@ pub struct Terminal {
 
 impl Terminal {
     /// Init terminal
-    pub fn init(&mut self) {
-        self.cursor.newline();
+    pub fn reset(&mut self) {
+        self.output_color = CellColor::new(Color::White, Color::Black);
+        self.clear();
     }
     /// Clear screen
     pub fn clear(&mut self) {
@@ -59,7 +66,7 @@ impl Terminal {
                 buffer.chars[row][col] = CharCell {
                     character: b' ',
                     color: clear_color,
-                }
+                };
             }
         }
     }
@@ -94,8 +101,9 @@ impl Terminal {
 
     /// Newline
     pub fn newline(&mut self) {
-        self.cursor.newline();
-        self.scroll_line();
+        if self.cursor.newline() {
+            self.scroll_line();
+        }
     }
 
     /// Scroll up one line
@@ -104,8 +112,6 @@ impl Terminal {
             self.get_buffer().chars[row] = self.get_buffer().chars[row+1];
         }
         self.get_buffer().chars[SCREEN_HEIGHT-1] = [CharCell {character: b' ', color: self.output_color}; SCREEN_WIDTH];
-        // self.set_color(CellColor::new(Color::Red, Color::White));
-        // self.write_byte(b'+');
     }
 
     /// Get pointer to memory buffer
@@ -117,8 +123,7 @@ impl Terminal {
 
 pub static TERMINAL: Mutex<Terminal> = Mutex::new(Terminal {
     raw_mode: false,
-    // output_color: CellColor::new(Color::White, Color::Black),
-    output_color: CellColor::new(Color::Black, Color::White),
+    output_color: CellColor::new(Color::White, Color::Black),
     cursor: Cursor {row: 0, col: 0},
     buffer: unsafe { Unique::new(0xb8000 as *mut _) },
 });

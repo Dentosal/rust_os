@@ -20,10 +20,28 @@ echo "* kernel"
 # compile kernel (with full optimizations)
 cargo rustc --target x86_64-unknown-linux-gnu --release -- -Z no-landing-pads
 
+echo "* kernel assembly routines"
+for fpath in src/asm_routines/*.asm
+do
+    filename=$(basename "$fpath")   # remove path
+    base="${filename%.*}"           # get basename
+    nasm -f elf64 "$fpath" -o "build/asm_routines/$base.o"
+done
+
 echo "Linking objects..."
 
 # link
-ld -n --gc-sections -T buildsystem/linker.ld -o build/kernel.bin build/entry.o target/x86_64-unknown-linux-gnu/release/librust_os.a
+ld -n --gc-sections -T buildsystem/linker.ld -o build/kernel.bin build/entry.o target/x86_64-unknown-linux-gnu/release/librust_os.a build/asm_routines/*.o
+
+echo "Cheking boundries..."
+
+actualsize=$(wc -c build/kernel.bin)
+if [ $((actualsize / 500)) -gte 39 ]
+then
+    echo "Kernel size: $((actualsize / 500)) sectors"
+    echo "^ It seems to be too large ^"
+    exit 1
+fi
 
 echo "Creating disk image..."
 

@@ -35,7 +35,7 @@ boot:
 
     ; load more code into 0x7e00 so we can jump to it later
     mov ah, 2       ; read
-    mov al, 40      ; 40 sectors (kernel max size is now 39 sectors = 39*512 bytes)
+    mov al, 80      ; 80 sectors (kernel max size is now 79 sectors = 79*512 bytes)
     mov ch, 0       ; cylinder & 0xff
     mov cl, 2       ; sector | ((cylinder >> 2) & 0xc0)
     mov dh, 0       ; head

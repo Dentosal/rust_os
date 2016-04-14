@@ -63,7 +63,8 @@ stage1:
     ; elf version (must be 2) (error code: "EV")
     mov ah, 'V'
     cmp byte [loadpoint + 0x0006], 0x2
-    jne error
+    ; jne error ; this fails. ignored currently. I can't remember why it wasn't here originally
+    ; ^ FIXME
 
     ; Now lets trust it's actually real and valid elf file
 

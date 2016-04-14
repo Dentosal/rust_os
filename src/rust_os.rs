@@ -11,7 +11,7 @@ extern crate spin;
 #[macro_use]
 mod vga_buffer;
 mod util;
-mod ram_map;
+mod mem_map;
 
 use vga_buffer::{Color, CellColor};
 

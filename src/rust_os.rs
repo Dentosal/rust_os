@@ -7,9 +7,11 @@
 extern crate rlibc;
 extern crate spin;
 
+
+#[macro_use]
 mod vga_buffer;
-mod terminal;
 mod util;
+mod ram_map;
 
 use vga_buffer::{Color, CellColor};
 
@@ -18,20 +20,20 @@ use vga_buffer::{Color, CellColor};
 pub extern fn rust_main() {
     use core::fmt::Write;
 
-    // init tty
-    let mut tty = terminal::TERMINAL.lock();
-    tty.set_color(CellColor::new(Color::Green, Color::Black));
-    tty.init();
-    tty.clear();
+    // test
+    rreset!();
+    rprintln!("Tuubaaja");
 
     // startup message
-    tty.newline();
-    tty.write_str("Bootup complete.\n");
-    tty.newline();
-    tty.write_str("Dimension 7 OS\n");
-    tty.write_str("Copyright (c) 2016 Hannes Karppila\n");
+    rprintln!("Dimension 7 OS\n");
+    rprintln!("Initializing system...");
 
 
+    // read memory map
+    let mmap_ok = ram_map::load_memory_map();
+
+    // hang
+    rprintln!("System ready.");
     loop {}
 }
 
@@ -43,7 +45,7 @@ extern "C" fn eh_personality() {}
 #[lang = "panic_fmt"]
 extern "C" fn panic_fmt(fmt: core::fmt::Arguments, file: &str, line: u32) -> ! {
     unsafe {
-        asm!("jmp error"::::"intel");
+        asm!("jmp panic"::::"intel");
     }
     loop {}
 }

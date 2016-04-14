@@ -183,7 +183,7 @@ pub static TERMINAL: Mutex<Terminal> = Mutex::new(Terminal {
 });
 
 
-/// "Raw" print macro
+/// "Raw" output macros
 macro_rules! rprint {
     ($($arg:tt)*) => ({
         use core::fmt::Write;
@@ -193,4 +193,10 @@ macro_rules! rprint {
 macro_rules! rprintln {
     ($fmt:expr) => (rprint!(concat!($fmt, "\n")));
     ($fmt:expr, $($arg:tt)*) => (rprint!(concat!($fmt, "\n"), $($arg)*));
+}
+macro_rules! rreset {
+    () => ({
+        use core::fmt::Write;
+        $crate::vga_buffer::TERMINAL.lock().reset();
+    });
 }

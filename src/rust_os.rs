@@ -43,9 +43,13 @@ extern "C" fn eh_personality() {}
 
 #[cfg(not(test))]
 #[lang = "panic_fmt"]
+// VirtualBox does not like panics, and most likely guru meditates instead
 extern "C" fn panic_fmt(fmt: core::fmt::Arguments, file: &str, line: u32) -> ! {
-    unsafe {
-        asm!("jmp panic"::::"intel");
-    }
+    // unsafe {
+    //     asm!("jmp panic"::::"intel");
+    // }
+    rreset!();
+    rprintln!("Kernel Panic: file: '{}', line {}", file, line);
+    rprintln!("    {}\n", fmt);
     loop {}
 }

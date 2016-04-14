@@ -5,3 +5,5 @@ Cargo.lock
 blog_os-master/
 build/
 dump*.txt
+tmp/
+temp/

@@ -195,7 +195,6 @@ macro_rules! rprintln {
 }
 macro_rules! rreset {
     () => ({
-        use core::fmt::Write;
         $crate::vga_buffer::TERMINAL.lock().reset();
     });
 }

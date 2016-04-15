@@ -1,9 +1,10 @@
 use spin::Mutex;
 
-pub const MEM_PAGE_SIZE_BYTES:      usize   = 0x1000; // 4096
-pub const MEM_PAGE_MAP_SIZE_BYTES:  usize   = 0x10000;
-pub const MEM_PAGE_MAP1_ADDRESS:    usize   = 0x30000;
-pub const MEM_PAGE_MAP2_ADDRESS:    usize   = 0x50000;
+pub const MEM_PAGE_SIZE_BYTES:      usize   = 0x1_000; // 4096
+pub const MEM_PAGE_MAP_SIZE_BYTES:  usize   = 0x10_000;
+pub const MEM_PAGE_MAP1_ADDRESS:    usize   = 0x30_000;
+pub const MEM_PAGE_MAP2_ADDRESS:    usize   = 0x40_000;
+pub const MEMORY_RESERVED_BELOW:    usize   = 0x50_000; // first 160/8=20 bytes of are permanently reserved for the kernel
 
 // Memory frame (single allocation unit)
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -107,8 +108,11 @@ pub fn create_memory_bitmap() {
                 memory_amount_counter_KiB += 1;
                 if address/MEM_PAGE_SIZE_BYTES > MEM_PAGE_MAP_SIZE_BYTES*8 {
                     // Page table is full.
-                    rprintln!("Done: {:#x}", address);
                     break;
+                }
+                if address < MEMORY_RESERVED_BELOW {
+                    // these are permanently reserved for the kernel
+                    continue;
                 }
                 unsafe {
                     *((MEM_PAGE_MAP1_ADDRESS + (address/8)/MEM_PAGE_SIZE_BYTES) as *mut u8) |= 1 << (address%8); // set free

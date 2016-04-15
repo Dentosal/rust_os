@@ -1,21 +1,23 @@
 [BITS 64]
 
 global start
-global error
-global breakpoint
 extern rust_main
 
 section .entry
 start:
-    mov edx, 0xf00d0000
+    ; update segments
+    mov dx, 0x10; data selector
+    mov ss, dx  ; stack segment
+    mov ds, dx  ; data segment
+    mov es, dx  ; extra segment
+    mov fs, dx  ; f-segment
+    mov gs, dx  ; g-segment
+
     ; set up stack
     mov esp, stack_top
 
-    mov edx, 0xf00d0001
-
+    ; get to kernel
     call rust_main
-
-    mov edx, 0xf00d0002
 
     ; rust main returned, print `OS returned!`
     mov rax, 0x4f724f204f534f4f
@@ -25,17 +27,6 @@ start:
     mov rax, 0x4f214f644f654f6e
     mov [0xb8010], rax
     hlt
-section .text:
-error:
-    mov rax, 0x4f214f214f214f21
-    mov [0xb8000], rax
-    hlt
-    jmp $
-breakpoint:
-    mov rax, 0x4f744f704f724f62
-    mov [0xb8000], rax
-    hlt
-    jmp $
 
 ; reserve space for stack
 section .bss

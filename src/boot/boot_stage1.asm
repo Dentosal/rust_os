@@ -17,16 +17,7 @@
 [ORG 0x7e00]
 
 
-%macro lp 0
-mov dword [0xb8000 + 80*12 + 80], 0x0f4d0f4a
-mov dword [0xb8000 + 80*12 + 84], 0x0f250f50
-jmp $
-%endmacro
-
 stage1:
-    ; SCREEN: top left: "11"
-    mov dword [0xb8000], 0x2f312f31
-
     ; paging
     call set_up_page_tables
     call enable_paging
@@ -56,7 +47,7 @@ stage1:
     jne error
 
     ; endianess (must be little endian, so value must be 1) (error code: "EE")
-    mov ah, 'E'
+    ;mov ah, 'E'
     cmp byte [loadpoint + 5], 0x1
     jne error
 
@@ -170,20 +161,19 @@ stage1:
 .over:
     ; going to byte bytes mode (8*8 = 2**6 = 64 bits = Long mode)
 
+    ; relocate GDT to 0x100
+    mov esi, gdt64  ; from
+    mov edi, 0x100  ; to
+    mov ecx, 8*3+12 ; size (no pointer)
+    rep movsb       ; copy
+
     ; load GDT
-    lgdt [gdt64.pointer]
+    lgdt [0x100 + 8*3]
 
-    ; Now we are in some kind of compatibility mode
-    ; Don't do anything else than update selectors and jump
-
-    ; update selectors
-    mov dx, gdt64.data
-    mov ss, dx  ; stack selector
-    mov ds, dx  ; data selector
-    mov es, dx  ; extra selector
-
+    ; Now we are in IA32e (compatibility) submode
     ; jump into kernel entry (relocated to 0x00010000)
-    jmp gdt64.code:0x00010000
+    ; and enable real 64 bit mode
+    jmp 0x08:0x00010000
 
 ; set up paging
 ; http://os.phil-opp.com/entering-longmode.html#set-up-identity-paging
@@ -266,9 +256,8 @@ gdt64:
     dq (1<<44) | (1<<47) | (1<<41) | (1<<43) | (1<<53) ; code segment
 .data: equ $ - gdt64
     dq (1<<44) | (1<<47) | (1<<41) ; data segment
-.pointer:   ; pointer "struct"
-    dw $ - gdt64 - 1
-    dq gdt64
-
+.pointer:   ; GDTR
+    dw 8*3      ; size
+    dq 0x100    ; POINTER
 
 times (0x200-($-$$)) db 0 ; fill sector

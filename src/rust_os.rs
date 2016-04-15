@@ -8,12 +8,14 @@
 
 extern crate rlibc;
 extern crate spin;
-
+extern crate cpuio;
+extern crate bitflags;
 
 #[macro_use]
 mod vga_buffer;
 mod util;
 mod mem_map;
+mod pic;
 
 use vga_buffer::{Color, CellColor};
 
@@ -26,8 +28,18 @@ pub extern fn rust_main() {
     rprintln!("Initializing system...");
     rprintln!("");
 
-    // read memory map
+    // set up frame allocator
     mem_map::create_memory_bitmap();
+
+    // pic setup
+    unsafe {
+        pic::PICS.lock().init();
+    }
+
+
+
+    // paging
+
 
     // hang
     rprintln!("");

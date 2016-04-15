@@ -174,8 +174,7 @@ stage1:
     lgdt [gdt64.pointer]
 
     ; Now we are in some kind of compatibility mode
-    ; Don't do anything else that update selectors and jump
-    ; (I think memory access will fail)
+    ; Don't do anything else than update selectors and jump
 
     ; update selectors
     mov dx, gdt64.data

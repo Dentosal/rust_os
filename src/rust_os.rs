@@ -28,7 +28,6 @@ pub extern fn rust_main() {
 
     // read memory map
     mem_map::create_memory_bitmap();
-    let allocator = mem_map::BitmapAllocator;
 
     // hang
     rprintln!("");
@@ -42,12 +41,11 @@ extern "C" fn eh_personality() {}
 
 #[cfg(not(test))]
 #[lang = "panic_fmt"]
-// VirtualBox does not like panics, and most likely guru meditates instead
 extern "C" fn panic_fmt(fmt: core::fmt::Arguments, file: &str, line: u32) -> ! {
     // unsafe {
     //     asm!("jmp panic"::::"intel");
     // }
-    rreset!();
+    // rreset!();
     rprintln!("Kernel Panic: file: '{}', line {}", file, line);
     rprintln!("    {}\n", fmt);
     loop {}

@@ -1,7 +1,9 @@
+use spin::Mutex;
+
 pub const MEM_PAGE_SIZE_BYTES:      usize   = 0x1000; // 4096
 pub const MEM_PAGE_MAP_SIZE_BYTES:  usize   = 0x10000;
 pub const MEM_PAGE_MAP1_ADDRESS:    usize   = 0x30000;
-pub const MEM_PAGE_MAP2_ADDRESS:    usize   = 0x40000;
+pub const MEM_PAGE_MAP2_ADDRESS:    usize   = 0x50000;
 
 // Memory frame (single allocation unit)
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -29,12 +31,9 @@ pub trait FrameAllocator {
 // Currently we can only get one frame at a time
 pub struct BitmapAllocator;
 impl BitmapAllocator {
-    pub fn new() -> BitmapAllocator {
-        BitmapAllocator {}
-    }
     fn is_free(&self, index: usize) -> bool {
         let free    = unsafe { *((MEM_PAGE_MAP1_ADDRESS + index/8) as *mut u8) } & (1 << (index%8)) != 0; // 1: free, 0: reserved
-        let usable  = unsafe { *((MEM_PAGE_MAP2_ADDRESS + index/8) as *mut u8) } & (1 << (index%8)) == 0; // 1: unusable, 0: usable
+        let usable  = unsafe { *((MEM_PAGE_MAP2_ADDRESS + index/8) as *mut u8) } & (1 << (index%8)) != 0; // 1: usable, 0: unusable
         if free && !usable { // error in free pages table
             panic!("PHYS_MEM: Page {} is incorrectly marked as free.", index);
         }
@@ -46,6 +45,9 @@ impl FrameAllocator for BitmapAllocator {
         // Find first free block
         for i in 0..(MEM_PAGE_MAP_SIZE_BYTES*8) {
             if self.is_free(i) {
+                unsafe {
+                    *((MEM_PAGE_MAP1_ADDRESS + i/8) as *mut u8) ^= 1 << (i%8); // set frame reserved
+                }
                 return Some(Frame::from_index(i));
             }
         }
@@ -54,7 +56,7 @@ impl FrameAllocator for BitmapAllocator {
     }
     fn deallocate_frame(&mut self, frame: Frame) {
         if self.is_free(frame.index) {
-            panic!("PHYS_MEM: deallocate_frame: Page already free {}.", frame.index);
+            panic!("PHYS_MEM: deallocate_frame: Page {} is already free.", frame.index);
         }
         unsafe {
             *((MEM_PAGE_MAP1_ADDRESS + frame.index/8) as *mut u8) |= 1 << (frame.index%8); // set the correct bit
@@ -95,7 +97,7 @@ pub fn create_memory_bitmap() {
         let entry_size:     usize   = unsafe { *(base.offset(24*index+ 8) as *mut u64) } as usize;
         let entry_type:     u32     = unsafe { *(base.offset(24*index+16) as *mut u32) };
         let acpi_data:      u32     = unsafe { *(base.offset(24*index+20) as *mut u32) };
-        //rprintln!("Section {}: {:#016x}-{:#016x}: type: {:#x}, acpi: {:#x}", index, entry_start, entry_start+entry_size, entry_type, acpi_data);
+        // rprintln!("Section {}: {:#016x}-{:#016x}: type: {:#x}, acpi: {:#x}", index, entry_start, entry_start+entry_size, entry_type, acpi_data);
 
         // is this usable?
         // Types 1, 4 ok to use and acpi_data bit 0 must be set
@@ -105,6 +107,7 @@ pub fn create_memory_bitmap() {
                 memory_amount_counter_KiB += 1;
                 if address/MEM_PAGE_SIZE_BYTES > MEM_PAGE_MAP_SIZE_BYTES*8 {
                     // Page table is full.
+                    rprintln!("Done: {:#x}", address);
                     break;
                 }
                 unsafe {
@@ -116,3 +119,6 @@ pub fn create_memory_bitmap() {
     }
     rprintln!("Memory size {} MiB", memory_amount_counter_KiB/1024);
 }
+
+// Create static pointer mutex with spinlock to make ALLOCATOR thread-safe
+pub static ALLOCATOR: Mutex<BitmapAllocator> = Mutex::new(BitmapAllocator {});

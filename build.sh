@@ -35,11 +35,10 @@ ld -n --gc-sections -T buildsystem/linker.ld -o build/kernel.bin build/entry.o t
 
 echo "Cheking boundries..."
 
-actualsize=$(wc -c build/kernel.bin)
-if [ $((actualsize / 500)) -gte 39 ]
+toobig=$(wc -c build/kernel.bin | python2 -c 'print int(int(raw_input().split(" ",1)[0])/512>79)')
+if [ $toobig -eq 1 ]
 then
-    echo "Kernel size: $((actualsize / 500)) sectors"
-    echo "^ It seems to be too large ^"
+    echo "Kernel image seems to be too large."
     exit 1
 fi
 

@@ -1,8 +1,10 @@
 #![no_std]
 #![feature(lang_items)]
+#![feature(asm)]
 #![feature(unique)]
 #![feature(const_fn)]
-#![feature(asm)]
+#![feature(braced_empty_structs)]
+#![feature(step_by)]
 
 extern crate rlibc;
 extern crate spin;
@@ -18,21 +20,18 @@ use vga_buffer::{Color, CellColor};
 /// The kernel main function
 #[no_mangle]
 pub extern fn rust_main() {
-    use core::fmt::Write;
-
-    // test
-    rreset!();
-    rprintln!("Tuubaaja");
-
     // startup message
+    rreset!();
     rprintln!("Dimension 7 OS\n");
     rprintln!("Initializing system...");
-
+    rprintln!("");
 
     // read memory map
-    let mmap_ok = ram_map::load_memory_map();
+    mem_map::create_memory_bitmap();
+    let allocator = mem_map::BitmapAllocator;
 
     // hang
+    rprintln!("");
     rprintln!("System ready.");
     loop {}
 }

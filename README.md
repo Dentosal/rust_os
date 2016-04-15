@@ -1,5 +1,5 @@
 # Dimension 7 - An operating system
-An x86-64 operating system written in Rust and nasm.
+A simple x86-64 operating system written in Rust and nasm.
 
 ## Current features:
 * Text output terminal
@@ -15,9 +15,10 @@ An x86-64 operating system written in Rust and nasm.
 ## Not-in-so-near future features:
 * Filesystem
 * Disk IO
-* Networking
+* Networking?
 * Executable programs
 * Shell & Utils & Editor
+* Multitasking?
 
 # Running
 Have qemu and vagrant installed, and run `./autoboild.sh -u`.

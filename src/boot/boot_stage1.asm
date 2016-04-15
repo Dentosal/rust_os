@@ -47,7 +47,7 @@ stage1:
     jne error
 
     ; endianess (must be little endian, so value must be 1) (error code: "EE")
-    ;mov ah, 'E'
+    mov ah, 'E'
     cmp byte [loadpoint + 5], 0x1
     jne error
 

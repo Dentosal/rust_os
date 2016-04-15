@@ -161,14 +161,14 @@ stage1:
 .over:
     ; going to byte bytes mode (8*8 = 2**6 = 64 bits = Long mode)
 
-    ; relocate GDT to 0x100
+    ; relocate GDT to 0x1000
     mov esi, gdt64  ; from
-    mov edi, 0x100  ; to
+    mov edi, 0x1000 ; to
     mov ecx, 8*3+12 ; size (no pointer)
     rep movsb       ; copy
 
     ; load GDT
-    lgdt [0x100 + 8*3]
+    lgdt [0x1000 + 8*3]
 
     ; Now we are in IA32e (compatibility) submode
     ; jump into kernel entry (relocated to 0x00010000)
@@ -258,6 +258,6 @@ gdt64:
     dq (1<<44) | (1<<47) | (1<<41) ; data segment
 .pointer:   ; GDTR
     dw 8*3      ; size
-    dq 0x100    ; POINTER
+    dq 0x1000   ; POINTER
 
 times (0x200-($-$$)) db 0 ; fill sector

@@ -90,7 +90,6 @@ impl Cursor {
 
 /// Terminal: an interface to hardware terminal
 pub struct Terminal {
-    raw_mode: bool,
     output_color: CellColor,
     cursor: Cursor,
     buffer: Unique<Buffer>,
@@ -177,7 +176,6 @@ impl ::core::fmt::Write for Terminal {
 
 // Create static pointer mutex with spinlock to make TERMINAL thread-safe
 pub static TERMINAL: Mutex<Terminal> = Mutex::new(Terminal {
-    raw_mode: false,
     output_color: CellColor::new(Color::White, Color::Black),
     cursor: Cursor {row: 0, col: 0},
     buffer: unsafe { Unique::new(VGA_BUFFER_ADDRESS as *mut _) },

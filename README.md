@@ -1,23 +1,24 @@
-# rust_os
-Testing x86-64 osdev with Rust and nasm.
+# Dimension 7 - An operating system
+A simple x86-64 operating system written in Rust and nasm.
 
 ## Current features:
 * Text output terminal
 * Long mode with Rust
+* Physical memory manager
+* Identity paging
 
 ## Planned in near future:
 * Virtual TTYs
 * Keyboard input
-* Memory manager and paging
+* Usable paging model
 
 ## Not-in-so-near future features:
 * Filesystem
 * Disk IO
-* Networking
+* Networking?
 * Executable programs
+* Shell & Utils & Editor
+* Multitasking?
 
 # Running
 Have qemu and vagrant installed, and run `./autoboild.sh -u`.
-
-# name
-Todo: rename. Maybe "Dimension 7"?

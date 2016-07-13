@@ -17,8 +17,6 @@ mod util;
 mod mem_map;
 mod pic;
 
-use vga_buffer::{Color, CellColor};
-
 /// The kernel main function
 #[no_mangle]
 pub extern fn rust_main() {
@@ -32,10 +30,27 @@ pub extern fn rust_main() {
     mem_map::create_memory_bitmap();
 
     // pic setup
-    unsafe {
-        pic::PICS.lock().init();
+    {
+        unsafe {
+            pic::PICS.lock().init();
+        }
     }
 
+    rprintln!("?0");
+
+    // idt setup
+    unsafe {
+        asm!("call idt_setup"::::"intel");
+    }
+
+    rprintln!("?1");
+
+
+    unsafe {
+        asm!("int 1"::::"intel");
+    }
+
+    rprintln!("?2");
 
 
     // paging

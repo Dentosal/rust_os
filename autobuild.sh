@@ -2,7 +2,7 @@
 set -e
 
 # give -v to open in VirtualBox
-# give -u to run vagrant up
+# give -u to run "vagrant up"
 
 vboxflag=0
 vagrantflag=0

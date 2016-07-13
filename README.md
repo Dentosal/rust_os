@@ -5,7 +5,8 @@ A simple x86-64 operating system written in Rust and nasm.
 * Text output terminal
 * Long mode with Rust
 * Physical memory manager
-* Identity paging
+* Identity paging for low memory
+* Basic interrupt support
 
 ## Planned in near future:
 * Virtual TTYs
@@ -19,6 +20,7 @@ A simple x86-64 operating system written in Rust and nasm.
 * Executable programs
 * Shell & Utils & Editor
 * Multitasking?
+* Device drivers?
 
 # Running
-Have qemu and vagrant installed, and run `./autoboild.sh -u`.
+Have qemu and vagrant installed, and run `./autobuild.sh -u`.

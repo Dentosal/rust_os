@@ -1,12 +1,14 @@
 [BITS 64]
 
+%include "src/asm_routines/constants.asm"
+
 global start
 extern rust_main
 
 section .entry
 start:
     ; update segments
-    mov dx, 0x10; data selector
+    mov dx, gdt_selector_data   ; data selector
     mov ss, dx  ; stack segment
     mov ds, dx  ; data segment
     mov es, dx  ; extra segment

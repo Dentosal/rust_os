@@ -2,6 +2,8 @@
 ; STAGE 1
 
 
+%include "src/asm_routines/constants.asm"
+
 ; Kernel elf executable initial load point
 %define loadpoint 0x8000
 
@@ -162,13 +164,13 @@ stage1:
     ; going to byte bytes mode (8*8 = 2**6 = 64 bits = Long mode)
 
     ; relocate GDT to 0x1000
-    mov esi, gdt64  ; from
-    mov edi, 0x1000 ; to
-    mov ecx, 8*3+12 ; size (no pointer)
-    rep movsb       ; copy
+    mov esi, tmp_gdt64  ; from
+    mov edi, gdt        ; to
+    mov ecx, 8*3+12     ; size (no pointer)
+    rep movsb           ; copy
 
     ; load GDT
-    lgdt [0x1000 + 8*3]
+    lgdt [gdt + 8*3]
 
     ; Now we are in IA32e (compatibility) submode
     ; jump into kernel entry (relocated to 0x00010000)
@@ -250,14 +252,12 @@ error:
 ; Constant data section
 
 ; GDT (Global Descriptor Table)
-gdt64:
+tmp_gdt64:
     dq 0 ; zero entry
-.code: equ $ - gdt64
     dq (1<<44) | (1<<47) | (1<<41) | (1<<43) | (1<<53) ; code segment
-.data: equ $ - gdt64
     dq (1<<44) | (1<<47) | (1<<41) ; data segment
 .pointer:   ; GDTR
     dw 8*3      ; size
-    dq 0x1000   ; POINTER
+    dq gdt      ; POINTER
 
 times (0x200-($-$$)) db 0 ; fill sector

@@ -10,3 +10,7 @@ crate-type = ["staticlib"]  # static and standalone
 rlibc = "1.0.0"             # raw libc
 spin = "0.3.4"              # spinlocks
 cpuio = "*"                 # cpu port IO
+
+[dependencies.bitflags]     # bitflags
+version = "0.4.0"
+features = ["no_std"]

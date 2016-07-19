@@ -175,7 +175,7 @@ impl Terminal {
     pub fn get_panic_access() -> Terminal {
         Terminal {
             output_color: CellColor::new(Color::Red, Color::Black),
-            cursor: Cursor {row: 0, col: SCREEN_HEIGHT-1},
+            cursor: Cursor {row: SCREEN_HEIGHT-1, col: 0},
             buffer: unsafe { Unique::new(VGA_BUFFER_ADDRESS as *mut _) },
         }
     }

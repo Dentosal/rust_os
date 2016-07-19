@@ -1,2 +1,2 @@
-# Fixme
-* [ x ] Relocate kernel ("without=now" causes GPF or PF)
+* VirtualBox has a nasty bug so the long mode doesn't work... maybe they will fix it...
+    * Until that Qemu is the "offical" platform

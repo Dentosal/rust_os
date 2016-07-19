@@ -47,6 +47,9 @@ Vagrant.configure(2) do |config|
     # Display the VirtualBox GUI when booting the machine
     # vb.gui = true
 
+    # Forward GDB port
+    config.vm.network "forwarded_port", guest: 1234, host: 1234
+
     # Customize the amount of memory on the VM:
     vb.memory = "4096"
   end
@@ -72,6 +75,8 @@ Vagrant.configure(2) do |config|
     sudo apt-get install xorriso -y
     sudo apt-get install git -y
     sudo apt-get install vim -y
+    sduo apt-get install texinfo flex bison python-dev ncurses-dev -y
+    curl -sf https://raw.githubusercontent.com/phil-opp/binutils-gdb/rust-os/build-rust-os-gdb.sh | sh
     curl -sSf https://static.rust-lang.org/rustup.sh | sh -s -- --channel=nightly -y
     echo "cd /vagrant" >> /home/vagrant/.bashrc
   SHELL

@@ -66,13 +66,13 @@ pub extern "C" fn exception_de() -> ! {
 }
 
 pub extern "C" fn exception_df() -> ! {
-    panic!("Double fault.");
+    unsafe {
+        panic_indicator!(0x4f664f64);   // "df"
+    }
+    loop {}
 }
 
 pub extern "C" fn exception_gp() -> ! {
-    unsafe {
-        asm!("mov dword ptr [0xb8000], 0x4f654f31" ::: "memory" : "volatile", "intel");
-    }
     panic!("General protection fault.");
 }
 

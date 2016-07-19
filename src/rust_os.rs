@@ -32,7 +32,6 @@ pub extern fn rust_main() {
     rprintln!("Initializing system...");
     rprintln!("");
 
-
     // set up frame allocator
     mem_map::create_memory_bitmap();
 
@@ -41,9 +40,9 @@ pub extern fn rust_main() {
     interrupt::init();
     cpuid::init(); // must be after interrupt handler, if the cpuid instruction is not supported => invalid opcode exception
 
-    // unsafe {
-    //     asm!("xor eax, eax; div eax;"::::"intel");
-    // }
+    unsafe {
+        asm!("xor eax, eax; div eax;"::::"intel");
+    }
 
     // paging
 
@@ -68,8 +67,8 @@ extern "C" fn eh_personality() -> ! {loop {}}
 extern "C" fn panic_fmt(fmt: core::fmt::Arguments, file: &str, line: u32) -> ! {
     unsafe {
         panic_indicator!();
-        // vga_buffer::panic_output(format_args!("Kernel Panic: file: '{}', line {}\n", file, line));
-        // vga_buffer::panic_output(format_args!("    {}\n", fmt));
+        vga_buffer::panic_output(format_args!("Kernel Panic: file: '{}', line {}\n", file, line));
+        vga_buffer::panic_output(format_args!("    {}\n", fmt));
         asm!("jmp panic"::::"intel");
     }
     loop {}

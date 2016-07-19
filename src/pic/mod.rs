@@ -103,3 +103,9 @@ impl ChainedPics {
 }
 
 pub static PICS: Mutex<ChainedPics> = Mutex::new(unsafe { ChainedPics::new(0x20, 0x28) });
+
+pub fn init() {
+    unsafe {
+        PICS.lock().init();
+    }
+}

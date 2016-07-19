@@ -5,15 +5,18 @@
 %include "src/asm_routines/constants.asm"
 
 global idt_setup
+global interrupt_unknown_exception
+
 extern panic
+extern panic_unknown_exception
 
 
 section .text:
 
-int_handler:
+interrupt_unknown_exception:
     xor ax, ax
     mov gs, ax
-    mov dword [gs:0xB8000],') : '
+    call panic_unknown_exception
     hlt
     jmp $
 
@@ -45,14 +48,11 @@ idt_setup:  ; set all interrupt routines to system panic
     push rdx
 
     ; set idt entries
-    mov rcx, 0x100  ; 0x100 = 255 entries
+    mov rcx, 0x100  ; 0x100 = 256 entries
     mov rbx, 0x0    ; idt starts from 0x0
-.foreach: ; IMPORTANT HERE FIXME: this does not do anything?? why??? (it is still called)
+.foreach:
     ; store offset (pointer to irq routine) to rax
-    ;mov rax, panic  ; default to panic. TODO: write a proper irq routine
-    mov rax, int_handler  ; use tmp handler
-    ; test if we should call something else on interrupt
-    ;cmp
+    mov rax, panic_unknown_exception    ; default to panic with message about unknown exception
 
     mov [rbx+ 0], ax                ; offset_low
     mov [rbx+ 2], word gdt_selector_code    ; code segment selector
@@ -79,20 +79,8 @@ idt_setup:  ; set all interrupt routines to system panic
     xor rax, rax
     mov [idtr+2], rax
 
-    mov edx, 0xF00D0001
-
     ; tell cpu where the idt is
     lidt [idtr]
-
-    mov edx, 0xF00D0002
-
-    mov eax, [idtr]
-
-    int 1
-
-    mov edx, 0xF00D0003
-
-    jmp $
 
     ; return
     pop rdx
@@ -101,19 +89,16 @@ idt_setup:  ; set all interrupt routines to system panic
     pop rax
     ret
 
-.int_1:
-    ; mov rax,
-    ret
 
 ; ; STRUCTURE
 ; idt_descriptor:
-;     dw 0x0  ; offset_low (16 bits)
-;     dw 0x0  ; selector
-;     db 0x0  ; zero
-;     db 0x0  ; type and attributes
-;     dw 0x0  ; offset_middle (16 bits)
-;     dd 0x0  ; offset_high (32 bits)
-;     dd 0x0  ; zero
+;     dw 0x0  ; u16 offset_low
+;     dw 0x0  ; u16 selector
+;     db 0x0  ; u8  zero
+;     db 0x0  ; u8  type and attributes
+;     dw 0x0  ; u16 offset_middle
+;     dd 0x0  ; u32 offset_high
+;     dd 0x0  ; u32 zero
 ;
 ;
 ; idtr:   ; idt starts from 0x0 and is therefore page-aligned

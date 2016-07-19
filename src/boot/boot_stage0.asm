@@ -1,6 +1,8 @@
 ; MASTER BOOT RECORD
 ; STAGE 0
 
+%include "src/asm_routines/constants.asm"
+
 %define loadpoint 0x8000
 ; locate kernel at 0x8000->
 %define bootdrive 0x7b00
@@ -23,7 +25,6 @@ boot:
     mov [bootdrive], dl
 
     ; get memory map
-    mov di, 0x1000  ; buffer 0x1000->
     mov si, mmap_error_msg
     call get_memory_map
     jc print_error   ; carry flag set on error
@@ -81,9 +82,9 @@ mmap_error_msg db "E: mmap", 0
 
 ; use the INT 0x15, eax= 0xE820 BIOS function to get a memory map
 ; http://wiki.osdev.org/Detecting_Memory_(x86)#BIOS_Function:_INT_0x15.2C_EAX_.3D_0xE820
-; inputs: es:di -> destination buffer for 24 byte entries
-; outputs: bp = entry count, trashes all registers except esi
+; output: bp = entry count, trashes all registers except esi
 get_memory_map:
+    mov di, (boot_tmp_mmap_buffer+2)
 	xor ebx, ebx               ; ebx must be 0 to start
 	xor bp, bp                 ; keep an entry count in bp
 	mov edx, 0x0534D4150       ; Place "SMAP" into edx
@@ -121,7 +122,7 @@ get_memory_map:
 	test ebx, ebx              ; if ebx resets to 0, list is complete
 	jne short .e820lp
 .e820f:
-	mov [0x1000-2], bp         ; store the entry count just below the array
+	mov [boot_tmp_mmap_buffer], bp ; store the entry count just below the array
 	clc                        ; there is "jc" on end of list to this point, so the carry must be cleared
 	ret
 .failed:

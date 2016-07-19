@@ -163,7 +163,7 @@ stage1:
 .over:
     ; going to byte bytes mode (8*8 = 2**6 = 64 bits = Long mode)
 
-    ; relocate GDT to 0x1000
+    ; relocate GDT
     mov esi, tmp_gdt64  ; from
     mov edi, gdt        ; to
     mov ecx, 8*3+12     ; size (no pointer)

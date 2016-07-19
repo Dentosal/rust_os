@@ -16,7 +16,7 @@ start:
     mov gs, dx  ; g-segment
 
     ; set up stack
-    mov esp, stack_top
+    mov rsp, stack_top
 
     ; get to kernel
     call rust_main

@@ -67,6 +67,7 @@ impl Cursor {
             self.col+=1;
         }
     }
+
     /// New line
     /// # Returns
     /// true if terminal should be scrolled
@@ -80,6 +81,7 @@ impl Cursor {
             true
         }
     }
+
     /// Set position
     pub fn set_position(&mut self, row: usize, col: usize) {
         // TODO: boundary check
@@ -101,6 +103,7 @@ impl Terminal {
         self.output_color = CellColor::new(Color::White, Color::Black);
         self.clear();
     }
+
     /// Clear screen
     pub fn clear(&mut self) {
         self.cursor.set_position(0, 0);
@@ -115,6 +118,7 @@ impl Terminal {
             }
         }
     }
+
     /// Write string to terminal's stdout
     pub fn write_str(&mut self, string: &str) {
         let sb = string.as_bytes();
@@ -122,6 +126,7 @@ impl Terminal {
             self.write_byte(sb[index]);
         }
     }
+
     /// Write single byte to terminal's stdout
     pub fn write_byte(&mut self, byte: u8) {
         if byte == b'\n' {
@@ -139,6 +144,7 @@ impl Terminal {
             self.cursor.next();
         }
     }
+
     /// Set color
     pub fn set_color(&mut self, color: CellColor) {
         self.output_color = color;
@@ -163,7 +169,18 @@ impl Terminal {
     fn get_buffer(&mut self) -> &mut Buffer {
         unsafe {self.buffer.get_mut()}
     }
+
+    /// Create unsafe panic terminal
+    /// Outputs red-on-black text to the last lines of the terminal
+    pub fn get_panic_access() -> Terminal {
+        Terminal {
+            output_color: CellColor::new(Color::Red, Color::Black),
+            cursor: Cursor {row: 0, col: SCREEN_HEIGHT-1},
+            buffer: unsafe { Unique::new(VGA_BUFFER_ADDRESS as *mut _) },
+        }
+    }
 }
+
 /// Format macros
 impl ::core::fmt::Write for Terminal {
     fn write_str(&mut self, s: &str) -> ::core::fmt::Result {
@@ -174,13 +191,21 @@ impl ::core::fmt::Write for Terminal {
     }
 }
 
+/// Panic output
+pub unsafe fn panic_output(fmt: ::core::fmt::Arguments) {
+    use core::fmt::Write;
+
+    let mut panicterm = Terminal::get_panic_access();
+    panicterm.scroll_line();
+    panicterm.write_fmt(fmt).unwrap();
+}
+
 // Create static pointer mutex with spinlock to make TERMINAL thread-safe
 pub static TERMINAL: Mutex<Terminal> = Mutex::new(Terminal {
     output_color: CellColor::new(Color::White, Color::Black),
     cursor: Cursor {row: 0, col: 0},
     buffer: unsafe { Unique::new(VGA_BUFFER_ADDRESS as *mut _) },
 });
-
 
 /// "Raw" output macros
 macro_rules! rprint {
@@ -196,5 +221,10 @@ macro_rules! rprintln {
 macro_rules! rreset {
     () => ({
         $crate::vga_buffer::TERMINAL.lock().reset();
+    });
+}
+macro_rules! panic_indicator {
+    () => ({
+        asm!("mov eax, 0x4f214f70; mov [0xb809c], eax" ::: "eax", "memory" : "volatile", "intel");
     });
 }

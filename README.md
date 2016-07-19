@@ -21,4 +21,4 @@ A simple x86-64 operating system written in Rust and nasm.
 * Multitasking?
 
 # Running
-Have qemu and vagrant installed, and run `./autoboild.sh -u`.
+Have Qemu and Vagrant installed, and run `./autobuild.sh -u`.

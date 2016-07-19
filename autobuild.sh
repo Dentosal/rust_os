@@ -3,28 +3,49 @@ set -e
 
 # give -v to open in VirtualBox
 # give -u to run "vagrant up"
+# give -s to use "qemu -s" for gdb in port 1234
+# give -d to use additional debug options
 
-vboxflag=0
-vagrantflag=0
+flag_vbox=0
+flag_debug=0
+flag_vagrant=0
+flag_qemu_s=0
 
-while getopts 'abf:vu' flag; do
+while getopts 'abf:uvsd' flag; do
   case "${flag}" in
-    u) vagrantflag=1 ;;
-    v) vboxflag=1 ;;
+    u) flag_vagrant=1 ;;
+    v) flag_vbox=1 ;;
+    s) flag_qemu_s=1 ;;
+    d) flag_debug=1 ;;
     *) error "Unexpected option ${flag}" ;;
   esac
 done
 
-if [ $vagrantflag -eq 1 ]
+if [ $flag_vagrant -eq 1 ]
 then
     vagrant up
 fi
 
 vagrant ssh -c "cd /vagrant/ && ./build.sh"
 
-if [ $vboxflag -eq 1 ]
+if [ $flag_vbox -eq 1 ]
 then
-    VBoxManage startvm "RustOS"
+    if [ $flag_debug -eq 1 ]
+    then
+        VirtualBox --startvm "RustOS" --debug
+    else
+        VBoxManage startvm "RustOS"
+    fi
 else
-    qemu-system-x86_64 -d int -no-reboot build/disk.img -monitor stdio
+    if [ $flag_qemu_s -eq 1 ]
+    then
+        qemu-system-x86_64 -d int -m 4096 -no-reboot build/disk.img -monitor stdio -s -S
+    else
+        if [ $flag_debug -eq 1 ]
+        then
+            qemu-system-x86_64 -d int,in_asm -m 4096 -no-reboot build/disk.img -monitor stdio
+        else
+            qemu-system-x86_64 -d int -m 4096 -no-reboot build/disk.img -monitor stdio
+        fi
+    fi
 fi

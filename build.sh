@@ -18,7 +18,7 @@ nasm -f elf64 src/entry.asm -o build/entry.o
 
 echo "* kernel"
 # compile kernel (with full optimizations)
-cargo rustc --target x86_64-unknown-linux-gnu --release -- -Z no-landing-pads
+cargo rustc --target x86_64-unknown-linux-gnu --release -- #-Z no-landing-pads # no-landing-pads disabled, moved to panic=abort, see Cargo.toml
 
 echo "* kernel assembly routines"
 for fpath in src/asm_routines/*.asm

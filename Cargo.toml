@@ -6,6 +6,12 @@ authors = ["Hannes Karppila <hannes.karppila@gmail.com>"]
 [lib]
 crate-type = ["staticlib"]  # static and standalone
 
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+
 [dependencies]
 rlibc = "1.0.0"             # raw libc
 spin = "0.3.4"              # spinlocks

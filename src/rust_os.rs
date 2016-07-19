@@ -1,10 +1,13 @@
+#![allow(dead_code)]
+
 #![no_std]
 #![feature(lang_items)]
 #![feature(asm)]
 #![feature(unique)]
 #![feature(const_fn)]
-#![feature(braced_empty_structs)]
 #![feature(step_by)]
+#![feature(inclusive_range_syntax)]
+#![feature(stmt_expr_attributes)]
 
 extern crate rlibc;
 extern crate spin;
@@ -16,6 +19,9 @@ mod vga_buffer;
 mod util;
 mod mem_map;
 mod pic;
+mod cpuid;
+mod interrupt;
+
 
 /// The kernel main function
 #[no_mangle]
@@ -26,32 +32,18 @@ pub extern fn rust_main() {
     rprintln!("Initializing system...");
     rprintln!("");
 
+
     // set up frame allocator
     mem_map::create_memory_bitmap();
 
-    // pic setup
-    {
-        unsafe {
-            pic::PICS.lock().init();
-        }
-    }
+    // Initializing modules
+    pic::init();
+    interrupt::init();
+    cpuid::init(); // must be after interrupt handler, if the cpuid instruction is not supported => invalid opcode exception
 
-    rprintln!("?0");
-
-    // idt setup
-    unsafe {
-        asm!("call idt_setup"::::"intel");
-    }
-
-    rprintln!("?1");
-
-
-    unsafe {
-        asm!("int 1"::::"intel");
-    }
-
-    rprintln!("?2");
-
+    // unsafe {
+    //     asm!("xor eax, eax; div eax;"::::"intel");
+    // }
 
     // paging
 
@@ -63,17 +55,22 @@ pub extern fn rust_main() {
 }
 
 #[cfg(not(test))]
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn _Unwind_Resume() -> ! {loop {}}
+
+#[cfg(not(test))]
 #[lang = "eh_personality"]
-extern "C" fn eh_personality() {}
+extern "C" fn eh_personality() -> ! {loop {}}
 
 #[cfg(not(test))]
 #[lang = "panic_fmt"]
 extern "C" fn panic_fmt(fmt: core::fmt::Arguments, file: &str, line: u32) -> ! {
-    // unsafe {
-    //     asm!("jmp panic"::::"intel");
-    // }
-    // rreset!();
-    rprintln!("Kernel Panic: file: '{}', line {}", file, line);
-    rprintln!("    {}\n", fmt);
+    unsafe {
+        panic_indicator!();
+        // vga_buffer::panic_output(format_args!("Kernel Panic: file: '{}', line {}\n", file, line));
+        // vga_buffer::panic_output(format_args!("    {}\n", fmt));
+        asm!("jmp panic"::::"intel");
+    }
     loop {}
 }

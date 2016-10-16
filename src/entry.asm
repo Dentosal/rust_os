@@ -33,5 +33,5 @@ start:
 ; reserve space for stack
 section .bss
 stack_bottom:
-    resb 4096
+    resb (4096*10) ; I have had a couple of overflows with just 4096-sized stack. Might be a good idea to increase this even more.
 stack_top:

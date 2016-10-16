@@ -1,5 +1,8 @@
+use core::intrinsics::unreachable;
 use core::ptr;
 use core::mem;
+
+use keyboard;
 
 // These constants MUST have defined with same values as those in src/asm_routines/constants.asm
 // They also MUST match the ones in plan.md
@@ -19,7 +22,7 @@ struct IDTReference {
 impl IDTReference {
     pub fn new() -> IDTReference {
         IDTReference {
-            limit: ((IDT_ENTRY_COUNT-1)*(mem::size_of::<IDTDescriptor>()))  as u16,
+            limit: ((IDT_ENTRY_COUNT-1)*(mem::size_of::<IDTDescriptor>())) as u16,
             offset: IDT_ADDRESS as u64
         }
     }
@@ -61,20 +64,40 @@ impl IDTDescriptor {
     }
 }
 
-pub extern "C" fn exception_de() -> ! {
+#[naked]
+unsafe extern "C" fn exception_de() -> ! {
     panic!("Division by zero.");
 }
 
-pub extern "C" fn exception_df() -> ! {
+#[naked]
+unsafe extern "C" fn exception_df() -> ! {
+    // it has double faulted, so no more risks, just deliver the panic indicator
     unsafe {
         panic_indicator!(0x4f664f64);   // "df"
     }
     loop {}
 }
 
-pub extern "C" fn exception_gp() -> ! {
+#[naked]
+unsafe extern "C" fn exception_gp() -> ! {
     panic!("General protection fault.");
 }
+
+/// keyboard_event: first ps/2 device sent data
+/// we just trust that it is a keyboard
+/// ^^this should change when we properly initialize the ps/2 controller
+#[no_mangle]
+pub extern fn keyboard_event() {
+    keyboard::KEYBOARD.lock().notify();
+}
+
+#[naked]
+unsafe extern "C" fn keyboard_event_wrapper() -> ! {
+    loop {}
+    asm!("call keyboard_event; iretq" :::: "volatile");
+    unreachable(); // NOTE: this is not a macro, this is core::intrinsics::unreachable, and it's better be unreachable
+}
+
 
 pub fn init() {
     let mut exception_handlers: [Option<*const fn()>; IDT_ENTRY_COUNT] = [None; IDT_ENTRY_COUNT];
@@ -82,6 +105,7 @@ pub fn init() {
     exception_handlers[0x00] = Some(exception_de as *const fn());
     exception_handlers[0x08] = Some(exception_df as *const fn());
     exception_handlers[0x0d] = Some(exception_gp as *const fn());
+    exception_handlers[0x21] = Some(keyboard_event_wrapper as *const fn());
 
     for index in 0...(IDT_ENTRY_COUNT-1) {
         let descriptor = match exception_handlers[index] {
@@ -92,10 +116,11 @@ pub fn init() {
             ptr::write_volatile((IDT_ADDRESS + index * mem::size_of::<IDTDescriptor>()) as *mut _, descriptor);
         }
     }
-
     IDTReference::new().write();
+
 
     unsafe {
         asm!("lidt [$0]" :: "r"(IDTR_ADDRESS) : "memory" : "volatile", "intel");
+        // asm!("sti" :::: "volatile", "intel");
     }
 }

@@ -7,12 +7,16 @@
 #![feature(const_fn)]
 #![feature(step_by)]
 #![feature(inclusive_range_syntax)]
+#![feature(naked_functions)]
+#![feature(core_intrinsics)]
 #![feature(stmt_expr_attributes)]
 
 extern crate rlibc;
 extern crate spin;
 extern crate cpuio;
 extern crate bitflags;
+
+
 
 #[macro_use]
 mod vga_buffer;
@@ -21,7 +25,9 @@ mod mem_map;
 mod pic;
 mod cpuid;
 mod interrupt;
+mod keyboard;
 
+pub use interrupt::{keyboard_event};
 
 /// The kernel main function
 #[no_mangle]
@@ -35,14 +41,21 @@ pub extern fn rust_main() {
     // set up frame allocator
     mem_map::create_memory_bitmap();
 
+    // rprintln!("??"); unsafe {asm!("jmp breakpoint"::::"intel","volatile");};
+
+    // unsafe {asm!("mov WORD PTR [0xb8000], 0xbeef"::::"intel","volatile");}
+
     // Initializing modules
     pic::init();
     interrupt::init();
-    cpuid::init(); // must be after interrupt handler, if the cpuid instruction is not supported => invalid opcode exception
+    // cpuid::init(); // must be after interrupt handler, if the cpuid instruction is not supported => invalid opcode exception
 
-    unsafe {
-        asm!("xor eax, eax; div eax;"::::"intel");
-    }
+
+
+    // unsafe {
+    //     asm!("int 0"::::"intel");
+    //     asm!("xor eax, eax; div eax;"::::"intel");
+    // }
 
     // paging
 
@@ -50,7 +63,14 @@ pub extern fn rust_main() {
     // hang
     rprintln!("");
     rprintln!("System ready.");
-    loop {}
+    loop {
+        // rprint!(".");
+        // for _ in 0..1000000 {
+        //     unsafe {
+        //         asm!("nop" :::: "volatile", "intel")
+        //     }
+        // }
+    }
 }
 
 #[cfg(not(test))]
@@ -66,10 +86,10 @@ extern "C" fn eh_personality() -> ! {loop {}}
 #[lang = "panic_fmt"]
 extern "C" fn panic_fmt(fmt: core::fmt::Arguments, file: &str, line: u32) -> ! {
     unsafe {
-        panic_indicator!();
-        vga_buffer::panic_output(format_args!("Kernel Panic: file: '{}', line {}\n", file, line));
-        vga_buffer::panic_output(format_args!("    {}\n", fmt));
-        asm!("jmp panic"::::"intel");
+        panic_indicator!(0x4f214f21); // !!
+        // vga_buffer::panic_output(format_args!("Kernel Panic: file: '{}', line {}\n", file, line));
+        // vga_buffer::panic_output(format_args!("    {}\n", fmt));
+        // asm!("jmp panic"::::"intel");
     }
     loop {}
 }

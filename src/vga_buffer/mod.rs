@@ -228,6 +228,6 @@ macro_rules! panic_indicator {
         asm!(concat!("mov eax, ", stringify!($x), "; mov [0xb809c], eax") ::: "eax", "memory" : "volatile", "intel");
     });
     () => ({
-        panic_indicator!(0x4f214f70);
+        panic_indicator!(0x4f214f70);   // !p
     });
 }

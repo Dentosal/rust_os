@@ -53,21 +53,7 @@ Vagrant.configure(2) do |config|
     # Customize the amount of memory on the VM:
     vb.memory = "4096"
   end
-  #
-  # View the documentation for the provider you are using for more
-  # information on available options.
 
-  # Define a Vagrant Push strategy for pushing to Atlas. Other push strategies
-  # such as FTP and Heroku are also available. See the documentation at
-  # https://docs.vagrantup.com/v2/push/atlas.html for more information.
-  # config.push.define "atlas" do |push|
-  #   push.app = "YOUR_ATLAS_USERNAME/YOUR_APPLICATION_NAME"
-  # end
-
-  # Enable provisioning with a shell script. Additional provisioners such as
-  # Puppet, Chef, Ansible, Salt, and Docker are also available. Please see the
-  # documentation for more information about their specific syntax and use.
-  #
   # Install rust osdev toolkit
   config.vm.provision "shell", inline: <<-SHELL
     sudo apt-get update
@@ -76,8 +62,10 @@ Vagrant.configure(2) do |config|
     sudo apt-get install git -y
     sudo apt-get install vim -y
     sduo apt-get install texinfo flex bison python-dev ncurses-dev -y
+    sudo apt-get install cmake libssl-dev -y
     curl -sf https://raw.githubusercontent.com/phil-opp/binutils-gdb/rust-os/build-rust-os-gdb.sh | sh
     curl -sSf https://static.rust-lang.org/rustup.sh | sh -s -- --channel=nightly -y
+    cargo install xargo
     echo "cd /vagrant" >> /home/vagrant/.bashrc
   SHELL
 end

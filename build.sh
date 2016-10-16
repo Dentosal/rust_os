@@ -1,6 +1,12 @@
 #!/bin/bash
 set -e
-#set -x # turn on command printing
+# set -x # turn on command printing
+
+# config
+TARGET="rust_os"
+
+# some constants
+PATH=$PATH:$HOME/.cargo/bin
 
 # prepare for build
 mkdir -p build
@@ -17,8 +23,10 @@ echo "* kernel entry point"
 nasm -f elf64 src/entry.asm -o build/entry.o
 
 echo "* kernel"
+
 # compile kernel (with full optimizations)
-cargo rustc --target x86_64-unknown-linux-gnu --release -- #-Z no-landing-pads # no-landing-pads disabled, moved to panic=abort, see Cargo.toml
+# cargo rustc --target x86_64-unknown-linux-gnu --release -- #-Z no-landing-pads # no-landing-pads disabled, moved to panic=abort, see Cargo.toml # outdated, using xargo now
+xargo build --target $TARGET --release
 
 echo "* kernel assembly routines"
 for fpath in src/asm_routines/*.asm
@@ -31,7 +39,7 @@ done
 echo "Linking objects..."
 
 # link
-ld -n --gc-sections -T buildsystem/linker.ld -o build/kernel.bin build/entry.o target/x86_64-unknown-linux-gnu/release/librust_os.a build/asm_routines/*.o
+ld -n --gc-sections -T buildsystem/linker.ld -o build/kernel.bin build/entry.o target/$TARGET/release/librust_os.a build/asm_routines/*.o
 
 echo "Cheking boundries..."
 
@@ -44,7 +52,7 @@ fi
 
 echo "Creating disk image..."
 
-# floppify :] ( or maybe imagify, isofy or harddiskify)
+# floppify :] (or maybe imagify, isofy or harddiskify)
 echo "* create file"
 echo "* bootsector"
 cp build/boot_stage0.bin build/disk.img    # create image (boot.bin should be same size as actual floppy)
@@ -53,8 +61,9 @@ dd "if=build/boot_stage1.bin" "of=build/disk.img" "bs=512" "seek=1" "count=1" "c
 echo "* kernel"
 dd "if=build/kernel.bin" "of=build/disk.img" "bs=512" "seek=2" "conv=notrunc"
 
+echo "Saving objdump..."
+objdump -d -M intel build/kernel.bin > objdump.txt
 
 # TODO? clean?
-
 
 echo "Done"

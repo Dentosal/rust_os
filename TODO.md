@@ -1,2 +1,3 @@
 * VirtualBox has a nasty bug so the long mode doesn't work... maybe they will fix it...
     * Until that Qemu is the "offical" platform
+* All interrupts cause double fault?? but interrupt handler still gets called, the problem is with the panic_output, I think

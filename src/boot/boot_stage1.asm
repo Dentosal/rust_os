@@ -8,6 +8,8 @@
 %define loadpoint 0x8000
 
 ; Page tables
+; These constants MUST match the ones in plan.md
+; If a constant defined here doesn't exists in that file, then it's also fine
 %define page_table_section_start 0x00020000
 %define page_table_p4 0x00020000
 %define page_table_p3 0x00021000

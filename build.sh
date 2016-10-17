@@ -26,7 +26,7 @@ echo "* kernel"
 
 # compile kernel (with full optimizations)
 # cargo rustc --target x86_64-unknown-linux-gnu --release -- #-Z no-landing-pads # no-landing-pads disabled, moved to panic=abort, see Cargo.toml # outdated, using xargo now
-xargo build --target $TARGET --release
+RUST_BACKTRACE=1 xargo build --target $TARGET --release
 
 echo "* kernel assembly routines"
 for fpath in src/asm_routines/*.asm

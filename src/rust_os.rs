@@ -14,64 +14,79 @@
 extern crate rlibc;
 extern crate spin;
 extern crate cpuio;
+#[macro_use]
 extern crate bitflags;
 
 
 
 #[macro_use]
 mod vga_buffer;
+#[macro_use]
 mod util;
+#[macro_use]
 mod mem_map;
+mod paging;
 mod pic;
 mod cpuid;
 mod interrupt;
 mod keyboard;
 
-pub use interrupt::{keyboard_event};
+use spin::Mutex;
 
-/// The kernel main function
-#[no_mangle]
-pub extern fn rust_main() {
-    // startup message
+pub use interrupt::{keyboard_event};
+use mem_map::{FrameAllocator, BitmapAllocator};
+
+/// Display startup message
+fn display_message() {
     rreset!();
     rprintln!("Dimension 7 OS\n");
-    rprintln!("Initializing system...");
-    rprintln!("");
+}
 
-    // set up frame allocator
+/// Finish system setup
+fn environment_setup() {
+    // frame allocator
     mem_map::create_memory_bitmap();
 
-    // rprintln!("??"); unsafe {asm!("jmp breakpoint"::::"intel","volatile");};
-
-    // unsafe {asm!("mov WORD PTR [0xb8000], 0xbeef"::::"intel","volatile");}
-
-    // Initializing modules
+    // interrupt controller
     pic::init();
+
+    // interrupt system
     interrupt::init();
-    // cpuid::init(); // must be after interrupt handler, if the cpuid instruction is not supported => invalid opcode exception
 
-
-
-    // unsafe {
-    //     asm!("int 0"::::"intel");
-    //     asm!("xor eax, eax; div eax;"::::"intel");
-    // }
+    // cpu feature detection (must be after interrupt handler, if the cpuid instruction is not supported => invalid opcode exception)
+    // cpuid::init(); // currently disabled
 
     // paging
 
 
-    // hang
-    rprintln!("");
-    rprintln!("System ready.");
-    loop {
-        // rprint!(".");
-        // for _ in 0..1000000 {
-        //     unsafe {
-        //         asm!("nop" :::: "volatile", "intel")
-        //     }
-        // }
-    }
 }
+
+/// The kernel main function
+#[no_mangle]
+pub extern fn rust_main() {
+    display_message();
+    environment_setup();
+
+    unsafe {
+        // asm!("int 0"::::"intel"); // int0 (#DE)
+        // asm!("xor eax, eax; div eax;"::::"intel"); // #DE
+        // asm!("ud2"); // invalid opcode
+        // *(0xdeadbeef as *mut u64) = 42; // #PF
+        int!(3);
+    }
+
+    rprintln!("OK?!");
+    loop {}
+
+    // let mut frame_allocator = ALLOCATOR.lock();
+    let mut frame_allocator = ALLOCATOR!();
+    paging::test_paging(&mut frame_allocator);
+
+    // hang
+    rprintln!("\nSystem ready.\n");
+    loop {}
+}
+
 
 #[cfg(not(test))]
 #[allow(non_snake_case)]
@@ -84,6 +99,7 @@ extern "C" fn eh_personality() -> ! {loop {}}
 
 #[cfg(not(test))]
 #[lang = "panic_fmt"]
+#[allow(unused_variables)]
 extern "C" fn panic_fmt(fmt: core::fmt::Arguments, file: &str, line: u32) -> ! {
     unsafe {
         panic_indicator!(0x4f214f21); // !!

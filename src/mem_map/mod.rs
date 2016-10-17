@@ -1,6 +1,8 @@
 use spin::Mutex;
 
-// This MUST be kept in sync with the one from src/asm_routines
+use paging::PhysicalAddress;
+
+// This MUST be kept in sync with the one from src/asm_routines and plan.md
 pub const BOOT_TMP_MMAP_BUFFER:     usize   = 0x2000;
 
 pub const MEM_PAGE_SIZE_BYTES:      usize   = 0x1_000; // 4096
@@ -12,16 +14,24 @@ pub const MEMORY_RESERVED_BELOW:    usize   = 0x50_000; // first 160/8=20 bytes 
 // Memory frame (single allocation unit)
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Frame {
-    index: usize
+    pub index: usize
 }
 impl Frame {
     // Create new Frame from memory address. Rounds down.
-    fn from_address(address: usize) -> Frame {
+    pub fn containing_address(address: usize) -> Frame {
         Frame {index: address / MEM_PAGE_SIZE_BYTES}
     }
     // Create new Frame from memory map index.
-    fn from_index(index: usize) -> Frame {
+    pub fn from_index(index: usize) -> Frame {
         Frame {index: index}
+    }
+    // Return start address of the frame
+    pub fn start_address(&self) -> PhysicalAddress {
+        self.index * MEM_PAGE_SIZE_BYTES
+    }
+    // Clone frame
+    fn clone(&self) -> Frame {
+        Frame { index: self.index }
     }
 }
 
@@ -33,7 +43,8 @@ pub trait FrameAllocator {
 
 // A simple first-fit frame allocator
 // Currently we can only get one frame at a time
-pub struct BitmapAllocator;
+pub struct BitmapAllocator {}
+
 impl BitmapAllocator {
     fn is_free(&self, index: usize) -> bool {
         let free    = unsafe { *((MEM_PAGE_MAP1_ADDRESS + index/8) as *mut u8) } & (1 << (index%8)) != 0; // 1: free, 0: reserved
@@ -128,4 +139,10 @@ pub fn create_memory_bitmap() {
 }
 
 // Create static pointer mutex with spinlock to make ALLOCATOR thread-safe
-pub static ALLOCATOR: Mutex<BitmapAllocator> = Mutex::new(BitmapAllocator {});
+// pub static ALLOCATOR: Mutex<BitmapAllocator> = Mutex::new(BitmapAllocator {});
+
+macro_rules! ALLOCATOR {
+    () => ({
+        BitmapAllocator {}
+    });
+}

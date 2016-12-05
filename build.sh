@@ -25,8 +25,7 @@ nasm -f elf64 src/entry.asm -o build/entry.o
 echo "* kernel"
 
 # compile kernel (with full optimizations)
-# cargo rustc --target x86_64-unknown-linux-gnu --release -- #-Z no-landing-pads # no-landing-pads disabled, moved to panic=abort, see Cargo.toml # outdated, using xargo now
-RUST_BACKTRACE=1 xargo build --target $TARGET --release
+xargo build --target $TARGET --release
 
 echo "* kernel assembly routines"
 for fpath in src/asm_routines/*.asm
@@ -43,7 +42,8 @@ ld -n --gc-sections -T buildsystem/linker.ld -o build/kernel.bin build/entry.o t
 
 echo "Cheking boundries..."
 
-toobig=$(wc -c build/kernel.bin | python2 -c 'print int(int(raw_input().split(" ",1)[0])/512>79)')
+# image size check
+toobig=$(wc -c build/kernel.bin | python2 -c 'print int(int(raw_input().split(" ",1)[0])/512>195)') # where 195 is size in blocks
 if [ $toobig -eq 1 ]
 then
     echo "Kernel image seems to be too large."
@@ -51,18 +51,24 @@ then
 fi
 
 echo "Creating disk image..."
+DISK_SIZE_BYTES=$(python -c 'print(0x200*0x800)') # a disk of 0x800=2048 0x200-byte sectors, 2**20 bytes, one mebibyte
+DISK_SIZE_SECTORS=$(python -c "print($DISK_SIZE_BYTES / 0x200)")
 
 # floppify :] (or maybe imagify, isofy or harddiskify)
-echo "* create file"
-echo "* bootsector"
-cp build/boot_stage0.bin build/disk.img    # create image (boot.bin should be same size as actual floppy)
-dd "if=build/boot_stage1.bin" "of=build/disk.img" "bs=512" "seek=1" "count=1" "conv=notrunc"
+echo "* create disk"
+dd "if=/dev/zero" "of=build/disk.img" "bs=512" "count=$DISK_SIZE_SECTORS" "conv=notrunc"
 
-echo "* kernel"
-dd "if=build/kernel.bin" "of=build/disk.img" "bs=512" "seek=2" "conv=notrunc"
+echo "* copy boot sectors"
+dd "if=build/boot_stage0.bin" "of=build/disk.img" "bs=512" "seek=0" "count=1" "conv=notrunc"
+dd "if=build/boot_stage1.bin" "of=build/disk.img" "bs=512" "seek=1" "count=2" "conv=notrunc"
+
+echo "* copy kernel"
+dd "if=build/kernel.bin" "of=build/disk.img" "bs=512" "seek=3" "conv=notrunc"
 
 echo "Saving objdump..."
-objdump -d -M intel build/kernel.bin > objdump.txt
+objdump -CShdr -M intel build/kernel.bin > objdump.txt
+echo "Saving readelf..."
+readelf -e build/kernel.bin > readelf.txt
 
 # TODO? clean?
 

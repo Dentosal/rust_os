@@ -1,3 +1,5 @@
+// TODO: cursor visibility (reverse?)
+
 use core::ptr::Unique;
 use spin::Mutex;
 

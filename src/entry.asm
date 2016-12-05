@@ -8,7 +8,7 @@ extern rust_main
 section .entry
 start:
     ; update segments
-    mov dx, gdt_selector_data   ; data selector
+    mov dx, gdt_selector_data
     mov ss, dx  ; stack segment
     mov ds, dx  ; data segment
     mov es, dx  ; extra segment
@@ -33,5 +33,5 @@ start:
 ; reserve space for stack
 section .bss
 stack_bottom:
-    resb (4096*10) ; I have had a couple of overflows with just 4096-sized stack. Might be a good idea to increase this even more.
+    resb (4096*40) ; I have had a couple of overflows with just 4096-sized stack. Might be a good idea to increase this even more.
 stack_top:

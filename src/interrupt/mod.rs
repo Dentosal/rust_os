@@ -1,10 +1,9 @@
-use core::intrinsics::unreachable;
 use core::ptr;
 use core::mem;
 
 use vga_buffer;
 use keyboard;
-use util::cr2;
+use pic;
 
 // These constants MUST have defined with same values as those in src/asm_routines/constants.asm
 // They also MUST match the ones in plan.md
@@ -108,6 +107,22 @@ macro_rules! restore_scratch_registers {
     }
 }
 
+macro_rules! irq_handler {
+    ($name: ident) => {{
+        #[naked]
+        extern "C" fn wrapper() -> ! {
+            unsafe {
+                save_scratch_registers!();
+                asm!("call $0" :: "i"($name as extern "C" fn()) :: "intel", "volatile");
+                restore_scratch_registers!();
+                asm!("iretq":::: "intel", "volatile");
+                ::core::intrinsics::unreachable();
+            }
+        }
+        wrapper
+    }}
+}
+
 macro_rules! exception_handler {
     ($name: ident) => {{
         #[naked]
@@ -201,6 +216,15 @@ unsafe extern "C" fn exception_df() -> ! {
     loop {}
 }
 
+
+/// General Protection Fault handler
+extern "C" fn exception_gpf(stack_frame: *const ExceptionStackFrame, error_code: u64) {
+    unsafe {
+        vga_buffer::panic_output(format_args!("Exception: General Protection Fault with error code at {:#x}\n{:#?}", error_code, *stack_frame));
+    }
+    loop {}
+}
+
 /// Page Fault error codes
 bitflags! {
     flags PageFaultErrorCode: u64 {
@@ -215,34 +239,55 @@ bitflags! {
 /// Page Fault handler
 extern "C" fn exception_pf(stack_frame: *const ExceptionStackFrame, error_code: u64) {
     unsafe {
-        vga_buffer::panic_output(format_args!("Exception: Page Fault with error code {:?} ({:?}) at {:#x}\n{:#?}", error_code, PageFaultErrorCode::from_bits(error_code).unwrap(), cr2(), *stack_frame));
+        vga_buffer::panic_output(format_args!("Exception: Page Fault with error code {:?} ({:?}) at {:#x}\n{:#?}", error_code, PageFaultErrorCode::from_bits(error_code).unwrap(), register!(cr2), *stack_frame));
     }
     loop {}
 }
 
+#[derive(Debug)]
+#[allow(dead_code)]
+enum SegmentNotPresentTable {
+    GDT,
+    IDT,
+    LDT
+}
 
 /// Segment Not Present handler
 extern "C" fn exception_snp(stack_frame: *const ExceptionStackFrame, error_code: u64) {
     unsafe {
-        vga_buffer::panic_output(format_args!("Exception: Segment Not Present with error code {:?}\n{:#?}", error_code, *stack_frame));
+        vga_buffer::panic_output(format_args!("Exception: Segment Not Present with error code {:#x} (e={:b},t={:?},i={:#x})\n{:#?}",
+            error_code,
+            error_code & 0b1,
+            match (error_code & 0b110) >> 1 {
+                0b00 => SegmentNotPresentTable::GDT,
+                0b01 => SegmentNotPresentTable::IDT,
+                0b10 => SegmentNotPresentTable::LDT,
+                0b11 => SegmentNotPresentTable::IDT,
+                _ => {unreachable!();}
+            },
+            (error_code & 0xFFFF) >> 4, // 3 ?
+            *stack_frame
+        ));
     }
     loop {}
+}
+
+extern "C" fn exception_irq0() {
+    // just ignore it (use later for timer?)
+    unsafe {
+        pic::PICS.lock().notify_eoi(0x20);
+    }
 }
 
 
 /// keyboard_event: first ps/2 device sent data
 /// we just trust that it is a keyboard
 /// ^^this should change when we properly initialize the ps/2 controller
-#[no_mangle]
-pub extern fn keyboard_event() {
-    keyboard::KEYBOARD.lock().notify();
-}
-
-#[naked]
-unsafe extern "C" fn keyboard_event_wrapper() {
-    loop {}
-    asm!("call keyboard_event; iretq" :::: "volatile");
-    ::core::intrinsics::unreachable();
+pub extern "C" fn exception_irq1() {
+    unsafe {
+        keyboard::KEYBOARD.lock().notify();
+        pic::PICS.lock().notify_eoi(0x21);
+    }
 }
 
 
@@ -255,10 +300,10 @@ pub fn init() {
     exception_handlers[0x06] = Some(exception_handler!(exception_ud) as *const fn());
     exception_handlers[0x08] = Some(exception_df as *const fn());
     exception_handlers[0x0b] = Some(exception_handler_with_error_code!(exception_snp) as *const fn());
-    exception_handlers[0x0d] = Some(simple_exception!("General Protection Fault") as *const fn());
+    exception_handlers[0x0d] = Some(exception_handler_with_error_code!(exception_gpf) as *const fn());
     exception_handlers[0x0e] = Some(exception_handler_with_error_code!(exception_pf) as *const fn());
-    exception_handlers[0x20] = Some(simple_exception!("Unknown error?") as *const fn());
-    exception_handlers[0x21] = Some(keyboard_event_wrapper as *const fn());
+    exception_handlers[0x20] = Some(irq_handler!(exception_irq0) as *const fn());
+    exception_handlers[0x21] = Some(irq_handler!(exception_irq1) as *const fn());
 
     for index in 0...(IDT_ENTRY_COUNT-1) {
         let descriptor = match exception_handlers[index] {
@@ -274,6 +319,6 @@ pub fn init() {
 
     unsafe {
         asm!("lidt [$0]" :: "r"(IDTR_ADDRESS) : "memory" : "volatile", "intel");
-        // asm!("sti" :::: "volatile", "intel");
+        asm!("sti" :::: "volatile", "intel");
     }
 }

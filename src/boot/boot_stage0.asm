@@ -3,8 +3,11 @@
 
 %include "src/asm_routines/constants.asm"
 
-%define loadpoint 0x8000
-; locate kernel at 0x8000->
+%define stage1_loadpoint 0x7e00
+; locate stage1 at 0x7e00->
+%define kernel_loadpoint 0xA000
+%define kernel_size_sectors 150
+; locate kernel at 0xA000->
 %define bootdrive 0x7b00
 ; bootdrive location (1 byte)
 
@@ -21,11 +24,14 @@ boot:
     ; initialize stack
     mov sp, 0x7bfe
 
+    ; clear interrupts
+    cli
+
     ; save boot drive
     mov [bootdrive], dl
 
     ; get memory map
-    mov si, mmap_error_msg
+    mov al, 'M'
     call get_memory_map
     jc print_error   ; carry flag set on error
 
@@ -34,26 +40,78 @@ boot:
     mov ds, ax
     mov es, ax
 
-    ; load more code into 0x7e00 so we can jump to it later
-    mov ah, 2       ; read
-    mov al, 60      ; 60 sectors (kernel max size is now 59 sectors = 59*512 bytes) (VirtualBox limits this)
-    mov ch, 0       ; cylinder & 0xff
-    mov cl, 2       ; sector | ((cylinder >> 2) & 0xc0)
-    mov dh, 0       ; head
-    mov dl, [bootdrive] ; drive number
-    mov bx, (loadpoint - 0x200)  ; read buffer (es:bx) (now next stage is located at (loadpoint - 0x200) and kernel just after that)
-    mov si, disk_error_msg
+    ; http://wiki.osdev.org/ATA_in_x86_RealMode_(BIOS)#LBA_in_Extended_Mode
+
+    ; test that extended lba reading is enabled
+    mov ah, 0x41
+    mov bx, 0x55AA
+    mov dl, 0x80
     int 0x13
+    mov al, 'L'
     jc print_error
 
-    ; hide cursor
+
+    ; load sectors
+    ; stage 1
+    mov dword [da_packet.lba_low],  1
+    mov dword [da_packet.lba_high], 0
+    mov  word [da_packet.count],    2
+    mov  word [da_packet.address],  stage1_loadpoint
+    mov  word [da_packet.segment],  0
+
+    mov ah, 0x42
+    mov si, da_packet
+    mov dl, 0x80        ; FIXME: actual boot device?
+    int 0x13
+    mov al, 'D'
+    jc print_error
+
+    ; kernel
+    mov dword [da_packet.lba_low],  3
+    mov dword [da_packet.lba_high], 0
+    mov  word [da_packet.count],    0x50-3
+    mov  word [da_packet.address],  kernel_loadpoint
+    mov  word [da_packet.segment],  0
+    mov ah, 0x42
+    mov si, da_packet
+    mov dl, 0x80        ; FIXME: actual boot device?
+    int 0x13
+    mov al, 'D'
+    jc print_error
+
+    mov ecx, ((kernel_size_sectors-(kernel_size_sectors-(0x50-3)))+0x50-1)/0x50+1; ceil((kernel_size_sectors-(0x50-3))/0x50)+1
+    mov eax, 0x50   ; note: limited so that last 4 bits are not in use
+.load_kernel_loop:
+    push cx
+        mov dword [da_packet.lba_low],  eax
+        mov dword [da_packet.lba_high], 0
+        mov  word [da_packet.count],    0x50
+        push eax
+            ; eax = (eax * 0x200) / 0x10 = eax * 0x20
+            imul eax, 0x20
+            mov word [da_packet.address], kernel_loadpoint
+            mov word [da_packet.segment], ax
+        pop eax
+        push eax
+            mov ah, 0x42
+            mov si, da_packet
+            mov dl, 0x80        ; FIXME: actual boot device?
+            int 0x13
+            mov al, 'D'
+            jc print_error
+        pop eax
+        add eax, 0x50
+    pop cx
+    loop .load_kernel_loop
+
+    ; hide cursor by moving it out of the screen
     mov bh, 0
     mov ah, 2
     mov dl, 100
     mov dh, 100
     int 10h
 
-    ; load protected mode GDT and a null IDT (we don't need interrupts)
+    ; load protected mode GDT and a null IDT
     cli
     lgdt [gdtr32]
     lidt [idtr32]
@@ -62,23 +120,35 @@ boot:
     or eax, 1
     mov cr0, eax
     ; far jump to load CS with 32 bit segment
-    jmp 0x08:protected_mode
+    jmp 0x08:0x7e00
 
-
-; in: si = pointer to string
-print_error:
-.loop:
-    lodsb
-    or al, al
-    jz .done
-    mov ah, 0x0e
-    int 0x10
-    jmp .loop
-.done:
+print_error:    ; prints E and one letter from al and terminates, (error in boot sector 0)
+    push ax
+        push ax
+            mov al, 'E'
+            mov ah, 0x0e
+            int 0x10
+        pop ax
+        mov ah, 0x0e
+        int 0x10
+    pop ax
     jmp $
 
-disk_error_msg db "E: disk", 0
-mmap_error_msg db "E: mmap", 0
+; disk address packet
+ALIGN 2
+da_packet:
+    db 16               ; size of this packet (constant)
+    db 0                ; reserved (always zero)
+.count:
+    dw 100              ; count (how many sectors) (127 might be a limit here)
+.address:
+    dw stage1_loadpoint ; offset (where)
+.segment:
+    dw 0x0000           ; segment
+.lba_low:
+    dq 1                ; lba low (position on disk)
+.lba_high:
+    dq 0                ; lba high
 
 ; use the INT 0x15, eax= 0xE820 BIOS function to get a memory map
 ; http://wiki.osdev.org/Detecting_Memory_(x86)#BIOS_Function:_INT_0x15.2C_EAX_.3D_0xE820
@@ -130,106 +200,6 @@ get_memory_map:
 	ret
 
 
-[BITS 32]
-
-protected_mode:
-    ; load all the other segments with 32 bit data segments
-    mov eax, 0x10
-    mov ds, eax
-    mov es, eax
-    mov fs, eax
-    mov gs, eax
-    mov ss, eax
-    ; set up stack
-    mov esp, 0x7c00 ; stack grows downwards
-
-    ; SCREEN: top left: "00"
-    mov dword [0xb8000], 0x2f302f30
-
-    call enable_A20
-    call check_long_mode
-    call set_up_SSE
-
-
-    ; SCREEN: top left: "01"
-    mov dword [0xb8000], 0x2f302f31
-
-
-    ; jump into stage 1
-    jmp 0x7e00
-
-
-; http://wiki.osdev.org/A20_Line
-; Using only "Fast A20" gate
-; Might be a bit unreliable, but it is small :]
-enable_A20:
-    in al, 0x92
-    test al, 2
-    jnz .done
-    or al, 2
-    and al, 0xFE
-    out 0x92, al
-.done:
-    ret
-
-
-; Check for SSE and enable it.
-; http://os.phil-opp.com/set-up-rust.html#enabling-sse
-; http://wiki.osdev.org/SSE
-set_up_SSE:
-    ; check for SSE
-    mov eax, 0x1
-    cpuid
-    test edx, 1<<25
-    jz .SSE_missing
-
-    ; enable SSE
-    mov eax, cr0
-    and ax, 0xFFFB      ; clear coprocessor emulation CR0.EM
-    or ax, 0x2          ; set coprocessor monitoring  CR0.MP
-    mov cr0, eax
-    mov eax, cr4
-    or ax, 3 << 9       ; set CR4.OSFXSR and CR4.OSXMMEXCPT at the same time
-    mov cr4, eax
-
-    ret
-.SSE_missing:
-    ; error: no SSE: "!S"
-    mov al, '!'
-    mov ah, 'S'
-    jmp error
-
-; http://wiki.osdev.org/Setting_Up_Long_Mode#x86_or_x86-64
-; Just assumes that cpuid is available (processor is released after 1993)
-check_long_mode:
-    mov eax, 0x80000000    ; Set the A-register to 0x80000000.
-    cpuid                  ; CPU identification.
-    cmp eax, 0x80000001    ; Compare the A-register with 0x80000001.
-    jb .no_long_mode       ; It is less, there is no long mode.
-    mov eax, 0x80000001    ; Set the A-register to 0x80000001.
-    cpuid                  ; CPU identification.
-    test edx, 1 << 29      ; Test if the LM-bit is set in the D-register.
-    jz .no_long_mode       ; They aren't, there is no long mode.
-    ret
-.no_long_mode:
-    ; error: no long mode: "!L"
-    mov al, '!'
-    mov ah, 'L'
-    jmp error
-
-
-; Prints `ERR: ` and the given 2-character error code to screen (TL) and hangs.
-; args: ax=(al,ah)=error_code (2 characters)
-error:
-    mov dword [0xb8000], 0x4f524f45
-    mov dword [0xb8004], 0x4f3a4f52
-    mov dword [0xb8008], 0x4f204f20
-    mov dword [0xb800a], 0x4f204f20
-    mov byte  [0xb800a], al
-    mov byte  [0xb800c], ah
-    hlt
-
-
 ; Constant data
 
 gdtr32:
@@ -260,8 +230,8 @@ gdt32:
     db 0x00         ; base 24:31
 .end:
 
+
+
 times (0x200 - 0x2)-($-$$) db 0
 db 0x55
 db 0xaa
-times (0x10000 - 0x0200) db 0 ; Smaller image
-;times (0x000b4000 - 0x200) db 0 ; Fill floppy (Standard 1.44M IBM Floppy)

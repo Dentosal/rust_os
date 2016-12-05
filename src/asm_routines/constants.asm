@@ -8,7 +8,7 @@
 %define gdt_selector_data 0x10
 
 %define idt 0x0
-%define idt_size 0x4000
-%define idtr 0x4000
+%define idt_size 0x1000
+%define idtr (idt+idt_size)
 
 %define boot_tmp_mmap_buffer 0x2000

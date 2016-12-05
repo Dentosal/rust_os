@@ -7,9 +7,11 @@ pub const BOOT_TMP_MMAP_BUFFER:     usize   = 0x2000;
 
 pub const MEM_PAGE_SIZE_BYTES:      usize   = 0x1_000; // 4096
 pub const MEM_PAGE_MAP_SIZE_BYTES:  usize   = 0x10_000;
-pub const MEM_PAGE_MAP1_ADDRESS:    usize   = 0x30_000;
-pub const MEM_PAGE_MAP2_ADDRESS:    usize   = 0x40_000;
-pub const MEMORY_RESERVED_BELOW:    usize   = 0x50_000; // first 160/8=20 bytes of are permanently reserved for the kernel
+pub const MEM_PAGE_MAP1_ADDRESS:    usize   = 0x60_000;
+pub const MEM_PAGE_MAP2_ADDRESS:    usize   = 0x70_000;
+pub const KERNEL_LOCATION:          usize   = 0x100_000;
+pub const KERNEL_SIZE_LIMIT:        usize   = 200*0x200;
+pub const MEMORY_RESERVED_BELOW:    usize   = KERNEL_LOCATION+KERNEL_SIZE_LIMIT;
 
 // Memory frame (single allocation unit)
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -17,21 +19,47 @@ pub struct Frame {
     pub index: usize
 }
 impl Frame {
-    // Create new Frame from memory address. Rounds down.
+    /// Create new Frame from memory address. Rounds down.
     pub fn containing_address(address: usize) -> Frame {
         Frame {index: address / MEM_PAGE_SIZE_BYTES}
     }
-    // Create new Frame from memory map index.
+    /// Create new Frame from memory map index.
     pub fn from_index(index: usize) -> Frame {
         Frame {index: index}
     }
-    // Return start address of the frame
+    /// Start address of the frame
     pub fn start_address(&self) -> PhysicalAddress {
         self.index * MEM_PAGE_SIZE_BYTES
     }
-    // Clone frame
-    fn clone(&self) -> Frame {
+    /// Clone frame
+    pub fn clone(&self) -> Frame {
         Frame { index: self.index }
+    }
+    /// Inclusive range between frames
+    fn range_inclusive(start: Frame, end: Frame) -> FrameIter {
+        FrameIter {
+            start: start,
+            end: end,
+        }
+    }
+}
+
+/// Iterator for frames
+struct FrameIter {
+    start: Frame,
+    end: Frame,
+}
+impl Iterator for FrameIter {
+    type Item = Frame;
+
+    fn next(&mut self) -> Option<Frame> {
+        if self.start <= self.end {
+            let frame = self.start.clone();
+            self.start.index += 1;
+            Some(frame)
+        } else {
+            None
+        }
     }
 }
 
@@ -43,9 +71,14 @@ pub trait FrameAllocator {
 
 // A simple first-fit frame allocator
 // Currently we can only get one frame at a time
-pub struct BitmapAllocator {}
+pub struct BitmapAllocator {
+    index: usize
+}
 
 impl BitmapAllocator {
+    pub fn new() -> BitmapAllocator {
+        BitmapAllocator {index: 0}
+    }
     fn is_free(&self, index: usize) -> bool {
         let free    = unsafe { *((MEM_PAGE_MAP1_ADDRESS + index/8) as *mut u8) } & (1 << (index%8)) != 0; // 1: free, 0: reserved
         let usable  = unsafe { *((MEM_PAGE_MAP2_ADDRESS + index/8) as *mut u8) } & (1 << (index%8)) != 0; // 1: usable, 0: unusable
@@ -66,7 +99,7 @@ impl FrameAllocator for BitmapAllocator {
                 return Some(Frame::from_index(i));
             }
         }
-        // We could not find any free memory block
+        // We could not find a free memory block
         None
     }
     fn deallocate_frame(&mut self, frame: Frame) {
@@ -143,6 +176,6 @@ pub fn create_memory_bitmap() {
 
 macro_rules! ALLOCATOR {
     () => ({
-        BitmapAllocator {}
+        $crate::mem_map::BitmapAllocator::new()
     });
 }

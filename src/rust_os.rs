@@ -30,57 +30,54 @@ mod pic;
 mod cpuid;
 mod interrupt;
 mod keyboard;
+mod elf_parser;
 
 use spin::Mutex;
 
-pub use interrupt::{keyboard_event};
-use mem_map::{FrameAllocator, BitmapAllocator};
+use keyboard::{KEYBOARD,Keyboard,KeyboardEvent};
 
-/// Display startup message
-fn display_message() {
+
+/// The kernel main function
+#[no_mangle]
+pub extern fn rust_main() {
     rreset!();
-    rprintln!("Dimension 7 OS\n");
-}
+    rprintln!("Dimension 7 OS");
+    rprintln!("Just a millisecond, loading the system...\n");
 
-/// Finish system setup
-fn environment_setup() {
+    /// Finish system setup
+
+    // receive raw kernel elf image data before we allow overwriting it
+    let kernel_elf_header =  unsafe { elf_parser::parse_kernel_elf() };
+
     // frame allocator
     mem_map::create_memory_bitmap();
 
     // interrupt controller
     pic::init();
 
+    // keyboard
+    keyboard::init();
+
+
+    rprintln!("??");loop {}
+
+
     // interrupt system
     interrupt::init();
 
     // cpu feature detection (must be after interrupt handler, if the cpuid instruction is not supported => invalid opcode exception)
-    // cpuid::init(); // currently disabled
+    cpuid::init(); // currently disabled
+
 
     // paging
+    paging::init();
 
+    // Test stuff
 
-}
+    rprintln!("Diving in...");
 
-/// The kernel main function
-#[no_mangle]
-pub extern fn rust_main() {
-    display_message();
-    environment_setup();
-
-    unsafe {
-        // asm!("int 0"::::"intel"); // int0 (#DE)
-        // asm!("xor eax, eax; div eax;"::::"intel"); // #DE
-        // asm!("ud2"); // invalid opcode
-        // *(0xdeadbeef as *mut u64) = 42; // #PF
-        int!(3);
-    }
-
-    rprintln!("OK?!");
-    loop {}
-
-    // let mut frame_allocator = ALLOCATOR.lock();
-    let mut frame_allocator = ALLOCATOR!();
-    paging::test_paging(&mut frame_allocator);
+    // loop {}
+    paging::test_paging();
 
     // hang
     rprintln!("\nSystem ready.\n");
@@ -102,10 +99,11 @@ extern "C" fn eh_personality() -> ! {loop {}}
 #[allow(unused_variables)]
 extern "C" fn panic_fmt(fmt: core::fmt::Arguments, file: &str, line: u32) -> ! {
     unsafe {
+        asm!("cli"::::"intel","volatile");
         panic_indicator!(0x4f214f21); // !!
-        // vga_buffer::panic_output(format_args!("Kernel Panic: file: '{}', line {}\n", file, line));
-        // vga_buffer::panic_output(format_args!("    {}\n", fmt));
-        // asm!("jmp panic"::::"intel");
+        vga_buffer::panic_output(format_args!("Kernel Panic: file: '{}', line {}\n", file, line));
+        vga_buffer::panic_output(format_args!("    {}\n", fmt));
+        // asm!("jmp panic"::::"intel","volatile");
     }
     loop {}
 }

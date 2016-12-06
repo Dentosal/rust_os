@@ -6,27 +6,19 @@
 ; Kernel elf executable initial load point
 %define loadpoint 0xA000
 
-; Page tables
-; These constants MUST match the ones in plan.md
-; If a constant defined here doesn't exists in that file, then it's also fine
-%define page_table_section_start 0x00020000
-%define page_table_p4 0x00020000
-%define page_table_p3 0x00021000
-%define page_table_p2 0x00022000
-%define page_table_section_end 0x00023000
-
 
 [BITS 32]
 [ORG 0x7e00]
 
 protected_mode:
-    ; load all the other segments with 32 bit data segments
+    ; load all the other segments than cs (it's already set by jumping) with 32 bit data segments
     mov eax, 0x10
     mov ds, eax
     mov es, eax
     mov fs, eax
     mov gs, eax
     mov ss, eax
+
     ; set up stack
     mov esp, 0x7c00 ; stack grows downwards
 
@@ -203,10 +195,15 @@ protected_mode:
     ; load GDT
     lgdt [gdt + 8*3]
 
-    ; Now we are in IA32e (compatibility) submode
-    ; jump into kernel entry (relocated to 0x00010000)
-    ; and enable real 64 bit mode
-    jmp 0x08:0x00100000
+
+    ; update selectors
+    mov ax, gdt_selector_data
+    mov ss, ax
+    mov ds, ax
+    mov es, ax
+
+    ; jump into kernel entry
+    jmp gdt_selector_code:0x00100000
 
 
 
@@ -335,10 +332,10 @@ enable_paging:
     mov cr4, eax
 
     ; set the long mode bit in the EFER MSR (model specific register)
-    mov ecx, 0xC0000080
-    rdmsr
-    or eax, 1 << 8
-    wrmsr
+    mov ecx, 0xC0000080 ; EFER
+    rdmsr               ; read
+    or eax, 1 << 8      ; set bit
+    wrmsr               ; write
 
     ; enable paging in the cr0 register
     mov eax, cr0

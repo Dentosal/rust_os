@@ -52,22 +52,22 @@ pub extern fn rust_main() {
     // frame allocator
     mem_map::create_memory_bitmap();
 
+    // cpu data
+    cpuid::init();
+
     // interrupt controller
     pic::init();
+
 
     // keyboard
     keyboard::init();
 
-
-    rprintln!("??");loop {}
-
+    rprintln!("!1");
 
     // interrupt system
     interrupt::init();
 
-    // cpu feature detection (must be after interrupt handler, if the cpuid instruction is not supported => invalid opcode exception)
-    cpuid::init(); // currently disabled
-
+    rprintln!("BRPT"); loop {}
 
     // paging
     paging::init();
@@ -101,9 +101,9 @@ extern "C" fn panic_fmt(fmt: core::fmt::Arguments, file: &str, line: u32) -> ! {
     unsafe {
         asm!("cli"::::"intel","volatile");
         panic_indicator!(0x4f214f21); // !!
-        vga_buffer::panic_output(format_args!("Kernel Panic: file: '{}', line {}\n", file, line));
-        vga_buffer::panic_output(format_args!("    {}\n", fmt));
-        // asm!("jmp panic"::::"intel","volatile");
+        // vga_buffer::panic_output(format_args!("Kernel Panic: file: '{}', line {}\n", file, line));
+        // vga_buffer::panic_output(format_args!("    {}\n", fmt));
+        asm!("jmp panic"::::"intel","volatile");
     }
     loop {}
 }

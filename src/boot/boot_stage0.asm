@@ -47,7 +47,7 @@ boot:
     mov bx, 0x55AA
     mov dl, 0x80
     int 0x13
-    mov al, 'L'
+    mov al, 'R'
     jc print_error
 
 
@@ -210,7 +210,7 @@ idtr32:
     dw 0
     dd 0
 
-gdt32:
+gdt32:  ; from AMD64 system programming manual, page 132
 .begin:
     ; null entry
     dq 0
@@ -218,15 +218,15 @@ gdt32:
     dw 0xffff       ; limit 0:15
     dw 0x0000       ; base 0:15
     db 0x00         ; base 16:23
-    db 0b10011010   ; access byte - code
-    db 0x4f         ; flags/(limit 16:19). flag is set to 32 bit protected mode
+    db 0b10011010   ; access P=1, DPL=00 (ring 0), S=1, TYPE=1010 (code, C=0, R=1 (readable), A=0)
+    db 0b01001111   ; flags G=0, D/B=1, RESERVED=0, AVL=0 and limit 16:19 = 0b1111
     db 0x00         ; base 24:31
     ; data entry
     dw 0xffff       ; limit 0:15
     dw 0x0000       ; base 0:15
     db 0x00         ; base 16:23
-    db 0b10010010   ; access byte - data
-    db 0x4f         ; flags/(limit 16:19). flag is set to 32 bit protected mode
+    db 0b10010010   ; access P=1, DPL=00 (ring 0), S=1, TYPE=0010 (data, E=0, W=1 (writable), A=0)
+    db 0b11001111   ; flags G=1 (limit marks 4 KiB blocks instead of 1 Byte), D/B=1, RESERVED=0, AVL=0 and limit 16:19 = 0b1111
     db 0x00         ; base 24:31
 .end:
 

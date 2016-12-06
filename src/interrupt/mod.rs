@@ -292,11 +292,15 @@ pub extern "C" fn exception_irq1() {
 
 
 pub fn init() {
+    rprintln!("!2");
+
     let mut exception_handlers: [Option<*const fn()>; IDT_ENTRY_COUNT] = [None; IDT_ENTRY_COUNT];
 
     //exception_handlers[0x00] = Some(exception_de_wrapper as *const fn());
     exception_handlers[0x00] = Some(simple_exception!("Divide-by-zero Error") as *const fn());
+    rprintln!("!3");
     exception_handlers[0x03] = Some(exception_handler!(exception_bp) as *const fn());
+    rprintln!("!5"); loop {}
     exception_handlers[0x06] = Some(exception_handler!(exception_ud) as *const fn());
     exception_handlers[0x08] = Some(exception_df as *const fn());
     exception_handlers[0x0b] = Some(exception_handler_with_error_code!(exception_snp) as *const fn());
@@ -304,6 +308,8 @@ pub fn init() {
     exception_handlers[0x0e] = Some(exception_handler_with_error_code!(exception_pf) as *const fn());
     exception_handlers[0x20] = Some(irq_handler!(exception_irq0) as *const fn());
     exception_handlers[0x21] = Some(irq_handler!(exception_irq1) as *const fn());
+
+    rprintln!("..."); loop {}
 
     for index in 0...(IDT_ENTRY_COUNT-1) {
         let descriptor = match exception_handlers[index] {

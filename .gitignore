@@ -1,15 +1,20 @@
 .DS_Store
 
-target
-Cargo.lock
 .vagrant/
+target/
+Cargo.lock
 
 build/
+*.o
+*.bin
 
 tmp/
 temp/
 
 dump*.txt
 *.dump
+
+objdump.txt
+readelf.txt
 
 blog_os-master/

@@ -163,7 +163,6 @@ protected_mode:
     cmp dword [ebx + 36], 0
     jne error
 
-    xchg bx,bx
     ; <2> copy p_filesz bytes from p_offset to p_vaddr
     ; uses: esi, edi, ecx
     rep movsb   ; https://en.wikibooks.org/wiki/X86_Assembly/Data_Transfer#Move_String

@@ -43,7 +43,7 @@ ld -n --gc-sections -T buildsystem/linker.ld -o build/kernel.bin build/entry.o t
 echo "Cheking boundries..."
 
 # image size check
-toobig=$(wc -c build/kernel.bin | python2 -c 'print int(int(raw_input().split(" ",1)[0])/512>195)') # where 195 is size in blocks
+toobig=$(wc -c build/kernel.bin | python3 -c 'print(int(int(input().strip().split(" ",1)[0])//512>195))') # where 195 is size in blocks
 if [ $toobig -eq 1 ]
 then
     echo "Kernel image seems to be too large."
@@ -51,8 +51,8 @@ then
 fi
 
 echo "Creating disk image..."
-DISK_SIZE_BYTES=$(python -c 'print(0x200*0x800)') # a disk of 0x800=2048 0x200-byte sectors, 2**20 bytes, one mebibyte
-DISK_SIZE_SECTORS=$(python -c "print($DISK_SIZE_BYTES / 0x200)")
+DISK_SIZE_BYTES=$(python3 -c 'print(0x200*0x800)') # a disk of 0x800=2048 0x200-byte sectors, 2**20 bytes, one mebibyte
+DISK_SIZE_SECTORS=$(python3 -c "print($DISK_SIZE_BYTES // 0x200)")
 
 # floppify :] (or maybe imagify, isofy or harddiskify)
 echo "* create disk"

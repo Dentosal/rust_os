@@ -6,7 +6,7 @@
 %define stage1_loadpoint 0x7e00
 ; locate stage1 at 0x7e00->
 %define kernel_loadpoint 0xA000
-%define kernel_size_sectors 150
+%define kernel_size_sectors 200
 ; locate kernel at 0xA000->
 %define bootdrive 0x7b00
 ; bootdrive location (1 byte)

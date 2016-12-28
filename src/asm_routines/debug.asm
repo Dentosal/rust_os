@@ -4,7 +4,7 @@
 global panic
 global breakpoint
 
-section .text:
+section .text
 
 panic:
     mov rax, 0x4f214f214f214f21 ; !!!!

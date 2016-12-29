@@ -11,6 +11,8 @@
 #![feature(core_intrinsics)]
 #![feature(stmt_expr_attributes)]
 
+
+extern crate volatile;
 extern crate rlibc;
 extern crate spin;
 extern crate cpuio;
@@ -26,7 +28,9 @@ mod util;
 #[macro_use]
 mod mem_map;
 mod paging;
+mod acpi;
 mod pic;
+// mod apic;
 mod cpuid;
 mod interrupt;
 mod keyboard;
@@ -34,7 +38,7 @@ mod elf_parser;
 
 use spin::Mutex;
 
-use keyboard::{KEYBOARD,Keyboard,KeyboardEvent};
+// use keyboard::{KEYBOARD,Keyboard,KeyboardEvent};
 
 
 /// The kernel main function
@@ -46,28 +50,30 @@ pub extern fn rust_main() {
 
     /// Finish system setup
 
+    // interrupt system
+    // interrupt::init();
+
     // receive raw kernel elf image data before we allow overwriting it
     let kernel_elf_header =  unsafe { elf_parser::parse_kernel_elf() };
+
 
     // frame allocator
     mem_map::create_memory_bitmap();
 
+    rprintln!("BRPT"); loop {}
     // cpu data
-    cpuid::init();
+    // cpuid::init();
 
     // interrupt controller
     pic::init();
+    // apic::init();
+
 
 
     // keyboard
-    keyboard::init();
+    //keyboard::init();
 
-    rprintln!("!1");
-
-    // interrupt system
-    interrupt::init();
-
-    rprintln!("BRPT"); loop {}
+    rprintln!("Init ok."); loop {}
 
     // paging
     paging::init();
@@ -97,13 +103,17 @@ extern "C" fn eh_personality() -> ! {loop {}}
 #[cfg(not(test))]
 #[lang = "panic_fmt"]
 #[allow(unused_variables)]
+#[no_mangle]
 extern "C" fn panic_fmt(fmt: core::fmt::Arguments, file: &str, line: u32) -> ! {
     unsafe {
+        asm!("jmp panic"::::"intel","volatile");
+
         asm!("cli"::::"intel","volatile");
         panic_indicator!(0x4f214f21); // !!
-        // vga_buffer::panic_output(format_args!("Kernel Panic: file: '{}', line {}\n", file, line));
-        // vga_buffer::panic_output(format_args!("    {}\n", fmt));
-        asm!("jmp panic"::::"intel","volatile");
+
+        rprintln!("Kernel Panic: file: '{}', line {}\n", file, line);
+        rprintln!("    {}\n", fmt);
+//        asm!("jmp panic"::::"intel","volatile");
     }
     loop {}
 }

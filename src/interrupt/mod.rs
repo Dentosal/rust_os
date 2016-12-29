@@ -1,7 +1,6 @@
 use core::ptr;
 use core::mem;
 
-use vga_buffer;
 use keyboard;
 use pic;
 
@@ -27,10 +26,8 @@ impl IDTReference {
             offset: IDT_ADDRESS as u64
         }
     }
-    pub fn write(&self) {
-        unsafe {
-            ptr::write(IDTR_ADDRESS as *mut Self, *self);
-        }
+    pub unsafe fn write(&self) {
+        ptr::write(IDTR_ADDRESS as *mut Self, *self);
     }
 }
 
@@ -181,7 +178,7 @@ macro_rules! simple_exception {
     ($text:expr) =>  {{
         extern "C" fn exception(stack_frame: *const ExceptionStackFrame) {
             unsafe {
-                vga_buffer::panic_output(format_args!(concat!("Exception: ", $text, "\n{:#?}"), *stack_frame));
+                rprintln!(concat!("Exception: ", $text, "\n{:#?}"), *stack_frame);
             };
             loop {}
         }
@@ -193,15 +190,15 @@ macro_rules! simple_exception {
 /// Breakpoint handler
 extern "C" fn exception_bp(stack_frame: *const ExceptionStackFrame) {
     unsafe {
-        // vga_buffer::panic_output(format_args!("EXCEPTION: Breakpoint at {:#x}\n{:#?}", (*stack_frame).instruction_pointer, *stack_frame));
         rprintln!("EXCEPTION: Breakpoint at {:#x}\n{:#?}", (*stack_frame).instruction_pointer, *stack_frame);
+        asm!("mov bx,bx"::::"intel","volatile"); // Trigger Bochs magic breakpoint
     }
 }
 
 /// Invalid Opcode handler (instruction undefined)
 extern "C" fn exception_ud(stack_frame: *const ExceptionStackFrame) {
     unsafe {
-        vga_buffer::panic_output(format_args!("Exception: invalid opcode at {:#x}\n{:#?}", (*stack_frame).instruction_pointer, *stack_frame));
+        rprintln!("Exception: invalid opcode at {:#x}\n{:#?}", (*stack_frame).instruction_pointer, *stack_frame);
     }
     loop {}
 }
@@ -220,7 +217,7 @@ unsafe extern "C" fn exception_df() -> ! {
 /// General Protection Fault handler
 extern "C" fn exception_gpf(stack_frame: *const ExceptionStackFrame, error_code: u64) {
     unsafe {
-        vga_buffer::panic_output(format_args!("Exception: General Protection Fault with error code at {:#x}\n{:#?}", error_code, *stack_frame));
+        rprintln!("Exception: General Protection Fault with error code at {:#x}\n{:#?}", error_code, *stack_frame);
     }
     loop {}
 }
@@ -239,7 +236,7 @@ bitflags! {
 /// Page Fault handler
 extern "C" fn exception_pf(stack_frame: *const ExceptionStackFrame, error_code: u64) {
     unsafe {
-        vga_buffer::panic_output(format_args!("Exception: Page Fault with error code {:?} ({:?}) at {:#x}\n{:#?}", error_code, PageFaultErrorCode::from_bits(error_code).unwrap(), register!(cr2), *stack_frame));
+        rprintln!("Exception: Page Fault with error code {:?} ({:?}) at {:#x}\n{:#?}", error_code, PageFaultErrorCode::from_bits(error_code).unwrap(), register!(cr2), *stack_frame);
     }
     loop {}
 }
@@ -255,7 +252,7 @@ enum SegmentNotPresentTable {
 /// Segment Not Present handler
 extern "C" fn exception_snp(stack_frame: *const ExceptionStackFrame, error_code: u64) {
     unsafe {
-        vga_buffer::panic_output(format_args!("Exception: Segment Not Present with error code {:#x} (e={:b},t={:?},i={:#x})\n{:#?}",
+        rprintln!("Exception: Segment Not Present with error code {:#x} (e={:b},t={:?},i={:#x})\n{:#?}",
             error_code,
             error_code & 0b1,
             match (error_code & 0b110) >> 1 {
@@ -267,7 +264,7 @@ extern "C" fn exception_snp(stack_frame: *const ExceptionStackFrame, error_code:
             },
             (error_code & 0xFFFF) >> 4, // 3 ?
             *stack_frame
-        ));
+        );
     }
     loop {}
 }
@@ -292,15 +289,11 @@ pub extern "C" fn exception_irq1() {
 
 
 pub fn init() {
-    rprintln!("!2");
-
     let mut exception_handlers: [Option<*const fn()>; IDT_ENTRY_COUNT] = [None; IDT_ENTRY_COUNT];
 
     //exception_handlers[0x00] = Some(exception_de_wrapper as *const fn());
     exception_handlers[0x00] = Some(simple_exception!("Divide-by-zero Error") as *const fn());
-    rprintln!("!3");
     exception_handlers[0x03] = Some(exception_handler!(exception_bp) as *const fn());
-    rprintln!("!5"); loop {}
     exception_handlers[0x06] = Some(exception_handler!(exception_ud) as *const fn());
     exception_handlers[0x08] = Some(exception_df as *const fn());
     exception_handlers[0x0b] = Some(exception_handler_with_error_code!(exception_snp) as *const fn());
@@ -308,8 +301,6 @@ pub fn init() {
     exception_handlers[0x0e] = Some(exception_handler_with_error_code!(exception_pf) as *const fn());
     exception_handlers[0x20] = Some(irq_handler!(exception_irq0) as *const fn());
     exception_handlers[0x21] = Some(irq_handler!(exception_irq1) as *const fn());
-
-    rprintln!("..."); loop {}
 
     for index in 0...(IDT_ENTRY_COUNT-1) {
         let descriptor = match exception_handlers[index] {
@@ -320,11 +311,17 @@ pub fn init() {
             ptr::write_volatile((IDT_ADDRESS + index * mem::size_of::<IDTDescriptor>()) as *mut _, descriptor);
         }
     }
-    IDTReference::new().write();
 
+    unsafe {
+        IDTReference::new().write();
+    }
+
+    rprintln!("Enabling interrupt handler...");
 
     unsafe {
         asm!("lidt [$0]" :: "r"(IDTR_ADDRESS) : "memory" : "volatile", "intel");
-        asm!("sti" :::: "volatile", "intel");
+        // asm!("sti" :::: "volatile", "intel"); // XXX: disabled sti for now
     }
+
+    rprintln!("Enabled.");
 }

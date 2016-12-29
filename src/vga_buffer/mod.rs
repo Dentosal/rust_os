@@ -2,6 +2,7 @@
 
 use core::ptr::Unique;
 use spin::Mutex;
+use volatile::Volatile;
 
 const SCREEN_HEIGHT: usize = 25;
 const SCREEN_WIDTH: usize = 80;
@@ -42,7 +43,7 @@ impl CellColor {
 
 /// Character cell: one character and color in screen
 #[derive(Clone, Copy)]
-#[repr(C)]
+#[repr(C,packed)]
 pub struct CharCell {
     pub character: u8,
     pub color: CellColor,
@@ -50,7 +51,7 @@ pub struct CharCell {
 
 /// A Virtual tty buffer
 pub struct Buffer {
-    pub chars: [[CharCell; SCREEN_WIDTH]; SCREEN_HEIGHT],
+    pub chars: [[Volatile<CharCell>; SCREEN_WIDTH]; SCREEN_HEIGHT],
 }
 
 
@@ -90,6 +91,10 @@ impl Cursor {
         self.row = row;
         self.col = col;
     }
+
+    pub fn position(&self) -> (usize, usize) {
+        (self.row, self.col)
+    }
 }
 
 /// Terminal: an interface to hardware terminal
@@ -113,19 +118,18 @@ impl Terminal {
         let mut buffer = self.get_buffer();
         for col in 0..SCREEN_WIDTH {
             for row in 0..SCREEN_HEIGHT {
-                buffer.chars[row][col] = CharCell {
+                buffer.chars[row][col].write(CharCell {
                     character: b' ',
                     color: clear_color,
-                };
+                });
             }
         }
     }
 
     /// Write string to terminal's stdout
     pub fn write_str(&mut self, string: &str) {
-        let sb = string.as_bytes();
-        for index in 0..sb.len() {
-            self.write_byte(sb[index]);
+        for b in string.bytes() {
+            self.write_byte(b);
         }
     }
 
@@ -139,10 +143,12 @@ impl Terminal {
                 self.newline();
             }
 
-            self.get_buffer().chars[self.cursor.row][self.cursor.col] = CharCell {
+            let color = self.output_color;
+            let (row, col) = self.cursor.position();
+            self.get_buffer().chars[row][col].write(CharCell {
                 character: byte,
-                color: self.output_color,
-            };
+                color: color
+            });
             self.cursor.next();
         }
     }
@@ -154,7 +160,8 @@ impl Terminal {
 
     /// Newline
     pub fn newline(&mut self) {
-        if self.cursor.newline() {
+        let scroll = self.cursor.newline();
+        if scroll {
             self.scroll_line();
         }
     }
@@ -162,9 +169,15 @@ impl Terminal {
     /// Scroll up one line
     fn scroll_line(&mut self) {
         for row in 0..(SCREEN_HEIGHT-1) {
-            self.get_buffer().chars[row] = self.get_buffer().chars[row+1];
+            for col in 0..SCREEN_WIDTH {
+                let new_value = self.get_buffer().chars[row+1][col].read();
+                self.get_buffer().chars[row][col].write(new_value);
+            }
         }
-        self.get_buffer().chars[SCREEN_HEIGHT-1] = [CharCell {character: b' ', color: self.output_color}; SCREEN_WIDTH];
+        for col in 0..SCREEN_WIDTH {
+            let color = self.output_color;
+            self.get_buffer().chars[SCREEN_HEIGHT-1][col].write(CharCell {character: b' ', color: color});
+        }
     }
 
     /// Get pointer to memory buffer
@@ -174,16 +187,17 @@ impl Terminal {
 
     /// Create unsafe panic terminal
     /// Outputs red-on-black text to the last lines of the terminal
-    pub fn get_panic_access() -> Terminal {
+    /// DEPRECATED, remove ASAP
+    pub unsafe fn get_panic_access() -> Terminal {
         Terminal {
             output_color: CellColor::new(Color::Red, Color::Black),
             cursor: Cursor {row: SCREEN_HEIGHT-1, col: 0},
-            buffer: unsafe { Unique::new(VGA_BUFFER_ADDRESS as *mut _) },
+            buffer: Unique::new(VGA_BUFFER_ADDRESS as *mut _),
         }
     }
 }
 
-/// Format macros
+/// Allow formatting
 impl ::core::fmt::Write for Terminal {
     fn write_str(&mut self, s: &str) -> ::core::fmt::Result {
         for byte in s.bytes() {
@@ -193,13 +207,10 @@ impl ::core::fmt::Write for Terminal {
     }
 }
 
-/// Panic output
-pub unsafe fn panic_output(fmt: ::core::fmt::Arguments) {
+/// Actual print function. This should only be externally called using the rprint! and rprintln! macros.
+pub fn print(fmt: ::core::fmt::Arguments) {
     use core::fmt::Write;
-
-    let mut panicterm = Terminal::get_panic_access();
-    panicterm.scroll_line();
-    panicterm.write_fmt(fmt).unwrap();
+    TERMINAL.lock().write_fmt(fmt).unwrap();
 }
 
 // Create static pointer mutex with spinlock to make TERMINAL thread-safe
@@ -212,8 +223,7 @@ pub static TERMINAL: Mutex<Terminal> = Mutex::new(Terminal {
 /// "Raw" output macros
 macro_rules! rprint {
     ($($arg:tt)*) => ({
-        use core::fmt::Write;
-        $crate::vga_buffer::TERMINAL.lock().write_fmt(format_args!($($arg)*)).unwrap();
+        $crate::vga_buffer::print(format_args!($($arg)*));
     });
 }
 macro_rules! rprintln {

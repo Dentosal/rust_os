@@ -17,3 +17,4 @@ rlibc = "1.0.0"             # raw libc
 spin = "0.3.4"              # spinlocks
 cpuio = "*"                 # cpu port IO
 bitflags = "0.7.0"          # bitflags
+volatile = "0.2.1"          # volatile read and write functions

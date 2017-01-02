@@ -3,14 +3,10 @@
 
 %include "src/asm_routines/constants.asm"
 
-; Kernel elf executable initial load point
-%define loadpoint 0xA000
-
-
 [BITS 32]
 [ORG 0x7e00]
 
-protected_mode:
+stage1:
     ; load all the other segments than cs (it's already set by jumping) with 32 bit data segments
     mov eax, 0x10
     mov ds, eax
@@ -29,10 +25,8 @@ protected_mode:
     call check_long_mode
     call set_up_SSE
 
-
     ; SCREEN: top left: "01"
     mov dword [0xb8000], 0x2f312f30
-
 
     ; paging
     call set_up_page_tables
@@ -40,151 +34,6 @@ protected_mode:
 
     ; SCREEN: top left: "02"
     mov dword [0xb8000], 0x2f322f30
-
-
-    ; parse elf header
-    ; http://wiki.osdev.org/ELF#Tables
-    ;
-    ; Because we are working in protected mode, we assume some values to fit in 32 bits.
-    ; Of course we test thay they are, but this code gives error if they aren't
-    ; It's not good practice, but... here we go :]
-    ;
-    ; elf error messages begin with "E"
-    mov al, 'E'
-
-    ; magic number 0x7f+'ELF'
-    ; if not elf show error message "E!"
-    mov ah, '!'
-    cmp dword [loadpoint + 0], 0x464c457f
-    jne error
-
-    ; bitness and instrucion set (must be 64, so values must be 2 and 0x3e) (error code: "EB")
-    mov ah, 'B'
-    cmp byte [loadpoint + 4], 0x2
-    jne error
-    cmp word [loadpoint + 18], 0x3e
-    jne error
-
-    ; endianess (must be little endian, so value must be 1) (error code: "EE")
-    mov ah, 'E'
-    cmp byte [loadpoint + 5], 0x1
-    jne error
-
-    ; elf version (must be 2) (error code: "EV")
-    ; mov ah, 'V'
-    ; cmp byte [loadpoint + 0x0006], 0x2
-    ; jne error ; this fails. ignored currently. I can't remember why it wasn't here originally
-    ; ^ FIXME
-
-    ; Now lets trust it's actually real and valid elf file
-
-    ; kernel entry position must be 0x_00000000_00100000, 1MiB
-    ; (error code : "EP")
-    mov ah, 'P'
-    cmp dword [loadpoint + 24], 0x00100000
-    jne error
-    cmp dword [loadpoint + 28], 0x00000000
-    jne error
-
-    ; load point is correct, great. print green OK
-    mov dword [0xb8000 + 80*24], 0x2f4b2f4f
-
-
-    ; Parse program headers and relocate sections
-    ; http://wiki.osdev.org/ELF#Program_header
-    ; (error code : "EH")
-    mov ah, 'H'
-
-    ; We know that program header size is 56 (=0x38) bytes
-    ; still, lets check it:
-    cmp word [loadpoint + 54], 0x38
-    jne error
-
-
-    ; get "Program header table position", check that it is max 32bits
-    mov ebx, dword [loadpoint + 32]
-    cmp dword [loadpoint + 36], 0
-    jne error
-    add ebx, loadpoint ; now ebx points to first program header
-
-    ; get length of program header table
-    mov ecx, 0
-    mov cx, [loadpoint + 56]
-
-    mov ah, '_'
-    ; loop through headers
-.loop_headers:
-    ; First, lets check that this sector should be loaded
-
-    cmp dword [ebx], 1 ; load: this is important
-    jne .next   ; if not important: continue
-
-    ; load: clear p_memsz bytes at p_vaddr to 0, then copy p_filesz bytes from p_offset to p_vaddr
-    push ecx
-
-    ; lets ignore some (probably important) stuff here
-    ; Again, because we are working in protected mode, we assume some values to fit in 32 bits.
-
-    mov ah, 'A'
-
-    ; esi = p_offset
-    mov esi, [ebx + 8]
-    cmp dword [ebx + 12], 0
-    jne error
-    add esi, loadpoint  ; now points to begin of buffer we must copy
-
-    mov ah, 'B'
-
-    ; edi = p_vaddr
-    mov edi, [ebx + 16]
-    cmp dword [ebx + 20], 0
-    jne error
-
-    mov ah, 'C'
-
-    ; ecx = p_memsz
-    mov ecx, [ebx + 40]
-    cmp dword [ebx + 44], 0
-    jne error
-
-    ; <1> clear p_memsz bytes at p_vaddr to 0
-    push edi
-.loop_clear:
-    mov byte [edi], 0
-    inc edi
-    loop .loop_clear
-    pop edi
-    ; </1>
-
-    mov ah, 'D'
-
-    ; ecx = p_filesz
-    mov ecx, [ebx + 32]
-    cmp dword [ebx + 36], 0
-    jne error
-
-    ; <2> copy p_filesz bytes from p_offset to p_vaddr
-    ; uses: esi, edi, ecx
-    rep movsb   ; https://en.wikibooks.org/wiki/X86_Assembly/Data_Transfer#Move_String
-    ; </2>
-
-    pop ecx
-
-    ; next entry
-    loop .loop_headers
-
-    ; no next entry, done
-    jmp .over
-
-.next:
-    add ebx, 0x38   ; skip entry (0x38 is entry size)
-    loop .loop_headers
-
-    mov ah, '-'
-
-    ; ELF relocation done
-.over:
-    ; going to byte bytes mode (8*8 = 2**6 = 64 bits = Long mode)
 
     ; relocate GDT
     mov esi, tmp_gdt64  ; from
@@ -195,15 +44,14 @@ protected_mode:
     ; load GDT
     lgdt [gdt + 8*3]
 
-
     ; update selectors
     mov ax, gdt_selector_data
     mov ss, ax
     mov ds, ax
     mov es, ax
 
-    ; jump into kernel entry
-    jmp gdt_selector_code:0x00100000
+    ; jump into stage 2, and activate long mode
+    jmp gdt_selector_code:0x8000
 
 
 
@@ -355,4 +203,4 @@ tmp_gdt64:
     dw 8*3      ; size
     dq gdt      ; POINTER
 
-times (0x400-($-$$)) db 0 ; fill two sectors
+times (0x200-($-$$)) db 0 ; fill a sector

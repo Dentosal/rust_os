@@ -8,20 +8,9 @@ extern rust_main
 
 section .entry
 start:
-    cli
-
-    ; update segments
-    mov dx, gdt_selector_data
-    mov ss, dx  ; stack segment
-    mov ds, dx  ; data segment
-    mov es, dx  ; extra segment
-    mov fs, dx  ; f-segment
-    mov gs, dx  ; g-segment
-
     ; set up stack
-    ; mov rsp, stack_top
-    ; mov rsp, 0x9f0000 ; HACK
-    mov rsp, 0x9f000 ; HACK
+    mov rsp, stack_top
+    ; mov rsp, 0x9f000 ; HACK
 
     ; get to kernel
     call rust_main

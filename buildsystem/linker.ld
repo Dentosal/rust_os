@@ -1,4 +1,4 @@
-OUTPUT_FORMAT("elf64-x86-64") /* FLAT BINARY DOES NOT WORK, ELF WORKS */
+OUTPUT_FORMAT(elf64-x86-64)
 ENTRY(start)
 
 SECTIONS {
@@ -17,55 +17,39 @@ All sections are 0x1000 = 4096 = 4KiB aligned, because that is the correct page 
 */
 
     /* ensure that the kernel entry code is at the beginning */
-    .entry :
-    {
-        *(.entry)
-        . = ALIGN(0x1000);
+    .entry : ALIGN(0x1000) {
+        KEEP(*(.entry))
     }
 
-    .text :
-    {
+    .text : ALIGN(0x1000) {
         *(.text .text.*)
-        . = ALIGN(0x1000);
     }
 
-    .rodata :
-    {
+    .rodata : ALIGN(0x1000) {
         *(.rodata .rodata.*)
-        . = ALIGN(0x1000);
     }
 
-    .data :
-    {
+    .data : ALIGN(0x1000) {
         *(.data .data.*)
-        . = ALIGN(0x1000);
     }
 
-    .bss :
-    {
-        *(.bss .bss.*)
-        . = ALIGN(0x1000);
+    .bss : ALIGN(0x1000) {
+        KEEP(*(.bss .bss.*))
     }
 
-    .got :
-    {
+    .got : ALIGN(0x1000) {
         *(.got)
-        . = ALIGN(0x1000);
     }
 
-    .got.plt :
-    {
+    .got.plt : ALIGN(0x1000) {
         *(.got.plt)
-        . = ALIGN(0x1000);
     }
 
-    .data.rel.ro :
-    {
+    .data.rel.ro : ALIGN(0x1000) {
         *(.data.rel.ro.local*) *(.data.rel.ro .data.rel.ro.*)
-        . = ALIGN(0x1000);
     }
 
-    .gcc_except_table : ALIGN(4K) {
+    .gcc_except_table : ALIGN(0x1000) {
         *(.gcc_except_table)
     }
 }

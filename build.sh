@@ -17,6 +17,7 @@ echo "* bootloader"
 # compile bootloader
 nasm src/boot/boot_stage0.asm -f bin -o build/boot_stage0.bin
 nasm src/boot/boot_stage1.asm -f bin -o build/boot_stage1.bin
+nasm src/boot/boot_stage2.asm -f bin -o build/boot_stage2.bin
 
 echo "* kernel entry point"
 # compile kernel entry point
@@ -58,9 +59,10 @@ DISK_SIZE_SECTORS=$(python3 -c "print($DISK_SIZE_BYTES // 0x200)")
 echo "* create disk"
 dd "if=/dev/zero" "of=build/disk.img" "bs=512" "count=$DISK_SIZE_SECTORS" "conv=notrunc"
 
-echo "* copy boot sectors"
+echo "* copy boot stages"
 dd "if=build/boot_stage0.bin" "of=build/disk.img" "bs=512" "seek=0" "count=1" "conv=notrunc"
-dd "if=build/boot_stage1.bin" "of=build/disk.img" "bs=512" "seek=1" "count=2" "conv=notrunc"
+dd "if=build/boot_stage1.bin" "of=build/disk.img" "bs=512" "seek=1" "count=1" "conv=notrunc"
+dd "if=build/boot_stage2.bin" "of=build/disk.img" "bs=512" "seek=2" "count=1" "conv=notrunc"
 
 echo "* copy kernel"
 dd "if=build/kernel.bin" "of=build/disk.img" "bs=512" "seek=3" "conv=notrunc"

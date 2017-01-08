@@ -88,26 +88,22 @@ impl Keyboard {
     pub unsafe fn verify_keyboard(&mut self) {
         self.data_port.write(0xF2);
 
-        if self.test_result(0xFA) {
-            if self.test_result(0xAB) {
-                let mut ok = false;
+        // This doesn't care about ack byte (0xFA), because Qemu doesn't support it, and it's not needed
+
+        for _ in 0..IO_WAIT_TIMEOUT {
+            let x = self.read_byte();
+            if x == 0xAB {
                 for _ in 0..IO_WAIT_TIMEOUT {
                     let kbd_subtype = self.read_byte();
-                    if (kbd_subtype == 0x41 || kbd_subtype == 0xC1 || kbd_subtype == 0x83) {
-                        ok = true;
+                    if kbd_subtype == 0x41 || kbd_subtype == 0xC1 || kbd_subtype == 0x83 {
+                        return;
                     }
                 }
-                if !ok {
-                    panic!("Unsupported keyboard: unknown subtype");
-                }
+                panic!("Unsupported keyboard: unknown subtype");
             }
-            else {
-                panic!("Unsupported keyboard: Mouse?");
-            }
+            io_wait();
         }
-        else {
-            panic!("Unsupported keyboard: \"Ancient AT\"");
-        }
+        panic!("Unsupported keyboard: cannot identify");
     }
 
     pub unsafe fn configure(&mut self) {

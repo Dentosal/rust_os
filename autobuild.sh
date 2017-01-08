@@ -51,18 +51,23 @@ then
         fi
     elif [ $flag_bochs -eq 1 ]
     then
-        bochs -q -f bochs_config
+        if [ $flag_debug -eq 1 ]
+        then
+            bochs -q -f dbgenv_config/bochs_debug
+        else
+            bochs -q -f dbgenv_config/bochs_normal
+        fi
     else
         if [ $flag_qemu_s -eq 1 ]
         then
-            qemu-system-x86_64 -d int -m 4096 -no-reboot build/disk.img -monitor stdio -s -S
+            qemu-system-x86_64 -d int -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio -s -S
         else
             if [ $flag_debug -eq 1 ]
             then
-                qemu-system-x86_64 -d int,in_asm -m 4096 -no-reboot build/disk.img -monitor stdio
+                qemu-system-x86_64 -d int,in_asm -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio
             else
-                # qemu-system-x86_64 -d int -m 4096 -no-reboot build/disk.img -monitor stdio
-                qemu-system-x86_64 -m 4096 -no-reboot build/disk.img -monitor stdio
+                # qemu-system-x86_64 -d int -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio
+                qemu-system-x86_64 -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio
             fi
         fi
     fi

@@ -5,8 +5,10 @@
 
 %define stage1_loadpoint 0x7e00
 ; locate stage1 at 0x7e00->
-%define kernel_loadpoint 0xA000
 %define kernel_size_sectors 200
+%define sectors_per_operation 0xff
+; 0xff is max. 127 might be the limit on some platforms, but we don't care about legacy right now
+%define kernel_loadpoint 0xA000
 ; locate kernel at 0xA000->
 %define bootdrive 0x7b00
 ; bootdrive location (1 byte)
@@ -46,13 +48,16 @@ boot:
     mov ah, 0x41
     mov bx, 0x55AA
     mov dl, 0x80
+    clc
     int 0x13
     mov al, 'R'
     jc print_error
 
+    ; enable A20
+    call enable_A20
 
     ; load sectors
-    ; stage 1
+    ; stages 1 and 2
     mov dword [da_packet.lba_low],  1
     mov dword [da_packet.lba_high], 0
     mov  word [da_packet.count],    2
@@ -66,12 +71,27 @@ boot:
     mov al, 'D'
     jc print_error
 
-    ; kernel
+    ; load kernel
+
+    ; mov dword [da_packet.lba_low],  3
+    ; mov dword [da_packet.lba_high], 0
+    ; mov  word [da_packet.count],    0xFF
+    ; mov  word [da_packet.address],  kernel_loadpoint
+    ; mov  word [da_packet.segment],  0
+    ;
+    ; mov ah, 0x42
+    ; mov si, da_packet
+    ; mov dl, 0x80        ; FIXME: actual boot device?
+    ; int 0x13
+    ; mov al, 'D'
+    ; jc print_error
+
     mov dword [da_packet.lba_low],  3
     mov dword [da_packet.lba_high], 0
-    mov  word [da_packet.count],    0x50-3
+    mov  word [da_packet.count],    0x7f
     mov  word [da_packet.address],  kernel_loadpoint
     mov  word [da_packet.segment],  0
+
     mov ah, 0x42
     mov si, da_packet
     mov dl, 0x80        ; FIXME: actual boot device?
@@ -79,30 +99,19 @@ boot:
     mov al, 'D'
     jc print_error
 
-    mov ecx, ((kernel_size_sectors-(kernel_size_sectors-(0x50-3)))+0x50-1)/0x50+1; ceil((kernel_size_sectors-(0x50-3))/0x50)+1
-    mov eax, 0x50   ; note: limited so that last 4 bits are not in use
-.load_kernel_loop:
-    push cx
-        mov dword [da_packet.lba_low],  eax
-        mov dword [da_packet.lba_high], 0
-        mov  word [da_packet.count],    0x50
-        push eax
-            ; eax = (eax * 0x200) / 0x10 = eax * 0x20
-            imul eax, 0x20
-            mov word [da_packet.address], kernel_loadpoint
-            mov word [da_packet.segment], ax
-        pop eax
-        push eax
-            mov ah, 0x42
-            mov si, da_packet
-            mov dl, 0x80        ; FIXME: actual boot device?
-            int 0x13
-            mov al, 'D'
-            jc print_error
-        pop eax
-        add eax, 0x50
-    pop cx
-    loop .load_kernel_loop
+    mov dword [da_packet.lba_low],  3+0x7f
+    mov dword [da_packet.lba_high], 0
+    mov  word [da_packet.count],    0x7f
+    mov  word [da_packet.address],  kernel_loadpoint
+    mov  word [da_packet.segment],  0x7f*(0x200/0x10)
+
+    mov ah, 0x42
+    mov si, da_packet
+    mov dl, 0x80        ; FIXME: actual boot device?
+    int 0x13
+    mov al, 'D'
+    jc print_error
+
 
     ; hide cursor by moving it out of the screen
     mov bh, 0
@@ -134,13 +143,26 @@ print_error:    ; prints E and one letter from al and terminates, (error in boot
     pop ax
     jmp $
 
+; http://wiki.osdev.org/A20_Line
+; Using only "Fast A20" gate
+; Might be a bit unreliable, but it is small :]
+enable_A20:
+    in al, 0x92
+    test al, 2
+    jnz .done
+    or al, 2
+    and al, 0xFE
+    out 0x92, al
+.done:
+    ret
+
 ; disk address packet
 ALIGN 2
 da_packet:
     db 16               ; size of this packet (constant)
     db 0                ; reserved (always zero)
 .count:
-    dw 100              ; count (how many sectors) (127 might be a limit here)
+    dw 1                ; count (how many sectors) (127 might be a limit here, still 0xFF on most BIOSes)
 .address:
     dw stage1_loadpoint ; offset (where)
 .segment:

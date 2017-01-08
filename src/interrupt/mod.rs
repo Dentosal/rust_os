@@ -1,5 +1,6 @@
 use core::ptr;
 use core::mem;
+use core::fmt;
 
 use keyboard;
 use pic;
@@ -63,16 +64,19 @@ impl IDTDescriptor {
 }
 
 
-#[derive(Debug)]
-#[repr(C)]
+#[repr(C,packed)]
 struct ExceptionStackFrame {
     instruction_pointer: u64,
     code_segment: u64,
     cpu_flags: u64,
     stack_pointer: u64,
-    stack_segment: u64,
+    stack_segment: u64
 }
-
+impl fmt::Display for ExceptionStackFrame {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ESF {{\n  rip: {:#x},\n  cs: {:#x},\n  flags: {:#x},\n  rsp: {:#x},\n  ss: {:#x}\n}}", self.instruction_pointer, self.code_segment, self.cpu_flags, self.stack_pointer, self.stack_segment)
+    }
+}
 
 macro_rules! save_scratch_registers {
     () => {
@@ -178,7 +182,8 @@ macro_rules! simple_exception {
     ($text:expr) =>  {{
         extern "C" fn exception(stack_frame: *const ExceptionStackFrame) {
             unsafe {
-                rprintln!(concat!("Exception: ", $text, "\n{:#?}"), *stack_frame);
+                rforce_unlock!();
+                rprintln!(concat!("Exception: ", $text, "\n{}"), *stack_frame);
             };
             loop {}
         }
@@ -190,24 +195,27 @@ macro_rules! simple_exception {
 /// Breakpoint handler
 extern "C" fn exception_bp(stack_frame: *const ExceptionStackFrame) {
     unsafe {
-        rprintln!("EXCEPTION: Breakpoint at {:#x}\n{:#?}", (*stack_frame).instruction_pointer, *stack_frame);
-        asm!("mov bx,bx"::::"intel","volatile"); // Trigger Bochs magic breakpoint
+        rforce_unlock!();
+        rprintln!("Breakpoint at {:#x}\n{}", (*stack_frame).instruction_pointer, *stack_frame);
+        bochs_magic_bp!();
     }
 }
 
 /// Invalid Opcode handler (instruction undefined)
 extern "C" fn exception_ud(stack_frame: *const ExceptionStackFrame) {
     unsafe {
-        rprintln!("Exception: invalid opcode at {:#x}\n{:#?}", (*stack_frame).instruction_pointer, *stack_frame);
+        rforce_unlock!();
+        rprintln!("Exception: invalid opcode at {:#x}\n{}", (*stack_frame).instruction_pointer, *stack_frame);
     }
     loop {}
 }
 
 /// Double Fault handler
 #[naked]
-unsafe extern "C" fn exception_df() -> ! {
+extern "C" fn exception_df() -> ! {
     // it has double faulted, so no more risks, just deliver the panic indicator
     unsafe {
+        bochs_magic_bp!();
         panic_indicator!(0x4f664f64);   // "df"
     }
     loop {}
@@ -217,7 +225,8 @@ unsafe extern "C" fn exception_df() -> ! {
 /// General Protection Fault handler
 extern "C" fn exception_gpf(stack_frame: *const ExceptionStackFrame, error_code: u64) {
     unsafe {
-        rprintln!("Exception: General Protection Fault with error code at {:#x}\n{:#?}", error_code, *stack_frame);
+        rforce_unlock!();
+        rprintln!("Exception: General Protection Fault with error code {:#x}\n{}", error_code, *stack_frame);
     }
     loop {}
 }
@@ -236,7 +245,9 @@ bitflags! {
 /// Page Fault handler
 extern "C" fn exception_pf(stack_frame: *const ExceptionStackFrame, error_code: u64) {
     unsafe {
-        rprintln!("Exception: Page Fault with error code {:?} ({:?}) at {:#x}\n{:#?}", error_code, PageFaultErrorCode::from_bits(error_code).unwrap(), register!(cr2), *stack_frame);
+        bochs_magic_bp!();
+        rforce_unlock!();
+        rprintln!("Exception: Page Fault with error code {:?} ({:?}) at {:#x}\n{}", error_code, PageFaultErrorCode::from_bits(error_code).unwrap(), register!(cr2), *stack_frame);
     }
     loop {}
 }
@@ -252,7 +263,7 @@ enum SegmentNotPresentTable {
 /// Segment Not Present handler
 extern "C" fn exception_snp(stack_frame: *const ExceptionStackFrame, error_code: u64) {
     unsafe {
-        rprintln!("Exception: Segment Not Present with error code {:#x} (e={:b},t={:?},i={:#x})\n{:#?}",
+        rprintln!("Exception: Segment Not Present with error code {:#x} (e={:b},t={:?},i={:#x})\n{}",
             error_code,
             error_code & 0b1,
             match (error_code & 0b110) >> 1 {

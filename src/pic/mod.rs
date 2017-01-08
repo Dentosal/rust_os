@@ -1,3 +1,8 @@
+// Mostly taken from, with MIT license
+// https://github.com/emk/toyos-rs/blob/master/crates/pic8259_simple/src/lib.rs
+// and from, public domain:
+// http://wiki.osdev.org/PIC#Programming_the_PIC_chips
+
 use spin::Mutex;
 use cpuio::{Port, UnsafePort};
 
@@ -57,8 +62,8 @@ impl ChainedPics {
         let mut io_wait = || { io_wait_port.write(0) };
 
         // Save masks
-        let mask1_orig = self.pics[0].data_port.read();
-        let mask2_orig = self.pics[1].data_port.read();
+        let mask1_orig: u8 = self.pics[0].data_port.read();
+        let mask2_orig: u8 = self.pics[1].data_port.read();
 
         // Initialization sequence
         self.pics[0].command_port.write(PIC_CMD_INIT);

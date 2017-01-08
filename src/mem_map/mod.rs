@@ -3,7 +3,7 @@ use spin::Mutex;
 use paging::PhysicalAddress;
 
 // This MUST be kept in sync with the one from src/asm_routines and plan.md
-pub const BOOT_TMP_MMAP_BUFFER:     usize   = 0x2000;
+const BOOT_TMP_MMAP_BUFFER:     usize   = 0x2000;
 
 pub const MEM_PAGE_SIZE_BYTES:      usize   = 0x1_000; // 4096
 pub const MEM_PAGE_MAP_SIZE_BYTES:  usize   = 0x10_000;
@@ -36,7 +36,7 @@ impl Frame {
         Frame { index: self.index }
     }
     /// Inclusive range between frames
-    fn range_inclusive(start: Frame, end: Frame) -> FrameIter {
+    pub fn range_inclusive(start: Frame, end: Frame) -> FrameIter {
         FrameIter {
             start: start,
             end: end,
@@ -45,7 +45,7 @@ impl Frame {
 }
 
 /// Iterator for frames
-struct FrameIter {
+pub struct FrameIter {
     start: Frame,
     end: Frame,
 }

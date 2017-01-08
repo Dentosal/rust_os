@@ -27,7 +27,7 @@ Begin   | Size  | Content
 0x60000 |0x3000 | Page tables (Boot stage only)
 0x70000 |0x10000| Memory bitmap 1 (currently free memory) (this allows (8*0x10000*0x1000)/1024**3 = 2GiB memory to be used, I think)
 0x80000 |0x10000| Memory bitmap 2 (hardware memory status)
-0x100000|???????| Relocated kernel (size proabably around 0x20000)
+0x100000|???????| Relocated kernel (will be huge)
 
 Final layout
 ------------
@@ -40,5 +40,5 @@ Begin   | Size  | Content
 0x70000 |0x10000| Memory bitmap 1 (currently free memory) (this allows (8*0x10000*0x1000)/1024**3 = 2GiB memory to be used, I think)
 0x80000 |0x10000| Memory bitmap 2 (hardware memory status)
 0x90000 |???????| Reserved for EBDA, ROM, Video Memory and other stuff there.
-0x100000|???????| Kernel (Extended memory)
+0x100000|???????| Kernel (Extended memory) (Size around 0x100000)
 ????????|???????| Free memory (must be allocated using the frame allocator)

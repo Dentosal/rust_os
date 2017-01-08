@@ -6,7 +6,7 @@ use volatile::Volatile;
 
 const SCREEN_HEIGHT: usize = 25;
 const SCREEN_WIDTH: usize = 80;
-const VGA_BUFFER_ADDRESS: usize = 0xb8000;
+pub const VGA_BUFFER_ADDRESS: usize = 0xb8000;
 
 /// A VGA color
 #[allow(dead_code)]
@@ -233,6 +233,11 @@ macro_rules! rprintln {
 macro_rules! rreset {
     () => ({
         $crate::vga_buffer::TERMINAL.lock().reset();
+    });
+}
+macro_rules! rforce_unlock {
+    () => ({
+        $crate::vga_buffer::TERMINAL.force_unlock();
     });
 }
 macro_rules! panic_indicator {

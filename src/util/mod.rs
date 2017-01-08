@@ -43,7 +43,7 @@ macro_rules! dump_memory_at {
     ($ptr:expr) => (rprintln!("{:x} {:x} {:x} {:x}", raw_ptr!(u16 $ptr; 0), raw_ptr!(u16 $ptr; 2), raw_ptr!(u16 $ptr; 4), raw_ptr!(u16 $ptr; 6)));
 }
 
-macro_rules! register {
+macro_rules! register { // general purpose register
     // read
     ($reg:ident) => ({
         let value: u64;
@@ -56,12 +56,32 @@ macro_rules! register {
     });
 }
 
-macro_rules! int {
-    ($num:expr) => ({
-        asm!(concat!("int ", stringify!($num)) :::: "intel");
+macro_rules! msr { // model specific register
+    // read
+    ($msr:expr) => ({
+        let value: u64;
+        asm!("rdmsr" : "={rax}"(value) : "{rcx}"($msr as u64) :: "volatile", "intel");
+        value
+    });
+    // write
+    ($msr:expr, $value:expr) => ({
+        asm!("wrmsr" :: "{rax}"($value as u64), "{rcx}"($msr as u64) :: "volatile", "intel");
     });
 }
 
+macro_rules! int {
+    ($num:expr) => ({
+        asm!(concat!("int ", stringify!($num)) :::: "volatile", "intel");
+    });
+}
+
+macro_rules! bochs_magic_bp {
+    () => ({
+        unsafe {
+            asm!("xchg bx, bx" :::: "volatile", "intel");
+        };
+    });
+}
 
 pub fn io_wait() {
     unsafe {

@@ -15,9 +15,10 @@ echo "Compiling source files..."
 
 echo "* bootloader"
 # compile bootloader
-nasm src/boot/boot_stage0.asm -f bin -o build/boot_stage0.bin
-nasm src/boot/boot_stage1.asm -f bin -o build/boot_stage1.bin
-nasm src/boot/boot_stage2.asm -f bin -o build/boot_stage2.bin
+nasm src/boot/alt0.asm -f bin -o build/alt0.bin
+nasm src/boot/stage0.asm -f bin -o build/stage0.bin
+nasm src/boot/stage1.asm -f bin -o build/stage1.bin
+nasm src/boot/stage2.asm -f bin -o build/stage2.bin
 
 echo "* kernel entry point"
 # compile kernel entry point
@@ -39,7 +40,8 @@ done
 echo "Linking objects..."
 
 # link
-ld -n --gc-sections -T buildsystem/linker.ld -o build/kernel.bin build/entry.o target/$TARGET/release/librust_os.a build/asm_routines/*.o
+ld -z max-page-size=0x1000 --gc-sections -T buildsystem/linker.ld -o build/kernel.bin build/entry.o target/$TARGET/release/librust_os.a build/asm_routines/*.o
+# ld -n --gc-sections -T buildsystem/linker.ld -o build/kernel.bin build/entry.o target/$TARGET/release/librust_os.a build/asm_routines/*.o
 
 echo "Cheking boundries..."
 
@@ -60,9 +62,10 @@ echo "* create disk"
 dd "if=/dev/zero" "of=build/disk.img" "bs=512" "count=$DISK_SIZE_SECTORS" "conv=notrunc"
 
 echo "* copy boot stages"
-dd "if=build/boot_stage0.bin" "of=build/disk.img" "bs=512" "seek=0" "count=1" "conv=notrunc"
-dd "if=build/boot_stage1.bin" "of=build/disk.img" "bs=512" "seek=1" "count=1" "conv=notrunc"
-dd "if=build/boot_stage2.bin" "of=build/disk.img" "bs=512" "seek=2" "count=1" "conv=notrunc"
+# dd "if=build/stage0.bin" "of=build/disk.img" "bs=512" "seek=0" "count=1" "conv=notrunc"
+dd "if=build/alt0.bin" "of=build/disk.img" "bs=512" "seek=0" "count=1" "conv=notrunc"
+dd "if=build/stage1.bin" "of=build/disk.img" "bs=512" "seek=1" "count=1" "conv=notrunc"
+dd "if=build/stage2.bin" "of=build/disk.img" "bs=512" "seek=2" "count=1" "conv=notrunc"
 
 echo "* copy kernel"
 dd "if=build/kernel.bin" "of=build/disk.img" "bs=512" "seek=3" "conv=notrunc"

@@ -21,7 +21,6 @@ stage1:
     ; SCREEN: top left: "00"
     mov dword [0xb8000], 0x2f302f30
 
-    call enable_A20
     call check_long_mode
     call set_up_SSE
 
@@ -52,22 +51,6 @@ stage1:
 
     ; jump into stage 2, and activate long mode
     jmp gdt_selector_code:0x8000
-
-
-
-; http://wiki.osdev.org/A20_Line
-; Using only "Fast A20" gate
-; Might be a bit unreliable, but it is small :]
-enable_A20:
-    in al, 0x92
-    test al, 2
-    jnz .done
-    or al, 2
-    and al, 0xFE
-    out 0x92, al
-.done:
-    ret
-
 
 ; Check for SSE and enable it.
 ; http://os.phil-opp.com/set-up-rust.html#enabling-sse

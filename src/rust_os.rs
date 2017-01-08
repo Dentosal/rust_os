@@ -51,16 +51,14 @@ pub extern fn rust_main() {
     /// Finish system setup
 
     // interrupt system
-    // interrupt::init();
+    interrupt::init();
 
     // receive raw kernel elf image data before we allow overwriting it
-    let kernel_elf_header =  unsafe { elf_parser::parse_kernel_elf() };
-
+    let kernel_elf_metadata =  unsafe { elf_parser::parse_kernel_elf() };
 
     // frame allocator
     mem_map::create_memory_bitmap();
 
-    rprintln!("BRPT"); loop {}
     // cpu data
     // cpuid::init();
 
@@ -68,25 +66,15 @@ pub extern fn rust_main() {
     pic::init();
     // apic::init();
 
-
-
     // keyboard
-    //keyboard::init();
-
-    rprintln!("Init ok."); loop {}
+    keyboard::init();
 
     // paging
-    paging::init();
+    paging::init(kernel_elf_metadata);
 
-    // Test stuff
-
-    rprintln!("Diving in...");
-
-    // loop {}
-    paging::test_paging();
-
-    // hang
     rprintln!("\nSystem ready.\n");
+
+
     loop {}
 }
 
@@ -106,14 +94,14 @@ extern "C" fn eh_personality() -> ! {loop {}}
 #[no_mangle]
 extern "C" fn panic_fmt(fmt: core::fmt::Arguments, file: &str, line: u32) -> ! {
     unsafe {
-        asm!("jmp panic"::::"intel","volatile");
+        // asm!("jmp panic"::::"intel","volatile");
 
         asm!("cli"::::"intel","volatile");
         panic_indicator!(0x4f214f21); // !!
 
         rprintln!("Kernel Panic: file: '{}', line {}\n", file, line);
         rprintln!("    {}\n", fmt);
-//        asm!("jmp panic"::::"intel","volatile");
+       asm!("jmp panic"::::"intel","volatile");
     }
     loop {}
 }

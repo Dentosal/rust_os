@@ -1,147 +1,129 @@
+mod entry;
+mod page;
 mod table;
+mod page_table;
+mod mapper;
+mod tlb;
 
-use mem_map::MEM_PAGE_SIZE_BYTES;
-use mem_map::{Frame, FrameAllocator};
+use vga_buffer::VGA_BUFFER_ADDRESS;
+use mem_map::{FrameAllocator, Frame, MEM_PAGE_SIZE_BYTES};
+use mem_map::{MEM_PAGE_MAP_SIZE_BYTES, MEM_PAGE_MAP1_ADDRESS, MEM_PAGE_MAP2_ADDRESS};
+use elf_parser;
+use elf_parser::{ELFData, ELFProgramHeader};
 
-pub use self::table::ActivePageTable;
+pub use self::mapper::Mapper;
+use self::page_table::{ActivePageTable,InactivePageTable};
+use self::page::{Page,TemporaryPage};
+
 
 const ENTRY_COUNT: usize = 512;
-
 
 pub type PhysicalAddress = usize;
 pub type VirtualAddress = usize;
 
 
-#[derive(Debug, Clone, Copy)]
-pub struct Page {
-   index: usize,
-}
+fn remap_kernel<A>(allocator: &mut A, elf_metadata: ELFData) where A: FrameAllocator {
+    let mut temporary_page = TemporaryPage::new(Page { index: 0xcafebabe }, allocator);
 
-impl Page {
-    pub fn containing_address(address: VirtualAddress) -> Page {
-        assert!(address < 0x0000_8000_0000_0000 || address >= 0xffff_8000_0000_0000, "invalid address: 0x{:x}", address);
-        Page { index: address / MEM_PAGE_SIZE_BYTES }
-    }
+    let mut active_table = unsafe { ActivePageTable::new() };
+    let mut new_table = {
+        let frame = allocator.allocate_frame().expect("no more frames");
+        InactivePageTable::new(frame, &mut active_table, &mut temporary_page)
+    };
 
-    pub fn start_address(&self) -> usize {
-        self.index * MEM_PAGE_SIZE_BYTES
-    }
+    rprintln!("Remapping the kernel now...");
 
+    active_table.with(&mut new_table, &mut temporary_page, |mapper| {
+        for ph in elf_metadata.ph_table.iter().filter_map(|x| *x) {
+            if ph.loadable() {
+                let start = ph.virtual_address as usize;
+                let size = ph.size_in_memory as usize;
+                let mut flags = entry::PRESENT;
 
-    fn p4_index(&self) -> usize {
-        (self.index >> 27) & 0o777
-    }
-    fn p3_index(&self) -> usize {
-        (self.index >> 18) & 0o777
-    }
-    fn p2_index(&self) -> usize {
-        (self.index >> 9) & 0o777
-    }
-    fn p1_index(&self) -> usize {
-        (self.index >> 0) & 0o777
-    }
-
-    fn translate(&self) -> Option<Frame> {
-        let p3 = unsafe { &*table::P4 }.next_table(self.p4_index());
-
-        let huge_page = || {
-            p3.and_then(|p3| {
-                let p3_entry = &p3[self.p3_index()];
-                // 1GiB self?
-                if let Some(start_frame) = p3_entry.pointed_frame() {
-                    if p3_entry.flags().contains(HUGE_PAGE) {
-                        // address must be 1GiB aligned
-                        assert!(start_frame.index % (ENTRY_COUNT * ENTRY_COUNT) == 0);
-                        return Some(Frame {
-                            index: start_frame.index + self.p2_index() * ENTRY_COUNT +
-                                    self.p1_index(),
-                        });
-                    }
+                if !(ph.flags.contains(elf_parser::EXECUTABLE)) {
+                    flags |= entry::NO_EXECUTE;
                 }
-                if let Some(p2) = p3.next_table(self.p3_index()) {
-                    let p2_entry = &p2[self.p2_index()];
-                    // 2MiB self?
-                    if let Some(start_frame) = p2_entry.pointed_frame() {
-                        if p2_entry.flags().contains(HUGE_PAGE) {
-                            // address must be 2MiB aligned
-                            assert!(start_frame.index % ENTRY_COUNT == 0);
-                            return Some(Frame { index: start_frame.index + self.p1_index() });
-                        }
-                    }
+                if !ph.flags.contains(elf_parser::READABLE) {
+                    panic!("Non-readable pages are not (yet) handled");
                 }
-                None
-            })
-        };
+                if ph.flags.contains(elf_parser::WRITABLE) {
+                    flags |= entry::WRITABLE;
+                }
 
-        p3.and_then(|p3| p3.next_table(self.p3_index()))
-          .and_then(|p2| p2.next_table(self.p2_index()))
-          .and_then(|p1| p1[self.p1_index()].pointed_frame())
-          .or_else(huge_page)
-    }
-}
+                assert!(start % MEM_PAGE_SIZE_BYTES == 0, "Segments must be page aligned");
 
+                rprintln!("{:#x} + {:#x} [{:?}]", start, size, flags);
 
-pub struct Entry(u64);
-
-bitflags! {
-    flags EntryFlags: u64 {
-        const PRESENT =         1 << 0,
-        const WRITABLE =        1 << 1,
-        const USER_ACCESSIBLE = 1 << 2,
-        const WRITE_THROUGH =   1 << 3,
-        const NO_CACHE =        1 << 4,
-        const ACCESSED =        1 << 5,
-        const DIRTY =           1 << 6,
-        const HUGE_PAGE =       1 << 7,
-        const GLOBAL =          1 << 8,
-        const NO_EXECUTE =      1 << 63,
-    }
-}
-
-impl Entry {
-    pub fn is_unused(&self) -> bool {
-        self.0 == 0
-    }
-
-    pub fn set_unused(&mut self) {
-        self.0 = 0;
-    }
-
-    pub fn flags(&self) -> EntryFlags {
-        EntryFlags::from_bits_truncate(self.0)
-    }
-
-    pub fn pointed_frame(&self) -> Option<Frame> {
-        if self.flags().contains(PRESENT) {
-            Some(Frame::containing_address(self.0 as usize & 0x000fffff_fffff000))
-        } else {
-            None
+                let start_frame = Frame::containing_address(start);
+                let end_frame = Frame::containing_address(start + size - 1);
+                for frame in Frame::range_inclusive(start_frame, end_frame) {
+                    mapper.identity_map(frame, flags, allocator);
+                }
+            }
         }
+
+        // identity map the VGA text buffer
+        let vga_buffer_frame = Frame::containing_address(VGA_BUFFER_ADDRESS);
+        mapper.identity_map(vga_buffer_frame, entry::WRITABLE | entry::PRESENT, allocator);
+
+        // identity map the physical memory allocatior bitmaps
+        let start_frame = Frame::containing_address(MEM_PAGE_MAP1_ADDRESS);
+        let end_frame = Frame::containing_address(MEM_PAGE_MAP1_ADDRESS + MEM_PAGE_MAP_SIZE_BYTES - 1);
+        for frame in Frame::range_inclusive(start_frame, end_frame) {
+            mapper.identity_map(frame, entry::WRITABLE | entry::PRESENT, allocator);
+        }
+
+        let start_frame = Frame::containing_address(MEM_PAGE_MAP2_ADDRESS);
+        let end_frame = Frame::containing_address(MEM_PAGE_MAP2_ADDRESS + MEM_PAGE_MAP_SIZE_BYTES - 1);
+        for frame in Frame::range_inclusive(start_frame, end_frame) {
+            mapper.identity_map(frame, entry::WRITABLE | entry::PRESENT, allocator);
+        }
+    });
+    rprintln!("Switching...");
+    let old_table = active_table.switch(new_table);
+    rprintln!("Remapping done.");
+}
+
+unsafe fn enable_nxe() {
+    let nxe_bit = 1 << 11;
+    let efer = 0xC0000080;
+    msr!(efer, msr!(efer) | nxe_bit);
+}
+
+unsafe fn enable_write_protection() {
+    let wp_bit = 1 << 16;
+    register!(cr0, register!(cr0) | wp_bit);
+}
+
+pub fn init(elf_metadata: ELFData) {
+    unsafe {
+        enable_nxe();
+        enable_write_protection();
     }
 
-    pub fn set(&mut self, frame: Frame, flags: EntryFlags) {
-        assert!(frame.start_address() & !0x000fffff_fffff000 == 0);
-        self.0 = (frame.start_address() as u64) | flags.bits();
-    }
+    remap_kernel(&mut ALLOCATOR!(), elf_metadata);
+
+    rprintln!("IT WORKED!");
 }
 
 
-pub fn test_paging<A>(allocator: &mut A) where A: FrameAllocator {
-    let page_table = unsafe { ActivePageTable::new() };
+
+pub fn test_paging() {
+    let page_table = unsafe { Mapper::new() };
 
     // test it
     // address 0 is mapped
-    rprintln!("Some = {:?}", page_table.translate(0));
+    rprintln!("Some = {:?}", page_table.translate_page(0));
      // second P1 entry
-    rprintln!("Some = {:?}", page_table.translate(4096));
+    rprintln!("Some = {:?}", page_table.translate_page(4096));
     // second P2 entry
-    rprintln!("Some = {:?}", page_table.translate(512 * 4096));
+    rprintln!("Some = {:?}", page_table.translate_page(512 * 4096));
     // 300th P2 entry
-    rprintln!("Some = {:?}", page_table.translate(300 * 512 * 4096));
+    rprintln!("Some = {:?}", page_table.translate_page(300 * 512 * 4096));
     // second P3 entry
-    rprintln!("None = {:?}", page_table.translate(512 * 512 * 4096));
+    rprintln!("None = {:?}", page_table.translate_page(512 * 512 * 4096));
     // last mapped byte
-    rprintln!("Some = {:?}", page_table.translate(512 * 512 * 4096 - 1));
+    rprintln!("Some = {:?}", page_table.translate_page(512 * 512 * 4096 - 1));
 
 
 }

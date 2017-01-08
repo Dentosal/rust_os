@@ -117,7 +117,7 @@ stage2:
 
     ; <2> copy p_filesz bytes from p_offset to p_vaddr
     ; uses: rsi, rdi, rcx
-    rep movsb   ; https://en.wikibooks.org/wiki/X86_Assembly/Data_Transfer#Move_String
+    rep movsb
     ; </2>
 
     pop rcx

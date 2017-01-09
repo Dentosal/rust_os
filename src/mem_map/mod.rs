@@ -1,3 +1,4 @@
+use core::ptr;
 use spin::Mutex;
 
 use paging::PhysicalAddress;
@@ -80,8 +81,9 @@ impl BitmapAllocator {
         BitmapAllocator {index: 0}
     }
     fn is_free(&self, index: usize) -> bool {
-        let free    = unsafe { *((MEM_PAGE_MAP1_ADDRESS + index/8) as *mut u8) } & (1 << (index%8)) != 0; // 1: free, 0: reserved
-        let usable  = unsafe { *((MEM_PAGE_MAP2_ADDRESS + index/8) as *mut u8) } & (1 << (index%8)) != 0; // 1: usable, 0: unusable
+        let free    = unsafe {ptr::read_volatile((MEM_PAGE_MAP1_ADDRESS + index/8) as *mut u8)} & (1 << (index%8)) != 0; // 1: free, 0: reserved
+        let usable  = unsafe {ptr::read_volatile((MEM_PAGE_MAP2_ADDRESS + index/8) as *mut u8)} & (1 << (index%8)) != 0; // 1: usable, 0: unusable
+
         if free && !usable { // error in free pages table
             panic!("PHYS_MEM: Page {} is incorrectly marked as free.", index);
         }
@@ -94,7 +96,11 @@ impl FrameAllocator for BitmapAllocator {
         for i in 0..(MEM_PAGE_MAP_SIZE_BYTES*8) {
             if self.is_free(i) {
                 unsafe {
-                    *((MEM_PAGE_MAP1_ADDRESS + i/8) as *mut u8) ^= 1 << (i%8); // set frame reserved
+                    // set frame reserved
+                    ptr::write_volatile(
+                        (MEM_PAGE_MAP1_ADDRESS + i/8) as *mut u8,
+                        ptr::read_volatile((MEM_PAGE_MAP1_ADDRESS + i/8) as *mut u8) ^ (1 << (i%8))
+                    );
                 }
                 return Some(Frame::from_index(i));
             }
@@ -107,7 +113,11 @@ impl FrameAllocator for BitmapAllocator {
             panic!("PHYS_MEM: deallocate_frame: Page {} is already free.", frame.index);
         }
         unsafe {
-            *((MEM_PAGE_MAP1_ADDRESS + frame.index/8) as *mut u8) |= 1 << (frame.index%8); // set the correct bit
+            // set the correct bit
+            ptr::write_volatile(
+                (MEM_PAGE_MAP1_ADDRESS + frame.index/8) as *mut u8,
+                ptr::read_volatile((MEM_PAGE_MAP1_ADDRESS + frame.index/8) as *mut u8) | (1 << (frame.index%8))
+            );
         }
     }
 }
@@ -133,18 +143,18 @@ pub fn create_memory_bitmap() {
     // zero out the bitmap sections
     for address in (MEM_PAGE_MAP1_ADDRESS..MEM_PAGE_MAP2_ADDRESS+MEM_PAGE_SIZE_BYTES).step_by(8) {
         unsafe {
-            *(address as *mut u8) = 0; // default to: reserved, unusable
+            ptr::write_volatile(address as *mut u8, 0); // default to (reserved, unusable)
         }
     }
 
-    let entry_count: u8 = unsafe {*((BOOT_TMP_MMAP_BUFFER) as *mut u8)};
+    let entry_count: u8 = unsafe {ptr::read_volatile(BOOT_TMP_MMAP_BUFFER as *mut u8)};
     let base = (BOOT_TMP_MMAP_BUFFER+2) as *mut u8;
     let mut memory_amount_counter_kib = 0;
     for index in 0..(entry_count as isize) {
-        let entry_start:    usize   = unsafe { *(base.offset(24*index+ 0) as *mut u64) } as usize;
-        let entry_size:     usize   = unsafe { *(base.offset(24*index+ 8) as *mut u64) } as usize;
-        let entry_type:     u32     = unsafe { *(base.offset(24*index+16) as *mut u32) };
-        let acpi_data:      u32     = unsafe { *(base.offset(24*index+20) as *mut u32) };
+        let entry_start:    usize   = unsafe { ptr::read_volatile(base.offset(24*index+ 0) as *mut u64) } as usize;
+        let entry_size:     usize   = unsafe { ptr::read_volatile(base.offset(24*index+ 8) as *mut u64) } as usize;
+        let entry_type:     u32     = unsafe { ptr::read_volatile(base.offset(24*index+16) as *mut u32) };
+        let acpi_data:      u32     = unsafe { ptr::read_volatile(base.offset(24*index+20) as *mut u32) };
         // rprintln!("Section {}: {:#016x}-{:#016x}: type: {:#x}, acpi: {:#x}", index, entry_start, entry_start+entry_size, entry_type, acpi_data);
 
         // is this usable?
@@ -162,8 +172,16 @@ pub fn create_memory_bitmap() {
                     continue;
                 }
                 unsafe {
-                    *((MEM_PAGE_MAP1_ADDRESS + (address/8)/MEM_PAGE_SIZE_BYTES) as *mut u8) |= 1 << (address%8); // set free
-                    *((MEM_PAGE_MAP2_ADDRESS + (address/8)/MEM_PAGE_SIZE_BYTES) as *mut u8) |= 1 << (address%8); // set usable
+                    // set free
+                    ptr::write_volatile(
+                        (MEM_PAGE_MAP1_ADDRESS + (address/8)/MEM_PAGE_SIZE_BYTES) as *mut u8,
+                        ptr::read_volatile((MEM_PAGE_MAP1_ADDRESS + (address/8)/MEM_PAGE_SIZE_BYTES) as *mut u8) | (1 << (address%8))
+                    );
+                    // set usable
+                    ptr::write_volatile(
+                        (MEM_PAGE_MAP2_ADDRESS + (address/8)/MEM_PAGE_SIZE_BYTES) as *mut u8,
+                        ptr::read_volatile((MEM_PAGE_MAP2_ADDRESS + (address/8)/MEM_PAGE_SIZE_BYTES) as *mut u8) | (1 << (address%8))
+                    );
                 }
             }
         }

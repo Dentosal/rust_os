@@ -1,11 +1,12 @@
-mod entry;
-mod page;
+pub mod entry;
+pub mod page;
+pub mod page_table;
 mod table;
-mod page_table;
 mod mapper;
 mod tlb;
 
 use vga_buffer::VGA_BUFFER_ADDRESS;
+use interrupt::{IDT_ADDRESS, IDTR_ADDRESS};
 use mem_map::{FrameAllocator, Frame, MEM_PAGE_SIZE_BYTES};
 use mem_map::{MEM_PAGE_MAP_SIZE_BYTES, MEM_PAGE_MAP1_ADDRESS, MEM_PAGE_MAP2_ADDRESS};
 use elf_parser;
@@ -22,7 +23,7 @@ pub type PhysicalAddress = usize;
 pub type VirtualAddress = usize;
 
 
-fn remap_kernel<A>(allocator: &mut A, elf_metadata: ELFData) where A: FrameAllocator {
+pub fn remap_kernel<A>(allocator: &mut A, elf_metadata: ELFData) -> ActivePageTable where A: FrameAllocator {
     let mut temporary_page = TemporaryPage::new(Page { index: 0xcafebabe }, allocator);
 
     let mut active_table = unsafe { ActivePageTable::new() };
@@ -62,6 +63,13 @@ fn remap_kernel<A>(allocator: &mut A, elf_metadata: ELFData) where A: FrameAlloc
             }
         }
 
+        // identity map IDT & IDTr
+        let idt_frame = Frame::containing_address(IDT_ADDRESS);
+        mapper.identity_map(idt_frame, entry::WRITABLE | entry::PRESENT, allocator);
+
+        let idtr_frame = Frame::containing_address(IDTR_ADDRESS);
+        mapper.identity_map(idtr_frame, entry::WRITABLE | entry::PRESENT, allocator);
+
         // identity map the VGA text buffer
         let vga_buffer_frame = Frame::containing_address(VGA_BUFFER_ADDRESS);
         mapper.identity_map(vga_buffer_frame, entry::WRITABLE | entry::PRESENT, allocator);
@@ -82,48 +90,17 @@ fn remap_kernel<A>(allocator: &mut A, elf_metadata: ELFData) where A: FrameAlloc
     rprintln!("Switching...");
     let old_table = active_table.switch(new_table);
     rprintln!("Remapping done.");
+
+    active_table
 }
 
-unsafe fn enable_nxe() {
+pub unsafe fn enable_nxe() {
     let nxe_bit = 1 << 11;
     let efer = 0xC0000080;
     msr!(efer, msr!(efer) | nxe_bit);
 }
 
-unsafe fn enable_write_protection() {
+pub unsafe fn enable_write_protection() {
     let wp_bit = 1 << 16;
     register!(cr0, register!(cr0) | wp_bit);
-}
-
-pub fn init(elf_metadata: ELFData) {
-    unsafe {
-        enable_nxe();
-        enable_write_protection();
-    }
-
-    remap_kernel(&mut ALLOCATOR!(), elf_metadata);
-
-    rprintln!("IT WORKED!");
-}
-
-
-
-pub fn test_paging() {
-    let page_table = unsafe { Mapper::new() };
-
-    // test it
-    // address 0 is mapped
-    rprintln!("Some = {:?}", page_table.translate_page(0));
-     // second P1 entry
-    rprintln!("Some = {:?}", page_table.translate_page(4096));
-    // second P2 entry
-    rprintln!("Some = {:?}", page_table.translate_page(512 * 4096));
-    // 300th P2 entry
-    rprintln!("Some = {:?}", page_table.translate_page(300 * 512 * 4096));
-    // second P3 entry
-    rprintln!("None = {:?}", page_table.translate_page(512 * 512 * 4096));
-    // last mapped byte
-    rprintln!("Some = {:?}", page_table.translate_page(512 * 512 * 4096 - 1));
-
-
 }

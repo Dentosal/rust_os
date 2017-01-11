@@ -9,9 +9,9 @@ use pic;
 // They also MUST match the ones in plan.md
 // If a constant defined here doesn't exists in that file, then it's also fine
 const GDT_SELECTOR_CODE: u16 = 0x08;
-const IDT_ADDRESS: usize = 0x0;
-const IDTR_ADDRESS: usize = 0x1000;
-const IDT_ENTRY_COUNT: usize = 0x100;
+pub const IDT_ADDRESS: usize = 0x0;
+pub const IDTR_ADDRESS: usize = 0x1000;
+pub const IDT_ENTRY_COUNT: usize = 0x100;
 
 
 #[derive(Debug, Clone, Copy)]
@@ -28,7 +28,7 @@ impl IDTReference {
         }
     }
     pub unsafe fn write(&self) {
-        ptr::write(IDTR_ADDRESS as *mut Self, *self);
+        ptr::write_volatile(IDTR_ADDRESS as *mut Self, *self);
     }
 }
 
@@ -74,7 +74,7 @@ struct ExceptionStackFrame {
 }
 impl fmt::Display for ExceptionStackFrame {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ESF {{\n  rip: {:#x},\n  cs: {:#x},\n  flags: {:#x},\n  rsp: {:#x},\n  ss: {:#x}\n}}", self.instruction_pointer, self.code_segment, self.cpu_flags, self.stack_pointer, self.stack_segment)
+        write!(f, "ExceptionStackFrame {{\n  rip: {:#x},\n  cs: {:#x},\n  flags: {:#x},\n  rsp: {:#x},\n  ss: {:#x}\n}}", self.instruction_pointer, self.code_segment, self.cpu_flags, self.stack_pointer, self.stack_segment)
     }
 }
 
@@ -211,16 +211,16 @@ extern "C" fn exception_ud(stack_frame: *const ExceptionStackFrame) {
 }
 
 /// Double Fault handler
-#[naked]
-extern "C" fn exception_df() -> ! {
-    // it has double faulted, so no more risks, just deliver the panic indicator
+extern "C" fn exception_df(stack_frame: *const ExceptionStackFrame, error_code: u64) {
+    // error code is always zero
     unsafe {
         bochs_magic_bp!();
         panic_indicator!(0x4f664f64);   // "df"
+        rforce_unlock!();
+        rprintln!("Exception: Double Fault\n{}", *stack_frame);
     }
     loop {}
 }
-
 
 /// General Protection Fault handler
 extern "C" fn exception_gpf(stack_frame: *const ExceptionStackFrame, error_code: u64) {
@@ -263,6 +263,7 @@ enum SegmentNotPresentTable {
 /// Segment Not Present handler
 extern "C" fn exception_snp(stack_frame: *const ExceptionStackFrame, error_code: u64) {
     unsafe {
+        rforce_unlock!();
         rprintln!("Exception: Segment Not Present with error code {:#x} (e={:b},t={:?},i={:#x})\n{}",
             error_code,
             error_code & 0b1,
@@ -273,7 +274,7 @@ extern "C" fn exception_snp(stack_frame: *const ExceptionStackFrame, error_code:
                 0b11 => SegmentNotPresentTable::IDT,
                 _ => {unreachable!();}
             },
-            (error_code & 0xFFFF) >> 4, // 3 ?
+            (error_code & 0xFFFF) >> 4, // FIXME: 3 ?
             *stack_frame
         );
     }
@@ -289,7 +290,7 @@ extern "C" fn exception_irq0() {
 
 
 /// keyboard_event: first ps/2 device sent data
-/// we just trust that it is a keyboard
+/// we just trust that it is the keyboard
 /// ^^this should change when we properly initialize the ps/2 controller
 pub extern "C" fn exception_irq1() {
     unsafe {
@@ -306,7 +307,7 @@ pub fn init() {
     exception_handlers[0x00] = Some(simple_exception!("Divide-by-zero Error") as *const fn());
     exception_handlers[0x03] = Some(exception_handler!(exception_bp) as *const fn());
     exception_handlers[0x06] = Some(exception_handler!(exception_ud) as *const fn());
-    exception_handlers[0x08] = Some(exception_df as *const fn());
+    exception_handlers[0x08] = Some(exception_handler_with_error_code!(exception_df) as *const fn());
     exception_handlers[0x0b] = Some(exception_handler_with_error_code!(exception_snp) as *const fn());
     exception_handlers[0x0d] = Some(exception_handler_with_error_code!(exception_gpf) as *const fn());
     exception_handlers[0x0e] = Some(exception_handler_with_error_code!(exception_pf) as *const fn());

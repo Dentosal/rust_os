@@ -2,25 +2,24 @@
 A simple x86-64 operating system written in Rust and nasm.
 
 ## Current features:
-* Text output terminal
 * Long mode with Rust
+* Text output terminal
 * Physical memory manager
-* Identity paging for low memory
+* Paging
 * Basic interrupt support
+* Keyboard input
 
 ## Planned in near future:
 * Virtual TTYs
-* Keyboard input
-* Usable paging model
+* Disk IO
 
 ## Not-in-so-near future features:
 * Filesystem
-* Disk IO
-* Networking?
+* Networking
 * Executable programs
 * Shell & Utils & Editor
-* Multitasking?
-* Device drivers?
+* Multitasking
+* Device drivers for USB/Audio/NICs
 
 # Running
 Have Qemu and Vagrant installed, and run `./autobuild.sh -u`.

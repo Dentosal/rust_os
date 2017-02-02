@@ -50,3 +50,9 @@ You will also need a virtual machine. Qemu is suggested, but Bochs should work a
 ## Actually running
 
 With Qemu and Vagrant installed, run `./autobuild.sh -u`. With Bochs: `./autobuild.sh -ub`. To use VirtualBox, run `./autobuild.sh -c`, and then convert raw binary image `build/disk.img` to VirtualBox format.
+
+
+# License
+This project is licensed under MIT license, that can be found in the file called LICENSE.
+
+The paging module, under [/src/paging/](/src/paging/), is partially a rewrite of [Philipp Oppermann's Blog OS](https://github.com/phil-opp/blog_os), and is really similar to his module. The code is licensed under MIT license. The hole list allocator is also from the Blog OS project, and the source file contains a license notice.

@@ -96,7 +96,7 @@ pub fn remap_kernel<A>(allocator: &mut A, elf_metadata: ELFData) -> ActivePageTa
 
 pub unsafe fn enable_nxe() {
     let nxe_bit = 1 << 11;
-    let efer = 0xC0000080;
+    let efer: u64 = 0xC0000080;
     msr!(efer, msr!(efer) | nxe_bit);
 }
 

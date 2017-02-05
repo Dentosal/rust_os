@@ -7,6 +7,7 @@ use super::{VirtualAddress, PhysicalAddress};
 use super::page::Page;
 use super::entry::*;
 use super::table::{Table, Level4};
+use super::tlb;
 
 pub struct Mapper {
     p4: Unique<Table<Level4>>,
@@ -36,16 +37,16 @@ impl Mapper {
 
     pub fn map<A>(&mut self, page: Page, flags: EntryFlags, allocator: &mut A) where A: FrameAllocator {
         let frame = allocator.allocate_frame().expect("out of memory");
-        self.map_to(page, frame, flags, allocator)
+        self.map_to(page, frame, flags, allocator);
     }
 
     pub fn identity_map<A>(&mut self, frame: Frame, flags: EntryFlags, allocator: &mut A) where A: FrameAllocator {
         let page = Page::containing_address(frame.start_address());
-        self.map_to(page, frame, flags, allocator)
+        self.map_to(page, frame, flags, allocator);
     }
 
     pub fn unmap<A>(&mut self, page: Page, allocator: &mut A) where A: FrameAllocator {
-        // FIXME: http://os.phil-opp.com/modifying-page-tables.html#unmapping-pages
+        // FIXME: ?? http://os.phil-opp.com/modifying-page-tables.html#unmapping-pages
         assert!(self.translate_page(page.start_address()).is_some());
 
         let p1 = self.p4_mut()
@@ -56,6 +57,11 @@ impl Mapper {
 
         let frame = p1[page.p1_index()].pointed_frame().unwrap();
         p1[page.p1_index()].set_unused();
+
+        unsafe {
+            tlb::flush(page.start_address());
+        }
+
         // TODO free p(1,2,3) table if empty
         allocator.deallocate_frame(frame);
     }

@@ -9,7 +9,7 @@ use super::page_table::ActivePageTable;
 use super::mapper;
 use super::entry::*;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Page {
    pub index: usize,
 }
@@ -50,8 +50,7 @@ impl Page {
                         // address must be 1GiB aligned
                         assert!(start_frame.index % (ENTRY_COUNT * ENTRY_COUNT) == 0);
                         return Some(Frame {
-                            index: start_frame.index + self.p2_index() * ENTRY_COUNT +
-                                    self.p1_index(),
+                            index: start_frame.index + self.p2_index() * ENTRY_COUNT + self.p1_index()
                         });
                     }
                 }
@@ -74,6 +73,31 @@ impl Page {
           .and_then(|p2| p2.next_table(self.p2_index()))
           .and_then(|p1| p1[self.p1_index()].pointed_frame())
           .or_else(huge_page)
+    }
+    pub fn range_inclusive(start: Page, end: Page) -> PageIter {
+        PageIter {
+            start: start,
+            end: end,
+        }
+    }
+}
+
+pub struct PageIter {
+    start: Page,
+    end: Page,
+}
+
+impl Iterator for PageIter {
+    type Item = Page;
+
+    fn next(&mut self) -> Option<Page> {
+        if self.start <= self.end {
+            let page = self.start;
+            self.start.index += 1;
+            Some(page)
+        } else {
+            None
+        }
     }
 }
 

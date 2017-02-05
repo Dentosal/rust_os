@@ -3,7 +3,7 @@
 plugin_ctrl: unmapped=1, biosdev=1, speaker=1, extfpuirq=1, parallel=1, serial=1, gameport=1, iodebug=1
 config_interface: textconfig
 display_library: x
-memory: host=2048, guest=2048
+memory: host=2048, guest=4096
 romimage: file="/usr/local/Cellar/bochs/2.6.8/share/bochs/BIOS-bochs-latest"
 vgaromimage: file="/usr/local/Cellar/bochs/2.6.8/share/bochs/VGABIOS-lgpl-latest"
 boot: disk
@@ -35,7 +35,7 @@ clock: sync=none, time0=local, rtc_sync=0
 # no loader
 log: -
 logprefix: %t%e%d
-debug: action=ignore
+debug: action=ignore, harddrv=report, pci=report
 info: action=report
 error: action=report
 panic: action=ask

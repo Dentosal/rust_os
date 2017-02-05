@@ -10,7 +10,6 @@ section .entry
 start:
     ; set up stack
     mov rsp, stack_top
-    ; mov rsp, 0x9f000 ; HACK
 
     ; get to kernel
     call rust_main

@@ -42,3 +42,5 @@ Begin   | Size  | Content
 0x90000 |???????| Reserved for EBDA, ROM, Video Memory and other stuff there.
 0x100000|???????| Kernel (Extended memory) (Size around 0x100000)
 ????????|???????| Free memory (must be allocated using the frame allocator)
+
+TODO: Bump allocator

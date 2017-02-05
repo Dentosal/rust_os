@@ -1,5 +1,5 @@
 #[allow(dead_code)]
-#[derive(Clone,Copy,Debug)]
+#[derive(Clone,Copy,PartialEq,Debug)]
 pub enum Key {
     // function keys
     F1,

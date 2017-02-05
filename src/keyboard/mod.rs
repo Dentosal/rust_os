@@ -1,4 +1,5 @@
 mod key;
+mod keyreader;
 mod keymap;
 
 use spin::Mutex;
@@ -7,7 +8,7 @@ use cpuio::{Port, UnsafePort};
 use util::io_wait;
 
 use self::key::Key;
-use self::keymap::KeyReader;
+use self::keyreader::KeyReader;
 
 // PS/2 ports
 const PS2_DATA:     u16 = 0x60; // rw
@@ -48,21 +49,26 @@ impl Keyboard {
 
     unsafe fn init(&mut self) {
         if self.self_test() {
-            rprintln!("Keyboard: self test ok");
+            rprintln!("Keyboard: self test: ok");
         }
         else {
-            rprintln!("Keyboard: self test failed");
-            panic!("Keyboard: self test failed");
+            rprintln!("Keyboard: self test: failed");
+            panic!("Keyboard: self test: failed");
         }
 
-        // self.test_echo();
-        // rprintln!("Keyboard: echo ok");
+        rprintln!("Keyboard: echo: {}", if self.test_echo() {"ok"} else {"failed"});
 
         self.disable_scanning();
         self.verify_keyboard();
         self.configure();
         self.enable_scanning();
+
+        self.key_reader.init();
         self.enabled = true;
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
     }
 
     pub unsafe fn test_result(&mut self, result: u8) -> bool {
@@ -134,8 +140,7 @@ impl Keyboard {
 
     pub unsafe fn enable_scanning(&mut self) {
         self.data_port.write(0xF4);
-        io_wait();
-        if self.read_byte() != 0xFA {
+        if !self.test_result(0xFA) {
             panic!("Unsupported keyboard");
         }
     }
@@ -149,10 +154,9 @@ impl Keyboard {
             Some(key) => {
                 let event = KeyboardEvent::new(key);
                 rprintln!("YES: {:?}", event.key);
-                loop {}
             }
             None => {
-                rprintln!("{:x}", key);
+                rprintln!("NOPE: {:x}", key);
             }
         }
 
@@ -195,12 +199,13 @@ impl KeyboardEvent {
     }
 }
 
-
 pub static KEYBOARD: Mutex<Keyboard> = Mutex::new(unsafe { Keyboard::new() });
-
 
 pub fn init() {
     unsafe {
+        // disable interrupts during initialization, so this wont deadlock on not-terribly-slow computers, including Qemu
+        asm!("cli"::::"intel","volatile");
         KEYBOARD.lock().init();
+        asm!("sti"::::"intel","volatile");
     }
 }

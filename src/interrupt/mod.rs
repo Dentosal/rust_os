@@ -4,6 +4,7 @@ use core::fmt;
 
 use keyboard;
 use pic;
+use time;
 
 // These constants MUST have defined with same values as those in src/asm_routines/constants.asm
 // They also MUST match the ones in plan.md
@@ -211,6 +212,7 @@ extern "C" fn exception_ud(stack_frame: *const ExceptionStackFrame) {
 }
 
 /// Double Fault handler
+#[allow(unused_variables)]
 extern "C" fn exception_df(stack_frame: *const ExceptionStackFrame, error_code: u64) {
     // error code is always zero
     unsafe {
@@ -281,20 +283,24 @@ extern "C" fn exception_snp(stack_frame: *const ExceptionStackFrame, error_code:
     loop {}
 }
 
+/// PIT timer ticked
 extern "C" fn exception_irq0() {
-    // just ignore it (use later for timer?)
     unsafe {
+        time::SYSCLOCK.force_unlock();
+        time::SYSCLOCK.lock().tick();
         pic::PICS.lock().notify_eoi(0x20);
     }
 }
 
 
-/// keyboard_event: first ps/2 device sent data
-/// we just trust that it is the keyboard
-/// ^^this should change when we properly initialize the ps/2 controller
+/// First ps/2 device, keyboard, sent data
 pub extern "C" fn exception_irq1() {
     unsafe {
-        keyboard::KEYBOARD.lock().notify();
+        rforce_unlock!();
+        let mut kbd = keyboard::KEYBOARD.lock();
+        if kbd.is_enabled() {
+            kbd.notify();
+        }
         pic::PICS.lock().notify_eoi(0x21);
     }
 }
@@ -332,7 +338,7 @@ pub fn init() {
 
     unsafe {
         asm!("lidt [$0]" :: "r"(IDTR_ADDRESS) : "memory" : "volatile", "intel");
-        // asm!("sti" :::: "volatile", "intel"); // XXX: disabled sti for now
+        asm!("sti" :::: "volatile", "intel");
     }
 
     rprintln!("Enabled.");

@@ -73,24 +73,14 @@ boot:
 
     ; load kernel
 
-    ; mov dword [da_packet.lba_low],  3
-    ; mov dword [da_packet.lba_high], 0
-    ; mov  word [da_packet.count],    0xFF
-    ; mov  word [da_packet.address],  kernel_loadpoint
-    ; mov  word [da_packet.segment],  0
-    ;
-    ; mov ah, 0x42
-    ; mov si, da_packet
-    ; mov dl, 0x80        ; FIXME: actual boot device?
-    ; int 0x13
-    ; mov al, 'D'
-    ; jc print_error
+%assign i 0
+%rep 3
 
-    mov dword [da_packet.lba_low],  3
+    mov dword [da_packet.lba_low],  3+0x7f*i
     mov dword [da_packet.lba_high], 0
     mov  word [da_packet.count],    0x7f
     mov  word [da_packet.address],  kernel_loadpoint
-    mov  word [da_packet.segment],  0
+    mov  word [da_packet.segment],  0x7f*(0x200/0x10)*i
 
     mov ah, 0x42
     mov si, da_packet
@@ -99,19 +89,8 @@ boot:
     mov al, 'D'
     jc print_error
 
-    mov dword [da_packet.lba_low],  3+0x7f
-    mov dword [da_packet.lba_high], 0
-    mov  word [da_packet.count],    0x7f
-    mov  word [da_packet.address],  kernel_loadpoint
-    mov  word [da_packet.segment],  0x7f*(0x200/0x10)
-
-    mov ah, 0x42
-    mov si, da_packet
-    mov dl, 0x80        ; FIXME: actual boot device?
-    int 0x13
-    mov al, 'D'
-    jc print_error
-
+%assign i i+1
+%endrep
 
     ; hide cursor by moving it out of the screen
     mov bh, 0

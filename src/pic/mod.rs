@@ -62,8 +62,8 @@ impl ChainedPics {
         let mut io_wait = || { io_wait_port.write(0) };
 
         // Save masks
-        let mask1_orig: u8 = self.pics[0].data_port.read();
-        let mask2_orig: u8 = self.pics[1].data_port.read();
+        let mut mask1: u8 = self.pics[0].data_port.read();
+        let mut mask2: u8 = self.pics[1].data_port.read();
 
         // Initialization sequence
         self.pics[0].command_port.write(PIC_CMD_INIT);
@@ -89,9 +89,15 @@ impl ChainedPics {
         self.pics[1].data_port.write(1);
         io_wait();
 
-        // Restore masks
-        self.pics[0].data_port.write(mask1_orig);
-        self.pics[1].data_port.write(mask2_orig);
+        // Modify masks
+        // http://wiki.osdev.org/IRQ#Standard_ISA_IRQs
+        // http://wiki.osdev.org/8259_PIC#Masking
+        mask1 &= 0b11111100; // Enable PIT and Keyboard
+        mask2 &= 0b11111111; // Do nothing
+
+        // Restore / Set masks
+        self.pics[0].data_port.write(mask1);
+        self.pics[1].data_port.write(mask2);
     }
     pub fn handles_interrupt(&self, interrupt_id: u8) -> bool {
         self.pics.iter().any(|p| p.handles_interrupt(interrupt_id))

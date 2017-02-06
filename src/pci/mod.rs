@@ -1,4 +1,5 @@
 mod scan;
+mod util;
 
 use collections::Vec;
 use spin::Mutex;
@@ -19,7 +20,6 @@ pub struct Device {
     pub location: DeviceLocation,
     pub class: DeviceClass
 }
-
 impl Device {
     fn new(id: u16, vendor: u16, location: DeviceLocation, class: DeviceClass) -> Device {
         Device {
@@ -30,8 +30,16 @@ impl Device {
         }
     }
 
-    pub fn read_u32(&self, offset: u8) -> u32 {
-        scan::pci_read_device(self.location, offset)
+    pub unsafe fn read(&self, offset: u8) -> u32 {
+        util::pci_read_device(self.location, offset)
+    }
+    pub unsafe fn write(&self, offset: u8, value: u32) {
+        util::pci_write_device(self.location, offset, value)
+    }
+
+    // http://wiki.osdev.org/RTL8139#PCI_Bus_Mastering
+    pub unsafe fn enable_bus_mastering(&self) {
+        self.write(0x04, self.read(0x04) | (1 << 2));
     }
 }
 
@@ -73,6 +81,5 @@ pub static PCI: Mutex<PCIController> = Mutex::new(PCIController::new());
 pub fn init() {
     PCI.lock().init();
     PCI.lock().print();
-    loop {}
     rprintln!("PCI: enabled");
 }

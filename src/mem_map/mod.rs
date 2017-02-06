@@ -192,6 +192,7 @@ pub fn create_memory_bitmap() {
 // Create static pointer mutex with spinlock to make ALLOCATOR thread-safe
 // pub static ALLOCATOR: Mutex<BitmapAllocator> = Mutex::new(BitmapAllocator {});
 
+// XXX / FIXME / TODO: We should be using mutexed allocator.
 macro_rules! ALLOCATOR {
     () => ({
         $crate::mem_map::BitmapAllocator::new()

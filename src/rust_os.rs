@@ -10,7 +10,8 @@
 #![feature(naked_functions)]
 #![feature(core_intrinsics)]
 #![feature(stmt_expr_attributes)]
-
+#![feature(alloc, collections)]
+#![feature(drop_types_in_const)]
 
 extern crate volatile;
 extern crate rlibc;
@@ -19,7 +20,12 @@ extern crate cpuio;
 #[macro_use]
 extern crate bitflags;
 
+extern crate linked_list_allocator;
+extern crate hole_list_allocator;
 
+extern crate alloc;
+#[macro_use]
+extern crate collections;
 
 #[macro_use]
 mod vga_buffer;
@@ -31,49 +37,63 @@ mod paging;
 mod acpi;
 mod pic;
 // mod apic;
-mod cpuid;
+// mod cpuid;
 mod interrupt;
 mod keyboard;
 mod elf_parser;
-
-use spin::Mutex;
-
-// use keyboard::{KEYBOARD,Keyboard,KeyboardEvent};
-
+mod memory;
+mod pit;
+mod time;
+mod pci;
+// mod ide;
+// mod nic;
 
 /// The kernel main function
 #[no_mangle]
 pub extern fn rust_main() {
     rreset!();
-    rprintln!("Dimension 7 OS");
-    rprintln!("Just a millisecond, loading the system...\n");
+    rprintln!("Loading the system...\n");
 
     /// Finish system setup
-
-    // interrupt system
-    interrupt::init();
-
-    // receive raw kernel elf image data before we allow overwriting it
-    let kernel_elf_metadata =  unsafe { elf_parser::parse_kernel_elf() };
-
-    // frame allocator
-    mem_map::create_memory_bitmap();
-
-    // cpu data
-    // cpuid::init();
 
     // interrupt controller
     pic::init();
     // apic::init();
 
+    // interrupt system
+    interrupt::init();
+
+    // memory allocation
+    memory::init();
+
+    // PIT
+    pit::init();
+
+    // cpu data
+    // cpuid::init();
+
     // keyboard
     keyboard::init();
 
-    // paging
-    paging::init(kernel_elf_metadata);
+    // PCI
+    pci::init();
 
+    // IDE / ATA
+    // ide::init();
+
+    // NIC
+    // nic::init();
+
+    // rreset!();
+    rprintln!("Dimension 7 OS");
     rprintln!("\nSystem ready.\n");
 
+    // fn stack_overflow() {
+    //     rprint!("."); stack_overflow();
+    // }
+    // stack_overflow();
+
+    rprintln!("Did not crash!");
 
     loop {}
 }
@@ -91,6 +111,7 @@ extern "C" fn eh_personality() -> ! {loop {}}
 #[cfg(not(test))]
 #[lang = "panic_fmt"]
 #[allow(unused_variables)]
+#[allow(private_no_mangle_fns)]
 #[no_mangle]
 extern "C" fn panic_fmt(fmt: core::fmt::Arguments, file: &str, line: u32) -> ! {
     unsafe {
@@ -101,7 +122,7 @@ extern "C" fn panic_fmt(fmt: core::fmt::Arguments, file: &str, line: u32) -> ! {
 
         rprintln!("Kernel Panic: file: '{}', line {}\n", file, line);
         rprintln!("    {}\n", fmt);
-       asm!("jmp panic"::::"intel","volatile");
+        asm!("jmp panic"::::"intel","volatile");
     }
     loop {}
 }

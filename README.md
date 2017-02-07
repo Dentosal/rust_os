@@ -5,24 +5,35 @@ Dimension 7 is a simple x86-64 operating system written in Rust. It is in fairly
 
 This is a learning project. Currently code contributions are not accepted, as I'd like to learn to fix the problems myself. Feel free to submit issues on GitHub if you find any bugs.
 
-Currently everything is subject to quick changes. Until I feel safe to even partially stabilize any modules, all development is done in main branch, and not being able to boot the version on main branch is more like rule than an exception.
+Currently everything is subject to quick changes. Any module should be considered unstable.
+
+### Branches
+
+Main branch should always contain a working build, that can be compiled and it boots successfully.
+Feature development is done in separate branches.
+
+Currently following features are under development:
+* Generic ATA IDE driver
+* Networking: Intel E1000 NIC driver
+
 
 ## Current features:
 * Long mode with Rust
 * Text mode terminal
 * Physical memory manager
 * Paging
-* Basic interrupt support
-* Keyboard input
+* Interrupts
+* Keyboard input (Somewhat)
 
 ## Planned in near future:
 * Virtual TTYs
 * Disk IO
-* Automated tests
+* Networking
+ * Intel E1000 driver
 
 ## Not-in-so-near future features:
+* Automated tests
 * A proper filesystem, maybe SFS, FAT32, or ext3
-* Networking
 * Executable programs, probably in ELF format
 * Shell and utilities
 * Multitasking
@@ -50,7 +61,6 @@ You will also need a virtual machine. Qemu is suggested, but Bochs should work a
 ## Actually running
 
 With Qemu and Vagrant installed, run `./autobuild.sh -u`. With Bochs: `./autobuild.sh -ub`. To use VirtualBox, run `./autobuild.sh -c`, and then convert raw binary image `build/disk.img` to VirtualBox format.
-
 
 # License
 This project is licensed under MIT license, that can be found in the file called LICENSE.

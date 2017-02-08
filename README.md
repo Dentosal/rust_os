@@ -40,21 +40,34 @@ Currently following features are under development:
 * Device drivers for USB/Audio/NICs
 
 # Running
-The project is using Vagrant to virtualize the building environment. While being a little slower, this means that building the system on any supported platform should Just Work™.
+The project is using Vagrant to virtualize the building environment. While being a little slower, this means that building the system on any supported platform should Just Work™. If you have a Unix-like system, install Qemu and
+
+```bash
+git clone https://github.com/Dentosal/rust_os.git && cd rust_os && ./autobuild.sh -u
+```
+
+If you don't have a Unix-like system, then you should probably get one, they are pretty awesome compared to old DOS systems or [Dentosal/rust_os](https://github.com/Dentosal/rust_os/edit/master/README.md).
 
 ## Dependencies
 
 Building with default automated build system required that Vagrant is installed. I use VirtualBox as my Vagrant provider, but [other providers](https://www.vagrantup.com/docs/providers/) should work as well.
 
-Vagrant isn't actually required: on Linux it should be reasonably easy to just install the dependencies by hand:
+Vagrant isn't actually required: on systems with apt, like Debian or Ubuntu, it should be reasonably easy to just install the dependencies by hand:
 
     sudo apt-get update
-    sudo apt-get install nasm -y
-    sudo apt-get install git -y
+    sudo apt-get install vim git nasm -y
     sduo apt-get install texinfo flex bison python-dev ncurses-dev -y
     sudo apt-get install cmake libssl-dev -y
-    curl -sSf https://static.rust-lang.org/rustup.sh | sh -s -- --channel=nightly -y
+
+    curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain nightly -y
+
+    export PATH="$HOME/.cargo/bin:$PATH"
+    rustup component add rust-src
     cargo install xargo
+
+And then add `$HOME/.cargo/bin` to your path on shell start, for example `.bashrc`:
+
+    export PATH="$HOME/.cargo/bin:$PATH
 
 You will also need a virtual machine. Qemu is suggested, but Bochs should work as well. VirtualBox can also be used, but the project isn't actively tested with it. Moreover, you must run it yourself.
 

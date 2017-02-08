@@ -30,6 +30,7 @@ echo "* kernel"
 xargo build --target $TARGET --release
 
 echo "* kernel assembly routines"
+mkdir -p build/asm_routines/
 for fpath in src/asm_routines/*.asm
 do
     filename=$(basename "$fpath")   # remove path

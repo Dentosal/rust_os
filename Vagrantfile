@@ -29,19 +29,23 @@ Vagrant.configure(2) do |config|
     vb.memory = "4096"
   end
 
-  # Install rust osdev toolkit
-  config.vm.provision "shell", inline: <<-SHELL
+  # Install rust osdev toolkit and some standard utilities
+  # these run as user vagrant instead of root
+  config.vm.provision "shell", privileged: false, inline: <<-SHELL
     sudo apt-get update
-    #sudo apt-get install xorriso -y
     sudo apt-get install vim git nasm -y
+    #sudo apt-get install xorriso -y
     sduo apt-get install texinfo flex bison python-dev ncurses-dev -y
     sudo apt-get install cmake libssl-dev -y
 
     # curl -sf https://raw.githubusercontent.com/phil-opp/binutils-gdb/rust-os/build-rust-os-gdb.sh | sh
 
-    curl -sSf https://static.rust-lang.org/rustup.sh | sh -s -- --channel=nightly -y
+    curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain nightly -y
+
+    export PATH="$HOME/.cargo/bin:$PATH"
+    rustup component add rust-src
     cargo install xargo
 
-    echo "cd /vagrant" >> /home/vagrant/.bashrc
+    echo "export PATH="$HOME/.cargo/bin:$PATH"; cd /vagrant" >> /home/vagrant/.bashrc
   SHELL
 end

@@ -1,4 +1,3 @@
-use super::{CONFIG_DATA, CONFIG_ADDR};
 use super::{Device, DeviceLocation, DeviceClass};
 use super::util::pci_read_device;
 

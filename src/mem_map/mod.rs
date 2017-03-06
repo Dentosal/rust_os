@@ -139,17 +139,12 @@ pub fn create_memory_bitmap() {
     // load memory map from where out bootloader left it
     // http://wiki.osdev.org/Detecting_Memory_(x86)#BIOS_Function:_INT_0x15.2C_EAX_.3D_0xE820
 
-    rprintln!("BITM: 1");
-
     // zero out the bitmap sections
     for address in (MEM_PAGE_MAP1_ADDRESS..MEM_PAGE_MAP2_ADDRESS+MEM_PAGE_SIZE_BYTES).step_by(8) {
-        rprintln!("{:#x}", address);
         unsafe {
             ptr::write_volatile(address as *mut u8, 0); // default to (reserved, unusable)
         }
     }
-
-    rprintln!("BITM: 2");
 
     let entry_count: u8 = unsafe {ptr::read_volatile(BOOT_TMP_MMAP_BUFFER as *mut u8)};
     let base = (BOOT_TMP_MMAP_BUFFER+2) as *mut u8;

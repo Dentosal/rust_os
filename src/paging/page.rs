@@ -146,7 +146,7 @@ impl TemporaryPage {
     /// Maps the temporary page to the given frame in the active table.
     /// Returns the start address of the temporary page.
     pub fn map(&mut self, frame: Frame, active_table: &mut ActivePageTable) -> VirtualAddress {
-        // XXX: kludge fix??? tutorial doens't seem to have same problem
+        // XXX: kludge fix??? tutorial doesn't seem to have same problem
         // assert!(active_table.translate_page(self.page).is_none(), "temporary page is already mapped");
         assert!(active_table.translate_page(self.page.index).is_none(), "temporary page is already mapped");
 

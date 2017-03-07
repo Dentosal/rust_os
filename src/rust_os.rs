@@ -50,7 +50,7 @@ mod pci;
 // Software:
 mod elf_parser;
 mod time;
-mod process;
+mod multitasking;
 mod syscall;
 
 /// The kernel main function
@@ -91,6 +91,9 @@ pub extern fn rust_main() {
     // NIC
     // nic::init();
 
+    // Multitasking
+    multitasking::init();
+
     // rreset!();
     rprintln!("Dimension 7 OS");
     rprintln!("\nSystem ready.\n");
@@ -104,8 +107,8 @@ pub extern fn rust_main() {
 
 
     loop {
-        use time::{SYSCLOCK, sleep_until};
-        sleep_until(SYSCLOCK.lock().after_seconds(1));
+        use time::{SYSCLOCK, buzy_sleep_until};
+        buzy_sleep_until(SYSCLOCK.lock().after_seconds(1));
         rprintln!("JAS");
 
         let success: bool;

@@ -1,3 +1,4 @@
+use core::cmp::Ordering;
 use spin::Mutex;
 
 use pit::TIME_BETWEEN_E_12;
@@ -11,20 +12,20 @@ impl SystemClock {
     pub const fn new() -> SystemClock {
         SystemClock {seconds: 0, nano_fraction: 0}
     }
-    pub unsafe fn tick(&mut self) {
+    pub fn tick(&mut self) {
         self.nano_fraction += TIME_BETWEEN_E_12/1_000;
         if self.nano_fraction > 1_000_000_000 {
             self.seconds += 1;
             self.nano_fraction -= 1_000_000_000;
         }
     }
-    pub fn now_microseconds(&self) -> u64 {
+    pub fn as_microseconds(&self) -> u64 {
         self.seconds*1_000_000 + self.nano_fraction/1_000
     }
-    pub fn now_milliseconds(&self) -> u64 {
+    pub fn as_milliseconds(&self) -> u64 {
         self.seconds*1_000 + self.nano_fraction/1_000_000
     }
-    pub fn now_seconds(&self) -> u64 {
+    pub fn as_seconds(&self) -> u64 {
         self.seconds
     }
 
@@ -45,6 +46,16 @@ impl SystemClock {
         }
     }
 }
+impl PartialEq for SystemClock {
+    fn eq(&self, other: &SystemClock) -> bool {
+        self.as_microseconds() == other.as_microseconds()
+    }
+}
+impl PartialOrd for SystemClock {
+    fn partial_cmp(&self, other: &SystemClock) -> Option<Ordering> {
+        Some(self.as_microseconds().cmp(&other.as_microseconds()))
+    }
+}
 
 
 pub static SYSCLOCK: Mutex<SystemClock> = Mutex::new(SystemClock::new());
@@ -53,12 +64,6 @@ pub fn init() {
     rprintln!("SYSCLOCK: enabled");
 }
 
-pub fn sleep_until(until: SystemClock) {
-    let u_micro: u64 = until.now_microseconds();
-    loop {
-        let n_micro = SYSCLOCK.lock().now_microseconds();
-        if n_micro >= u_micro {
-            break;
-        }
-    }
+pub fn buzy_sleep_until(until: SystemClock) {
+    while SYSCLOCK.lock().as_microseconds() < until.as_microseconds() {}
 }

@@ -6,64 +6,11 @@ use keyboard;
 use pic;
 use time;
 
-// These constants MUST have defined with same values as those in src/asm_routines/constants.asm
-// They also MUST match the ones in plan.md
-// If a constant defined here doesn't exists in that file, then it's also fine
-const GDT_SELECTOR_CODE: u16 = 0x08;
-pub const IDT_ADDRESS: usize = 0x0;
-pub const IDTR_ADDRESS: usize = 0x1000;
-pub const IDT_ENTRY_COUNT: usize = 0x100;
+#[macro_use]
+mod macros;
+pub mod idt;
 
-
-#[derive(Debug, Clone, Copy)]
-#[repr(C, packed)]
-struct IDTReference {
-    limit: u16,
-    offset: u64
-}
-impl IDTReference {
-    pub fn new() -> IDTReference {
-        IDTReference {
-            limit: ((IDT_ENTRY_COUNT-1)*(mem::size_of::<IDTDescriptor>())) as u16,
-            offset: IDT_ADDRESS as u64
-        }
-    }
-    pub unsafe fn write(&self) {
-        ptr::write_volatile(IDTR_ADDRESS as *mut Self, *self);
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-#[repr(C, packed)]
-pub struct IDTDescriptor {
-    pointer_low: u16,
-    gdt_selector: u16,
-    zero: u8,
-    options: u8,
-    pointer_middle: u16,
-    pointer_high: u32,
-    reserved: u32
-}
-
-impl IDTDescriptor {
-    pub fn new(present: bool, pointer: u64, ring: u8) -> IDTDescriptor {
-        assert!(ring < 4);
-        assert!(present || (pointer == 0 && ring == 0)); // pointer and ring must be 0 if not present
-        // example options: present => 1, ring 0 => 00, interrupt gate => 0, interrupt gate => 1110,
-        let options: u8 = 0b0_00_0_1110 | (ring << 5) | ((if present {1} else {0}) << 7);
-
-        IDTDescriptor {
-            pointer_low: (pointer & 0xffff) as u16,
-            gdt_selector: GDT_SELECTOR_CODE,
-            zero: 0,
-            options: options,
-            pointer_middle: ((pointer & 0xffff_0000) >> 16) as u16,
-            pointer_high: ((pointer & 0xffff_ffff_0000_0000) >> 32) as u32,
-            reserved: 0,
-        }
-    }
-}
-
+pub use self::idt::*;
 
 #[repr(C,packed)]
 struct ExceptionStackFrame {
@@ -78,120 +25,6 @@ impl fmt::Display for ExceptionStackFrame {
         write!(f, "ExceptionStackFrame {{\n  rip: {:#x},\n  cs: {:#x},\n  flags: {:#x},\n  rsp: {:#x},\n  ss: {:#x}\n}}", self.instruction_pointer, self.code_segment, self.cpu_flags, self.stack_pointer, self.stack_segment)
     }
 }
-
-macro_rules! save_scratch_registers {
-    () => {
-        asm!("push rax
-              push rcx
-              push rdx
-              push rsi
-              push rdi
-              push r8
-              push r9
-              push r10
-              push r11
-        " :::: "intel", "volatile");
-    }
-}
-
-macro_rules! restore_scratch_registers {
-    () => {
-        asm!("pop r11
-              pop r10
-              pop r9
-              pop r8
-              pop rdi
-              pop rsi
-              pop rdx
-              pop rcx
-              pop rax
-            " :::: "intel", "volatile");
-    }
-}
-
-macro_rules! irq_handler {
-    ($name: ident) => {{
-        #[naked]
-        extern "C" fn wrapper() -> ! {
-            unsafe {
-                save_scratch_registers!();
-                asm!("call $0" :: "i"($name as extern "C" fn()) :: "intel", "volatile");
-                restore_scratch_registers!();
-                asm!("iretq":::: "intel", "volatile");
-                ::core::intrinsics::unreachable();
-            }
-        }
-        wrapper
-    }}
-}
-
-macro_rules! exception_handler {
-    ($name: ident) => {{
-        #[naked]
-        extern "C" fn wrapper() -> ! {
-            unsafe {
-                save_scratch_registers!();
-                asm!("
-                    mov rdi, rsp  // pointer to stack as first argument
-                    add rdi, 9*8 // calculate exception stack frame pointer
-                    call $0       // call handler
-                "   :
-                    : "i"($name as extern "C" fn(*const ExceptionStackFrame))
-                    : "rdi"
-                    : "intel"
-                );
-                restore_scratch_registers!();
-                asm!("iretq":::: "intel", "volatile");
-                ::core::intrinsics::unreachable();
-            }
-        }
-        wrapper
-    }}
-}
-
-macro_rules! exception_handler_with_error_code {
-    ($name: ident) => {{
-        #[naked]
-        extern "C" fn wrapper() -> ! {
-            unsafe {
-                save_scratch_registers!();
-                asm!("
-                    mov rsi, [rsp+9*8]  // load error code into rsi
-                    mov rdi, rsp        // pointer to stack as first argument
-                    add rdi, 10*8       // calculate exception stack frame pointer
-                    sub rsp, 8          // align the stack pointer
-                    call $0             // call handler
-                    add rsp, 8          // undo stack pointer alignment
-                "   :
-                    : "i"($name as extern "C" fn(*const ExceptionStackFrame, u64))
-                    : "rdi","rsi"
-                    : "intel"
-                );
-                restore_scratch_registers!();
-                asm!("
-                    add rsp, 8  // drop error code
-                    iretq       // return from exception
-                "   :::: "intel", "volatile");
-                ::core::intrinsics::unreachable();
-            }
-        }
-        wrapper
-    }}
-}
-
-macro_rules! simple_exception {
-    ($text:expr) =>  {{
-        extern "C" fn exception(stack_frame: *const ExceptionStackFrame) {
-            unsafe {
-                rforce_unlock!();
-                rprintln!(concat!("Exception: ", $text, "\n{}"), *stack_frame);
-            };
-            loop {}
-        }
-        exception_handler!(exception)
-    }}
-}
-
 
 /// Breakpoint handler
 extern "C" fn exception_bp(stack_frame: *const ExceptionStackFrame) {
@@ -306,6 +139,40 @@ pub extern "C" fn exception_irq1() {
 }
 
 
+/// System calls
+#[naked]
+pub extern "C" fn syscall() -> ! {
+    use super::syscall::{SyscallResult, call};
+
+    unsafe {
+        syscall_save_scratch_registers!();
+        let routine: u64;
+        let arg0: u64;
+        let arg1: u64;
+        let arg2: u64;
+        let arg3: u64;
+
+        asm!("" :
+            "={rax}"(routine),
+            "={rdi}"(arg0),
+            "={rsi}"(arg1),
+            "={rdx}"(arg2),
+            "={rcx}"(arg3)
+            :::
+            "intel"
+        );
+
+        let result = call(routine, (arg0, arg1, arg2, arg3));
+
+        register!(rax, result.success);
+        register!(rdx, result.result);
+
+        syscall_restore_scratch_registers!();
+        asm!("iretq" :::: "intel", "volatile");
+        ::core::intrinsics::unreachable();
+    }
+}
+
 pub fn init() {
     let mut exception_handlers: [Option<*const fn()>; IDT_ENTRY_COUNT] = [None; IDT_ENTRY_COUNT];
 
@@ -319,6 +186,7 @@ pub fn init() {
     exception_handlers[0x0e] = Some(exception_handler_with_error_code!(exception_pf) as *const fn());
     exception_handlers[0x20] = Some(irq_handler!(exception_irq0) as *const fn());
     exception_handlers[0x21] = Some(irq_handler!(exception_irq1) as *const fn());
+    exception_handlers[0xd7] = Some(syscall as *const fn());
 
     for index in 0...(IDT_ENTRY_COUNT-1) {
         let descriptor = match exception_handlers[index] {

@@ -27,6 +27,7 @@ extern crate alloc;
 #[macro_use]
 extern crate collections;
 
+// Hardware:
 #[macro_use]
 mod vga_buffer;
 #[macro_use]
@@ -40,13 +41,17 @@ mod pic;
 // mod cpuid;
 mod interrupt;
 mod keyboard;
-mod elf_parser;
-mod memory;
 mod pit;
-mod time;
+mod memory;
 mod pci;
 // mod ide;
 // mod nic;
+
+// Software:
+mod elf_parser;
+mod time;
+mod process;
+mod syscall;
 
 /// The kernel main function
 #[no_mangle]
@@ -62,6 +67,8 @@ pub extern fn rust_main() {
 
     // interrupt system
     interrupt::init();
+
+    rprintln!("INTr");
 
     // memory allocation
     memory::init();
@@ -95,7 +102,24 @@ pub extern fn rust_main() {
 
     rprintln!("Did not crash!");
 
-    loop {}
+
+    loop {
+        use time::{SYSCLOCK, sleep_until};
+        sleep_until(SYSCLOCK.lock().after_seconds(1));
+        rprintln!("JAS");
+
+        let success: bool;
+        let result: u64;
+        unsafe {
+            asm!("
+                mov rax, 0x1
+                mov rdi, 0x2
+                mov rsi, 0x3
+                int 0xd7
+            " : "={rax}"(success), "={rdx}"(result) :: "eax", "rdx", "rdi", "rsi" : "intel");
+        }
+        rprintln!("{:?} {:?}", success, result);
+    }
 }
 
 

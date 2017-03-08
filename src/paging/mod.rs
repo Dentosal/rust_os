@@ -6,14 +6,14 @@ mod mapper;
 mod tlb;
 
 use vga_buffer::VGA_BUFFER_ADDRESS;
-use interrupt::{IDT_ADDRESS, IDTR_ADDRESS};
+use interrupt::idt;
 use mem_map::{FrameAllocator, Frame, MEM_PAGE_SIZE_BYTES};
 use mem_map::{MEM_PAGE_MAP_SIZE_BYTES, MEM_PAGE_MAP1_ADDRESS, MEM_PAGE_MAP2_ADDRESS};
 use elf_parser;
 use elf_parser::{ELFData, ELFProgramHeader};
 
 pub use self::mapper::Mapper;
-use self::page_table::{ActivePageTable,InactivePageTable};
+pub use self::page_table::{ActivePageTable,InactivePageTable};
 use self::page::{Page,TemporaryPage};
 
 
@@ -64,10 +64,10 @@ pub fn remap_kernel<A>(allocator: &mut A, elf_metadata: ELFData) -> ActivePageTa
         }
 
         // identity map IDT & IDTr
-        let idt_frame = Frame::containing_address(IDT_ADDRESS);
+        let idt_frame = Frame::containing_address(idt::ADDRESS);
         mapper.identity_map(idt_frame, entry::WRITABLE | entry::PRESENT, allocator);
 
-        let idtr_frame = Frame::containing_address(IDTR_ADDRESS);
+        let idtr_frame = Frame::containing_address(idt::R_ADDRESS);
         mapper.identity_map(idtr_frame, entry::WRITABLE | entry::PRESENT, allocator);
 
         // identity map the VGA text buffer

@@ -17,9 +17,11 @@
 extern crate volatile;
 extern crate rlibc;
 extern crate spin;
+extern crate x86;
 extern crate cpuio;
 #[macro_use]
 extern crate bitflags;
+extern crate bit_field;
 
 extern crate linked_list_allocator;
 extern crate hole_list_allocator;
@@ -66,13 +68,11 @@ pub extern fn rust_main() {
     pic::init();
     // apic::init();
 
-    // interrupt system
-    interrupt::init();
-
-    rprintln!("INTr");
-
     // memory allocation
-    memory::init();
+    let mut mem_ctrl = memory::init();
+
+    // interrupt system
+    interrupt::init(&mut mem_ctrl);
 
     // PIT
     pit::init();
@@ -114,7 +114,7 @@ pub extern fn rust_main() {
         let pid = pm.spawn();
         rprintln!("Did not crash!");
     }
-    
+
     loop {
         use time::{SYSCLOCK, buzy_sleep_until};
         buzy_sleep_until(SYSCLOCK.lock().after_seconds(1));

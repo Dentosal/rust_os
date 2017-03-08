@@ -8,9 +8,13 @@ use time;
 
 #[macro_use]
 mod macros;
+mod gdt;
 pub mod idt;
 
-pub use self::idt::*;
+use memory::MemoryController;
+
+use x86::bits64::task::TaskStateSegment;
+use x86::shared::PrivilegeLevel;
 
 #[repr(C,packed)]
 struct ExceptionStackFrame {
@@ -173,10 +177,17 @@ pub extern "C" fn syscall() -> ! {
     }
 }
 
-pub fn init() {
-    let mut exception_handlers: [Option<*const fn()>; IDT_ENTRY_COUNT] = [None; IDT_ENTRY_COUNT];
+pub fn init(memory_controller: &mut MemoryController) {
+    let mut exception_handlers: [Option<*const fn()>; idt::ENTRY_COUNT] = [None; idt::ENTRY_COUNT];
 
-    //exception_handlers[0x00] = Some(exception_de_wrapper as *const fn());
+    // Initialize TSS
+    let double_fault_stack = memory_controller.alloc_stack(1).expect("could not allocate double fault stack");
+
+    let mut tss = TaskStateSegment::new();
+    tss.ist[gdt::DOUBLE_FAULT_IST_INDEX] = double_fault_stack.top as u64;
+
+
+    // Bind exception handlers
     exception_handlers[0x00] = Some(simple_exception!("Divide-by-zero Error") as *const fn());
     exception_handlers[0x03] = Some(exception_handler!(exception_bp) as *const fn());
     exception_handlers[0x06] = Some(exception_handler!(exception_ud) as *const fn());
@@ -188,24 +199,24 @@ pub fn init() {
     exception_handlers[0x21] = Some(irq_handler!(exception_irq1) as *const fn());
     exception_handlers[0xd7] = Some(syscall as *const fn());
 
-    for index in 0...(IDT_ENTRY_COUNT-1) {
+    for index in 0...(idt::ENTRY_COUNT-1) {
         let descriptor = match exception_handlers[index] {
-            None            => {IDTDescriptor::new(false, 0, 0)},
-            Some(pointer)   => {IDTDescriptor::new(true, pointer as u64, 0)} // TODO: currenly all are ring 0b00
+            None            => {idt::Descriptor::new(false, 0, PrivilegeLevel::Ring0)},
+            Some(pointer)   => {idt::Descriptor::new(true, pointer as u64, PrivilegeLevel::Ring0)} // TODO: currenly all are Ring0
         };
         unsafe {
-            ptr::write_volatile((IDT_ADDRESS + index * mem::size_of::<IDTDescriptor>()) as *mut _, descriptor);
+            ptr::write_volatile((idt::ADDRESS + index * mem::size_of::<idt::Descriptor>()) as *mut _, descriptor);
         }
     }
 
     unsafe {
-        IDTReference::new().write();
+        idt::Reference::new().write();
     }
 
     rprintln!("Enabling interrupt handler...");
 
     unsafe {
-        asm!("lidt [$0]" :: "r"(IDTR_ADDRESS) : "memory" : "volatile", "intel");
+        asm!("lidt [$0]" :: "r"(idt::R_ADDRESS) : "memory" : "volatile", "intel");
         asm!("sti" :::: "volatile", "intel");
     }
 

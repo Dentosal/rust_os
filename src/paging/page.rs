@@ -1,3 +1,5 @@
+use core::ops::Add;
+
 use mem_map::MEM_PAGE_SIZE_BYTES;
 use mem_map::{Frame,FrameAllocator};
 
@@ -80,12 +82,19 @@ impl Page {
         }
     }
 }
+impl Add<usize> for Page {
+    type Output = Page;
 
-pub struct PageIter {
-    start: Page,
-    end: Page,
+    fn add(self, delta: usize) -> Page {
+        Page { index: self.index + delta }
+    }
 }
 
+#[derive(Clone)]
+pub struct PageIter {
+    start: Page,
+    end: Page
+}
 impl Iterator for PageIter {
     type Item = Page;
 

@@ -3,6 +3,7 @@ use spin::Mutex;
 
 use pit::TIME_BETWEEN_E_12;
 
+#[derive(Copy,Clone)]
 pub struct SystemClock {
     seconds: u64,
     nano_fraction: u64
@@ -13,10 +14,19 @@ impl SystemClock {
         SystemClock {seconds: 0, nano_fraction: 0}
     }
     pub fn tick(&mut self) {
+        use multitasking::SCHEDULER;
+
+        // Increase current time
         self.nano_fraction += TIME_BETWEEN_E_12/1_000;
         if self.nano_fraction > 1_000_000_000 {
             self.seconds += 1;
             self.nano_fraction -= 1_000_000_000;
+        }
+
+        // Update multitasking scheduler
+        match SCHEDULER.try_lock() {
+            Some(mut s) => s.tick(self.clone()),
+            None => {rprintln!("MT: SCHED: Locking failed");}
         }
     }
     pub fn as_microseconds(&self) -> u64 {

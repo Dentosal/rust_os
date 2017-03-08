@@ -7,6 +7,7 @@
 #![feature(const_fn)]
 #![feature(step_by)]
 #![feature(inclusive_range_syntax)]
+// #![feature(box_syntax, box_patterns)]
 #![feature(naked_functions)]
 #![feature(core_intrinsics)]
 #![feature(stmt_expr_attributes)]
@@ -105,7 +106,15 @@ pub extern fn rust_main() {
 
     rprintln!("Did not crash!");
 
+    use multitasking::PROCMAN;
 
+    {
+        let ref mut pm = PROCMAN.lock();
+        rprintln!("Did not crash!");
+        let pid = pm.spawn();
+        rprintln!("Did not crash!");
+    }
+    
     loop {
         use time::{SYSCLOCK, buzy_sleep_until};
         buzy_sleep_until(SYSCLOCK.lock().after_seconds(1));

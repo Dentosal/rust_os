@@ -1,20 +1,24 @@
-.DS_Store
-
+# Build
 .vagrant/
 target/
-Cargo.lock
-
 build/
 *.o
 *.bin
 
+# Cargo
+Cargo.lock
+
+# Temp files
 tmp/
 temp/
 
+# Dumps
 dump*.txt
 *.dump
 
+# Build debugging
 objdump.txt
 readelf.txt
 
-blog_os-master/
+# Misc
+.DS_Store

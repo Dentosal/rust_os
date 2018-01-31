@@ -53,7 +53,7 @@ pub fn remap_kernel<A>(allocator: &mut A, elf_metadata: ELFData) -> ActivePageTa
 
                 assert!(start % MEM_PAGE_SIZE_BYTES == 0, "Segments must be page aligned");
 
-                rprintln!("{:#x} + {:#x} [{:?}]", start, size, flags);
+                rprintln!("{:#x} :+ {:#x} [{:?}]", start, size, flags);
 
                 let start_frame = Frame::containing_address(start);
                 let end_frame = Frame::containing_address(start + size - 1);

@@ -3,6 +3,8 @@ use spin::Mutex;
 
 use paging::PhysicalAddress;
 
+use d7alloc::{HEAP_START, HEAP_SIZE};
+
 // This MUST be kept in sync with the one from src/asm_routines and plan.md
 const BOOT_TMP_MMAP_BUFFER:     usize   = 0x2000;
 
@@ -77,7 +79,7 @@ pub struct BitmapAllocator {
 }
 
 impl BitmapAllocator {
-    pub fn new() -> BitmapAllocator {
+    pub const fn new() -> BitmapAllocator {
         BitmapAllocator {index: 0}
     }
     fn is_free(&self, index: usize) -> bool {
@@ -93,7 +95,7 @@ impl BitmapAllocator {
 impl FrameAllocator for BitmapAllocator {
     fn allocate_frame(&mut self) -> Option<Frame> {
         // Find first free block
-        for i in 0..(MEM_PAGE_MAP_SIZE_BYTES*8) {
+        for i in 0..(MEM_PAGE_MAP_SIZE_BYTES*8) { // 8 bits of information per byte
             if self.is_free(i) {
                 unsafe {
                     // set frame reserved
@@ -170,6 +172,10 @@ pub fn create_memory_bitmap() {
                     // these are permanently reserved for the kernel
                     continue;
                 }
+                if HEAP_START <= address && address < (HEAP_START+HEAP_SIZE) {
+                    // these are permanently reserved for the heap
+                    continue;
+                }
                 unsafe {
                     // set free
                     ptr::write_volatile(
@@ -189,11 +195,4 @@ pub fn create_memory_bitmap() {
 }
 
 // Create static pointer mutex with spinlock to make ALLOCATOR thread-safe
-// pub static ALLOCATOR: Mutex<BitmapAllocator> = Mutex::new(BitmapAllocator {});
-
-// XXX / FIXME / TODO: We should be using mutexed allocator.
-macro_rules! ALLOCATOR {
-    () => ({
-        $crate::mem_map::BitmapAllocator::new()
-    });
-}
+// pub static ALLOCATOR: Mutex<BitmapAllocator> = Mutex::new(BitmapAllocator::new());

@@ -1,7 +1,7 @@
 use super::ProcessId;
 use super::process::Process;
 
-use collections::Vec;
+use alloc::Vec;
 
 pub struct ProcessManager {
     process_list: Option<Vec<Process>>,

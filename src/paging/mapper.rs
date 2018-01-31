@@ -10,14 +10,12 @@ use super::table::{Table, Level4};
 use super::tlb;
 
 pub struct Mapper {
-    p4: Unique<Table<Level4>>,
+    p4: Unique<Table<Level4>>
 }
 
 impl Mapper {
     pub unsafe fn new() -> Mapper {
-        Mapper {
-            p4: Unique::new(P4),
-        }
+        Mapper { p4: Unique::new_unchecked(P4) }
     }
 
     pub fn map_to<A>(&mut self, page: Page, frame: Frame, flags: EntryFlags, allocator: &mut A) where A: FrameAllocator {
@@ -26,6 +24,11 @@ impl Mapper {
         let mut p2 = p3.next_table_create(page.p3_index(), allocator);
         let mut p1 = p2.next_table_create(page.p2_index(), allocator);
 
+        if page.start_address() == 0x4001a000 {
+            rprintln!("!! {:#x} ok={:}", page.start_address(), p1[page.p1_index()].is_unused());
+            rprintln!("!! {:?}", p1[page.p1_index()].flags());
+            // loop {}
+        }
         assert!(p1[page.p1_index()].is_unused());
         p1[page.p1_index()].set(frame, flags | PRESENT);
     }
@@ -36,7 +39,13 @@ impl Mapper {
     }
 
     pub fn map<A>(&mut self, page: Page, flags: EntryFlags, allocator: &mut A) where A: FrameAllocator {
+        rprintln!("!>");
         let frame = allocator.allocate_frame().expect("out of memory");
+        rprintln!("!<");
+        rprintln!("!<<<<< {:#x}", frame.start_address() as u64);
+        rprintln!("!>>>>>");
+        rprintln!("!? {:#x}", page.index);
+        rprintln!("!? {:#x}", 0xCAFE);
         self.map_to(page, frame, flags, allocator);
     }
 
@@ -67,11 +76,11 @@ impl Mapper {
     }
 
     pub fn p4(&self) -> &Table<Level4> {
-        unsafe { self.p4.get() }
+        unsafe { self.p4.as_ref() }
     }
 
     pub fn p4_mut(&mut self) -> &mut Table<Level4> {
-        unsafe { self.p4.get_mut() }
+        unsafe { self.p4.as_mut() }
     }
 }
 

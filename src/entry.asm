@@ -8,6 +8,14 @@ extern rust_main
 
 section .entry
 start:
+    ; clear segment registers
+    xor ax, ax
+    mov ss, ax
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+
     ; set up stack
     mov rsp, stack_top
 

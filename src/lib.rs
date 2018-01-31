@@ -1,18 +1,21 @@
 #![allow(dead_code)]
+#![allow(unused_macros)]
 
 #![no_std]
+
 #![feature(lang_items)]
+#![feature(core_intrinsics)]
 #![feature(asm)]
+#![feature(ptr_internals)]
 #![feature(unique)]
 #![feature(const_fn)]
-#![feature(step_by)]
+#![feature(naked_functions)]
+#![feature(iterator_step_by)]
 #![feature(inclusive_range_syntax)]
 // #![feature(box_syntax, box_patterns)]
-#![feature(naked_functions)]
-#![feature(core_intrinsics)]
 #![feature(stmt_expr_attributes)]
-#![feature(alloc, collections)]
-#![feature(drop_types_in_const)]
+#![feature(alloc)]
+#![feature(global_allocator)]
 
 extern crate volatile;
 extern crate rlibc;
@@ -23,25 +26,22 @@ extern crate cpuio;
 extern crate bitflags;
 extern crate bit_field;
 
-extern crate linked_list_allocator;
-extern crate hole_list_allocator;
+extern crate d7alloc;
 
-extern crate alloc;
 #[macro_use]
-extern crate collections;
+extern crate alloc;
 
 // Hardware:
 #[macro_use]
 mod vga_buffer;
 #[macro_use]
 mod util;
-#[macro_use]
 mod mem_map;
 mod paging;
 mod acpi;
 mod pic;
 // mod apic;
-// mod cpuid;
+mod cpuid;
 mod interrupt;
 mod keyboard;
 mod pit;
@@ -56,13 +56,14 @@ mod time;
 mod multitasking;
 mod syscall;
 
+
 /// The kernel main function
 #[no_mangle]
 pub extern fn rust_main() {
     rreset!();
     rprintln!("Loading the system...\n");
 
-    /// Finish system setup
+    // Finish system setup
 
     // interrupt controller
     pic::init();
@@ -78,7 +79,7 @@ pub extern fn rust_main() {
     pit::init();
 
     // cpu data
-    // cpuid::init();
+    cpuid::init();
 
     // keyboard
     keyboard::init();
@@ -95,16 +96,9 @@ pub extern fn rust_main() {
     // Multitasking
     multitasking::init();
 
-    // rreset!();
+    rreset!();
     rprintln!("Dimension 7 OS");
     rprintln!("\nSystem ready.\n");
-
-    // fn stack_overflow() {
-    //     rprint!("."); stack_overflow();
-    // }
-    // stack_overflow();
-
-    rprintln!("Did not crash!");
 
     use multitasking::PROCMAN;
 
@@ -112,6 +106,7 @@ pub extern fn rust_main() {
         let ref mut pm = PROCMAN.lock();
         rprintln!("Did not crash!");
         let pid = pm.spawn();
+        rprintln!("PID: {}", pid);
         rprintln!("Did not crash!");
     }
 
@@ -134,6 +129,8 @@ pub extern fn rust_main() {
     }
 }
 
+#[global_allocator]
+static HEAP_ALLOCATOR: d7alloc::BumpAllocator = d7alloc::BumpAllocator::new(d7alloc::HEAP_START, d7alloc::HEAP_START + d7alloc::HEAP_SIZE);
 
 #[cfg(not(test))]
 #[allow(non_snake_case)]

@@ -1,2 +1,2 @@
 [dependencies]
-collections = {}
+alloc = {}

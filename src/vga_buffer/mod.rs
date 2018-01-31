@@ -182,7 +182,7 @@ impl Terminal {
 
     /// Get pointer to memory buffer
     fn get_buffer(&mut self) -> &mut Buffer {
-        unsafe {self.buffer.get_mut()}
+        unsafe {self.buffer.as_mut()}
     }
 
     /// Create unsafe panic terminal
@@ -192,7 +192,7 @@ impl Terminal {
         Terminal {
             output_color: CellColor::new(Color::Red, Color::Black),
             cursor: Cursor {row: SCREEN_HEIGHT-1, col: 0},
-            buffer: Unique::new(VGA_BUFFER_ADDRESS as *mut _),
+            buffer: Unique::new_unchecked(VGA_BUFFER_ADDRESS as *mut _),
         }
     }
 }
@@ -217,7 +217,7 @@ pub fn print(fmt: ::core::fmt::Arguments) {
 pub static TERMINAL: Mutex<Terminal> = Mutex::new(Terminal {
     output_color: CellColor::new(Color::White, Color::Black),
     cursor: Cursor {row: 0, col: 0},
-    buffer: unsafe { Unique::new(VGA_BUFFER_ADDRESS as *mut _) },
+    buffer: unsafe { Unique::new_unchecked(VGA_BUFFER_ADDRESS as *mut _) },
 });
 
 /// "Raw" output macros

@@ -1,11 +1,12 @@
 mod stack_allocator;
 
 use paging;
+use paging::entry;
 use paging::page::Page;
 use mem_map;
 use elf_parser;
 
-use hole_list_allocator::{HEAP_START, HEAP_SIZE};
+use d7alloc::{HEAP_START, HEAP_SIZE};
 
 pub use self::stack_allocator::Stack;
 
@@ -39,7 +40,7 @@ pub fn init() -> MemoryController {
         paging::enable_write_protection();
     }
 
-    let mut frame_allocator = ALLOCATOR!();
+    let mut frame_allocator = mem_map::BitmapAllocator::new();
     let mut active_table: paging::page_table::ActivePageTable = paging::remap_kernel(&mut frame_allocator, elf_metadata);
 
     let heap_start_page = Page::containing_address(HEAP_START);
@@ -47,7 +48,16 @@ pub fn init() -> MemoryController {
     for page in Page::range_inclusive(heap_start_page, heap_end_page) {
         // TODO: remove VVVV
         rprintln!("{:?}", page); // XXX: only this side effect works???
-        active_table.map(page, paging::entry::WRITABLE, &mut frame_allocator);
+        rprintln!("{:#x}", page.start_address()); // XXX: only this side effect works???
+        {
+            let ps = page.start_address();
+            let hs = heap_end_page.start_address();
+            rprintln!("{:#x} {:#x}",  hs, ps);
+        }
+        // rprintln!("{:?}", page.start_address()); // XXX: only this side effect works???
+        // TODO: NOW WORKS? WHAT DID I DO??
+        // XXX: Now **REMOVING** this line makes stuff work?
+        active_table.map(page, entry::WRITABLE | entry::NO_EXECUTE, &mut frame_allocator);
     }
 
     let stack_allocator = {

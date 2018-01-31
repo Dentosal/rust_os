@@ -12,7 +12,7 @@ Vagrant.configure(2) do |config|
 
   # Every Vagrant development environment requires a box. You can search for
   # boxes at https://atlas.hashicorp.com/search.
-  config.vm.box = "ubuntu/trusty64"
+  config.vm.box = "bento/ubuntu-17.10"
 
   # Disable automatic box update checking. If you disable this, then
   # boxes will only be checked for updates when the user runs
@@ -33,19 +33,25 @@ Vagrant.configure(2) do |config|
   # these run as user vagrant instead of root
   config.vm.provision "shell", privileged: false, inline: <<-SHELL
     sudo apt-get update
+    sudo apt-get upgrade
+    sudo apt-get autoremove
+    sudo apt-get install python3 python3-dev python3-pip -y
     sudo apt-get install vim git nasm -y
     #sudo apt-get install xorriso -y
-    sduo apt-get install texinfo flex bison python-dev ncurses-dev -y
+    sudo apt-get install texinfo flex bison python-dev ncurses-dev -y
     sudo apt-get install cmake libssl-dev -y
 
-    # curl -sf https://raw.githubusercontent.com/phil-opp/binutils-gdb/rust-os/build-rust-os-gdb.sh | sh
+    python3 -m pip install --upgrade pip
+    python3 -m pip install requests
+
+    curl -sf https://raw.githubusercontent.com/phil-opp/binutils-gdb/rust-os/build-rust-os-gdb.sh | sh
 
     curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain nightly -y
 
     export PATH="$HOME/.cargo/bin:$PATH"
     rustup component add rust-src
-    cargo install xargo
+    cargo install --force xargo
 
-    echo "export PATH="$HOME/.cargo/bin:$PATH"; cd /vagrant" >> /home/vagrant/.bashrc
+    echo "export PATH="$HOME/.cargo/bin:$PATH"; cd /vagrant" >> $HOME/.bashrc
   SHELL
 end

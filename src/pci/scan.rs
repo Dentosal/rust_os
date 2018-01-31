@@ -1,7 +1,7 @@
 use super::{Device, DeviceLocation, DeviceClass};
 use super::util::pci_read_device;
 
-use collections::Vec;
+use alloc::Vec;
 
 // http://wiki.osdev.org/PCI#PCI_Device_Structure
 
@@ -37,7 +37,7 @@ fn check_device(bus: u8, dev: u8) -> Vec<Device> {
         if (header_type & 0x80) != 0 {
             // This is a multi-function device, so check remaining functions
 
-            for f in 1...8 {
+            for f in 1..=8 {
                 if get_vendor_id(DeviceLocation(bus, dev, f)) != 0xFFFF {
                     result.extend(check_function(DeviceLocation(bus, dev, f)));
                 }
@@ -60,7 +60,7 @@ fn check_function(loc: DeviceLocation) -> Vec<Device> {
 }
 
 fn check_bus(bus: u8) -> Vec<Device> {
-    (0...32).map(|dev| check_device(bus, dev)).flat_map(|v| v).collect()
+    (0..=32).map(|dev| check_device(bus, dev)).flat_map(|v| v).collect()
 }
 
 pub fn check_all_busses() -> Vec<Device> {
@@ -72,7 +72,7 @@ pub fn check_all_busses() -> Vec<Device> {
     else {
         let mut result = Vec::new();
         // Multiple PCI host controllers
-        for func in 0...8 {
+        for func in 0..=8 {
             if get_vendor_id(DeviceLocation(0, 0, func)) != 0xFFFF {
                 break;
             }

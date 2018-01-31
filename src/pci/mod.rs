@@ -1,7 +1,7 @@
 mod scan;
 mod util;
 
-use collections::Vec;
+use alloc::Vec;
 use spin::Mutex;
 
 const CONFIG_ADDR: usize = 0xCF8;

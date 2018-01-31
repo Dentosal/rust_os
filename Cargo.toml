@@ -2,6 +2,7 @@
 name = "rust_os"
 version = "0.1.0"
 authors = ["Hannes Karppila <hannes.karppila@gmail.com>"]
+publish = false
 
 [lib]
 crate-type = ["staticlib"]  # static and standalone
@@ -13,17 +14,17 @@ panic = "abort"
 panic = "abort"
 
 [dependencies]
-rlibc = "1.0.0"                 # raw libc
+rlibc = "*"                     # raw libc
 spin = "0.4"                    # spinlocks
-cpuio = "*"                     # cpu port IO
+cpuio = "0.2.0"                 # cpu port IO
 bitflags = "0.7.0"              # bitflags
 bit_field = "0.7.0"             # bit fields
-volatile = "0.2.1"              # volatile read and write functions
-linked_list_allocator = "0.2.3" # TEMP: using the allocator from https://os.phil-opp.com/
+volatile = "0.2.3"              # volatile read and write functions
 
 [dependencies.x86]
 default-features = false
 version = "0.8.1"
 
-[dependencies.hole_list_allocator]  # TEMP: using the allocator from https://os.phil-opp.com/
-path = "libs/hole_list_allocator"
+[dependencies.d7alloc]
+version = "*"
+path = "libs/d7alloc"

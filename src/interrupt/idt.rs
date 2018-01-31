@@ -30,12 +30,13 @@ impl Reference {
     }
 }
 
+/// http://wiki.osdev.org/IDT#Structure_AMD64
 #[derive(Debug, Clone, Copy)]
 #[repr(C, packed)]
 pub struct Descriptor {
     pointer_low: u16,
     gdt_selector: u16,
-    zero: u8,
+    ist_offset: u8,
     options: u8,
     pointer_middle: u16,
     pointer_high: u32,
@@ -43,7 +44,9 @@ pub struct Descriptor {
 }
 
 impl Descriptor {
-    pub fn new(present: bool, pointer: u64, ring: PrivilegeLevel) -> Descriptor {
+    pub fn new(present: bool, pointer: u64, ring: PrivilegeLevel, ist_index: u8) -> Descriptor {
+        let ist_offset = ist_index+1;
+        assert!(ist_offset < 0b1000);
         assert!(present || (pointer == 0 && ring == Ring0)); // pointer and ring must be 0 if not present
         // example options: present => 1, ring 0 => 00, interrupt gate => 0, interrupt gate => 1110,
         let options: u8 = 0b0_00_0_1110 | ((ring as u8) << 5) | ((if present {1} else {0}) << 7);
@@ -51,11 +54,11 @@ impl Descriptor {
         Descriptor {
             pointer_low: (pointer & 0xffff) as u16,
             gdt_selector: GDT_SELECTOR_CODE,
-            zero: 0,
+            ist_offset: ist_offset,
             options: options,
             pointer_middle: ((pointer & 0xffff_0000) >> 16) as u16,
             pointer_high: ((pointer & 0xffff_ffff_0000_0000) >> 32) as u32,
-            reserved: 0,
+            reserved: 0
         }
     }
 }

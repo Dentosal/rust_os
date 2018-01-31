@@ -1,3 +1,9 @@
+use spin::Once;
+use x86::bits64::task::TaskStateSegment;
+use x86::shared::task::load_tr;
+use x86::shared::segmentation::{SegmentSelector, set_cs};
+use x86::shared::PrivilegeLevel;
+
 use core::ptr;
 use core::mem;
 use core::fmt;
@@ -12,9 +18,6 @@ mod gdt;
 pub mod idt;
 
 use memory::MemoryController;
-
-use x86::bits64::task::TaskStateSegment;
-use x86::shared::PrivilegeLevel;
 
 #[repr(C,packed)]
 struct ExceptionStackFrame {
@@ -57,6 +60,7 @@ extern "C" fn exception_df(stack_frame: *const ExceptionStackFrame, error_code: 
         panic_indicator!(0x4f664f64);   // "df"
         rforce_unlock!();
         rprintln!("Exception: Double Fault\n{}", *stack_frame);
+        rprintln!("exception stack frame at {:#p}", stack_frame);
     }
     loop {}
 }
@@ -177,32 +181,68 @@ pub extern "C" fn syscall() -> ! {
     }
 }
 
+#[derive(Clone,Copy)]
+struct HandlerInfo {
+    function_ptr: *const fn(),
+    privilege_level: PrivilegeLevel,
+    tss_selector: u8
+}
+impl HandlerInfo {
+    pub const fn new(f: *const fn(), pl: PrivilegeLevel, tss_s: u8) -> HandlerInfo {
+        HandlerInfo { function_ptr: f, privilege_level: pl, tss_selector: tss_s }
+    }
+}
+
+static TSS: Once<TaskStateSegment> = Once::new();
+static GDT: Once<gdt::Gdt> = Once::new();
+
 pub fn init(memory_controller: &mut MemoryController) {
-    let mut exception_handlers: [Option<*const fn()>; idt::ENTRY_COUNT] = [None; idt::ENTRY_COUNT];
+    let mut handlers: [Option<HandlerInfo>; idt::ENTRY_COUNT] = [None; idt::ENTRY_COUNT];
 
     // Initialize TSS
     let double_fault_stack = memory_controller.alloc_stack(1).expect("could not allocate double fault stack");
 
-    let mut tss = TaskStateSegment::new();
-    tss.ist[gdt::DOUBLE_FAULT_IST_INDEX] = double_fault_stack.top as u64;
 
+    let mut code_selector = SegmentSelector::empty();
+    let mut tss_selector = SegmentSelector::empty();
+
+    let tss = TSS.call_once(|| {
+        let mut tss = TaskStateSegment::new();
+        tss.ist[gdt::DOUBLE_FAULT_IST_INDEX] = double_fault_stack.top as u64;
+        tss
+    });
+
+    let gdt = GDT.call_once(|| {
+        let mut gdt = gdt::Gdt::new();
+        code_selector = gdt.add_entry(gdt::Descriptor::kernel_code_segment());
+        tss_selector = gdt.add_entry(gdt::Descriptor::tss_segment(&tss));
+        gdt
+    });
+    unsafe {
+        // load GDT
+        gdt.load();
+        // reload code segment register
+        set_cs(code_selector);
+        // load TSS
+        load_tr(tss_selector);
+    }
 
     // Bind exception handlers
-    exception_handlers[0x00] = Some(simple_exception!("Divide-by-zero Error") as *const fn());
-    exception_handlers[0x03] = Some(exception_handler!(exception_bp) as *const fn());
-    exception_handlers[0x06] = Some(exception_handler!(exception_ud) as *const fn());
-    exception_handlers[0x08] = Some(exception_handler_with_error_code!(exception_df) as *const fn());
-    exception_handlers[0x0b] = Some(exception_handler_with_error_code!(exception_snp) as *const fn());
-    exception_handlers[0x0d] = Some(exception_handler_with_error_code!(exception_gpf) as *const fn());
-    exception_handlers[0x0e] = Some(exception_handler_with_error_code!(exception_pf) as *const fn());
-    exception_handlers[0x20] = Some(irq_handler!(exception_irq0) as *const fn());
-    exception_handlers[0x21] = Some(irq_handler!(exception_irq1) as *const fn());
-    exception_handlers[0xd7] = Some(syscall as *const fn());
+    handlers[0x00] = Some(HandlerInfo::new(simple_exception!("Divide-by-zero Error"), PrivilegeLevel::Ring0, 0));
+    handlers[0x03] = Some(HandlerInfo::new(exception_handler!(exception_bp), PrivilegeLevel::Ring0, 0));
+    handlers[0x06] = Some(HandlerInfo::new(exception_handler!(exception_ud), PrivilegeLevel::Ring0, 0));
+    handlers[0x08] = Some(HandlerInfo::new(exception_handler_with_error_code!(exception_df), PrivilegeLevel::Ring0, 5));
+    handlers[0x0b] = Some(HandlerInfo::new(exception_handler_with_error_code!(exception_snp), PrivilegeLevel::Ring0, 0));
+    handlers[0x0d] = Some(HandlerInfo::new(exception_handler_with_error_code!(exception_gpf), PrivilegeLevel::Ring0, 0));
+    handlers[0x0e] = Some(HandlerInfo::new(exception_handler_with_error_code!(exception_pf), PrivilegeLevel::Ring0, 0));
+    handlers[0x20] = Some(HandlerInfo::new(irq_handler!(exception_irq0), PrivilegeLevel::Ring0, 0));
+    handlers[0x21] = Some(HandlerInfo::new(irq_handler!(exception_irq1), PrivilegeLevel::Ring0, 0));
+    handlers[0xd7] = Some(HandlerInfo::new(syscall as *const fn(), PrivilegeLevel::Ring0, 0));
 
-    for index in 0...(idt::ENTRY_COUNT-1) {
-        let descriptor = match exception_handlers[index] {
-            None            => {idt::Descriptor::new(false, 0, PrivilegeLevel::Ring0)},
-            Some(pointer)   => {idt::Descriptor::new(true, pointer as u64, PrivilegeLevel::Ring0)} // TODO: currenly all are Ring0
+    for index in 0..=(idt::ENTRY_COUNT-1) {
+        let descriptor = match handlers[index] {
+            None        => {idt::Descriptor::new(false, 0, PrivilegeLevel::Ring0, 0)},
+            Some(info)  => {idt::Descriptor::new(true, info.function_ptr as u64, info.privilege_level, info.tss_selector)}
         };
         unsafe {
             ptr::write_volatile((idt::ADDRESS + index * mem::size_of::<idt::Descriptor>()) as *mut _, descriptor);

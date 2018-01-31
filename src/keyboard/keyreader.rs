@@ -1,7 +1,7 @@
 use super::key::Key;
 use super::keymap::Keymap;
 
-use collections::Vec;
+use alloc::Vec;
 
 
 const BUFFER_SIZE: usize = 10;

@@ -1,6 +1,6 @@
 use super::key::Key;
 
-use collections::Vec;
+use alloc::Vec;
 
 pub struct Keymap {
     mapping: Option<Vec<(Vec<u8>, Key)>>

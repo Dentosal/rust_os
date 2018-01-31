@@ -67,7 +67,7 @@ macro_rules! irq_handler {
                 ::core::intrinsics::unreachable();
             }
         }
-        wrapper
+        wrapper as *const fn()
     }}
 }
 
@@ -91,7 +91,7 @@ macro_rules! exception_handler {
                 ::core::intrinsics::unreachable();
             }
         }
-        wrapper
+        wrapper as *const fn()
     }}
 }
 
@@ -121,7 +121,7 @@ macro_rules! exception_handler_with_error_code {
                 ::core::intrinsics::unreachable();
             }
         }
-        wrapper
+        wrapper as *const fn()
     }}
 }
 

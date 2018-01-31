@@ -27,7 +27,7 @@ nasm -f elf64 src/entry.asm -o build/entry.o
 echo "* kernel"
 
 # compile kernel (with full optimizations)
-xargo build --target $TARGET --release
+RUST_TARGET_PATH=$(pwd) xargo build --target $TARGET --release
 
 echo "* kernel assembly routines"
 mkdir -p build/asm_routines/

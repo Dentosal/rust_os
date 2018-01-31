@@ -1,5 +1,5 @@
 # Dimension 7 - An operating system
-Dimension 7 is a simple x86-64 operating system written in Rust. It is in fairly early stage, and is developed by fearlessly breaking things, trying new stuff before older stubs are even working and most importantly.
+Dimension 7 is a simple x86-64 operating system written in Rust. It is in fairly early stage, and is developed by fearlessly breaking things, trying new stuff before older stubs are even working and most importantly experimenting with weird ideas.
 
 ## Development
 
@@ -46,28 +46,20 @@ The project is using Vagrant to virtualize the building environment. While being
 git clone https://github.com/Dentosal/rust_os.git && cd rust_os && ./autobuild.sh -u
 ```
 
+Sometimes shared folder feature will not work, and you get an error message about missing `/vagrant` etc. In that case installing vbguest plugin should help:
+
+```bash
+vagrant plugin install vagrant-vbguest
+```
+
+
 If you don't have a Unix-like system, then you should probably get one, they are pretty awesome compared to old DOS systems or [Dentosal/rust_os](https://github.com/Dentosal/rust_os/edit/master/README.md).
 
 ## Dependencies
 
 Building with default automated build system required that Vagrant is installed. I use VirtualBox as my Vagrant provider, but [other providers](https://www.vagrantup.com/docs/providers/) should work as well.
 
-Vagrant isn't actually required: on systems with apt, like Debian or Ubuntu, it should be reasonably easy to just install the dependencies by hand:
-
-    sudo apt-get update
-    sudo apt-get install vim git nasm -y
-    sduo apt-get install texinfo flex bison python-dev ncurses-dev -y
-    sudo apt-get install cmake libssl-dev -y
-
-    curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain nightly -y
-
-    export PATH="$HOME/.cargo/bin:$PATH"
-    rustup component add rust-src
-    cargo install xargo
-
-And then add `$HOME/.cargo/bin` to your path on shell start, for example `.bashrc`:
-
-    export PATH="$HOME/.cargo/bin:$PATH
+Vagrant isn't actually required: on systems with apt, like Debian or Ubuntu, it should be reasonably easy to just install the dependencies by hand. The install script can be found from Vagrantfile.
 
 You will also need a virtual machine. Qemu is suggested, but Bochs should work as well. VirtualBox can also be used, but the project isn't actively tested with it. Moreover, you must run it yourself.
 

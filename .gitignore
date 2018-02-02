@@ -20,5 +20,9 @@ dump*.txt
 objdump.txt
 readelf.txt
 
+# Python scripting stuff
+__pycache__/
+*.pyc
+
 # Misc
 .DS_Store

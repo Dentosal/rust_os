@@ -1,4 +1,5 @@
 #![allow(unused_variables)]
+#![allow(unused_imports)]
 
 use util::{inb, outb};
 
@@ -16,13 +17,13 @@ const PIT_CH2_CONTROL: u16 = 0x61;
 // floats are disabled in kernel code, so these are calculated by hand
 const TARGET_FREQ: u64  = 1000; // Hz
 const RELOAD_VALUE: u64 = 1193;
-pub const ACTUAL_FREQ_E_9: u64 = 1000_152556600; // Hz * 10 ** 12
-pub const TIME_BETWEEN_E_12: u64 = 999847467; // s * 10 ** 12
+pub const ACTUAL_FREQ_E_9: u64 = 1000_152556600;    // Hz * 10 ** 12
+pub const TIME_BETWEEN_E_12: u64 = 999847467;       // s * 10 ** 12
 
 pub fn init() {
     // Channel 0, lobyte/hibyte, Rate generator, Binary mode
     unsafe {
-        outb(PIT_REG, 0b00_11_010_0);                   // command
+        outb(PIT_REG, 0b00_11_010_0);                         // command
         outb(PIT_CH0, (RELOAD_VALUE & 0x00FF) as u8);         // low
         outb(PIT_CH0, ((RELOAD_VALUE & 0xFF00) >> 8) as u8);  // high
     }

@@ -10,11 +10,11 @@ use interrupt::idt;
 use mem_map::{FrameAllocator, Frame, MEM_PAGE_SIZE_BYTES};
 use mem_map::{MEM_PAGE_MAP_SIZE_BYTES, MEM_PAGE_MAP1_ADDRESS, MEM_PAGE_MAP2_ADDRESS};
 use elf_parser;
-use elf_parser::{ELFData, ELFProgramHeader};
+use elf_parser::ELFData;
 
 pub use self::mapper::Mapper;
-pub use self::page_table::{ActivePageTable,InactivePageTable};
-use self::page::{Page,TemporaryPage};
+pub use self::page_table::{ActivePageTable, InactivePageTable};
+use self::page::{Page, TemporaryPage};
 
 
 const ENTRY_COUNT: usize = 512;
@@ -88,7 +88,7 @@ pub fn remap_kernel<A>(allocator: &mut A, elf_metadata: ELFData) -> ActivePageTa
         }
     });
     rprintln!("Switching...");
-    let old_table = active_table.switch(new_table);
+    let _old_table = active_table.switch(new_table);
     rprintln!("Remapping done.");
 
     active_table

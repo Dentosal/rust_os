@@ -20,9 +20,9 @@ impl Mapper {
 
     pub fn map_to<A>(&mut self, page: Page, frame: Frame, flags: EntryFlags, allocator: &mut A) where A: FrameAllocator {
         let p4 = unsafe { &mut *P4 };
-        let mut p3 = p4.next_table_create(page.p4_index(), allocator);
-        let mut p2 = p3.next_table_create(page.p3_index(), allocator);
-        let mut p1 = p2.next_table_create(page.p2_index(), allocator);
+        let p3 = p4.next_table_create(page.p4_index(), allocator);
+        let p2 = p3.next_table_create(page.p3_index(), allocator);
+        let p1 = p2.next_table_create(page.p2_index(), allocator);
 
         if page.start_address() == 0x4001a000 {
             rprintln!("!! {:#x} ok={:}", page.start_address(), p1[page.p1_index()].is_unused());

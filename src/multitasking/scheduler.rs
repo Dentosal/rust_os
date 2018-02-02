@@ -39,7 +39,7 @@ impl Scheduler {
                 let mut pm = PROCMAN.lock();
                 match pm.get_at(index) {
                     Some(ref mut process) => {
-                        unsafe{rforce_unlock!();}
+                        rforce_unlock!();
                         rprintln!("NP: {:}", process.id);
                     },
                     None => {} // A process was killed, invalidating the index

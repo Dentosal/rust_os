@@ -1,10 +1,10 @@
-fn run_feature_checks(ecx: u32, edx: u32) {
-
+fn run_feature_checks(_ecx: u32, _edx: u32) {
+    // TODO
 }
 
 pub fn init() {
-    let mut ecx: u32;
-    let mut edx: u32;
+    let ecx: u32;
+    let edx: u32;
     unsafe {
         // CPUID_GETFEATURES
         asm!(

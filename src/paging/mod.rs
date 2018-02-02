@@ -41,13 +41,13 @@ pub fn remap_kernel<A>(allocator: &mut A, elf_metadata: ELFData) -> ActivePageTa
                 let size = ph.size_in_memory as usize;
                 let mut flags = entry::PRESENT;
 
-                if !(ph.flags.contains(elf_parser::EXECUTABLE)) {
+                if !ph.has_flag(elf_parser::EXECUTABLE) {
                     flags |= entry::NO_EXECUTE;
                 }
-                if !ph.flags.contains(elf_parser::READABLE) {
+                if !ph.has_flag(elf_parser::READABLE) {
                     panic!("Non-readable pages are not (yet) handled");
                 }
-                if ph.flags.contains(elf_parser::WRITABLE) {
+                if ph.has_flag(elf_parser::WRITABLE) {
                     flags |= entry::WRITABLE;
                 }
 

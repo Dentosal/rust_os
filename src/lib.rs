@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 #![allow(unused_macros)]
 
+#![deny(safe_packed_borrows)]
+
 #![no_std]
 
 #![feature(lang_items)]

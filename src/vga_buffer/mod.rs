@@ -115,7 +115,7 @@ impl Terminal {
     pub fn clear(&mut self) {
         self.cursor.set_position(0, 0);
         let clear_color = self.output_color;
-        let mut buffer = self.get_buffer();
+        let buffer = self.get_buffer();
         for col in 0..SCREEN_WIDTH {
             for row in 0..SCREEN_HEIGHT {
                 buffer.chars[row][col].write(CharCell {

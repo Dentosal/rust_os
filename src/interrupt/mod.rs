@@ -29,7 +29,13 @@ struct ExceptionStackFrame {
 }
 impl fmt::Display for ExceptionStackFrame {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ExceptionStackFrame {{\n  rip: {:#x},\n  cs: {:#x},\n  flags: {:#x},\n  rsp: {:#x},\n  ss: {:#x}\n}}", self.instruction_pointer, self.code_segment, self.cpu_flags, self.stack_pointer, self.stack_segment)
+        let ip = self.instruction_pointer;
+        let cs = self.code_segment;
+        let fl = self.cpu_flags;
+        let sp = self.stack_pointer;
+        let ss = self.stack_segment;
+
+        write!(f, "ExceptionStackFrame {{\n  rip: {:#x},\n  cs: {:#x},\n  flags: {:#x},\n  rsp: {:#x},\n  ss: {:#x}\n}}", ip, cs, fl, sp, ss)
     }
 }
 

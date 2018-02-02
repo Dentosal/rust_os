@@ -47,13 +47,13 @@ pub fn init() -> MemoryController {
     let heap_end_page = Page::containing_address(HEAP_START + HEAP_SIZE - 1);
     for page in Page::range_inclusive(heap_start_page, heap_end_page) {
         // TODO: remove VVVV
-        rprintln!("{:?}", page); // XXX: only this side effect works???
-        rprintln!("{:#x}", page.start_address()); // XXX: only this side effect works???
-        {
-            let ps = page.start_address();
-            let hs = heap_end_page.start_address();
-            rprintln!("{:#x} {:#x}",  hs, ps);
-        }
+        // rprintln!("{:?}", page); // XXX: only this side effect works???
+        // rprintln!("{:#x}", page.start_address()); // XXX: only this side effect works???
+        // {
+        //     let ps = page.start_address();
+        //     let hs = heap_end_page.start_address();
+        //     rprintln!("{:#x} {:#x}",  hs, ps);
+        // }
         // rprintln!("{:?}", page.start_address()); // XXX: only this side effect works???
         // TODO: NOW WORKS? WHAT DID I DO??
         // XXX: Now **REMOVING** this line makes stuff work?

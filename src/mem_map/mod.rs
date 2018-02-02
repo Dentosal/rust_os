@@ -1,5 +1,4 @@
 use core::ptr;
-use spin::Mutex;
 
 use paging::PhysicalAddress;
 

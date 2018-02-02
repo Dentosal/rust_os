@@ -65,6 +65,10 @@ impl ELFProgramHeader {
     pub fn loadable(&self) -> bool {
         self.header_type == 1
     }
+    pub fn has_flag(&self, flag: ELFPermissionFlags) -> bool {
+        let flags = self.flags;
+        flags.contains(flag)
+    }
 }
 
 // #[derive(Clone,Copy)]

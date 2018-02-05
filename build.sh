@@ -39,9 +39,8 @@ done
 
 echo "Linking objects..."
 
-# link
+# link (use --print-gc-sections to debug)
 ld -z max-page-size=0x1000 --gc-sections -T buildsystem/linker.ld -o build/kernel.bin build/entry.o target/$TARGET/release/librust_os.a build/asm_routines/*.o
-# ld -n --gc-sections -T buildsystem/linker.ld -o build/kernel.bin build/entry.o target/$TARGET/release/librust_os.a build/asm_routines/*.o
 
 echo "Cheking boundries..."
 

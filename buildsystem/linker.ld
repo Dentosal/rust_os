@@ -18,7 +18,7 @@ SECTIONS {
     }
 
     .rodata : ALIGN(0x1000) {
-        *(.rodata .rodata.*)
+        KEEP(*(.rodata .rodata.*))
     }
 
     .data : ALIGN(0x1000) {

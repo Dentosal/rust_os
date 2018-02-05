@@ -3,9 +3,6 @@
 
 %include "src/asm_routines/constants.asm"
 
-; Kernel elf executable initial load point
-%define loadpoint 0xA000
-
 [BITS 64]
 [ORG 0x8000]
 
@@ -32,7 +29,7 @@ stage2:
     ; magic number 0x7f+'ELF'
     ; if not elf show error message "E!"
     mov ah, '!'
-    cmp dword [loadpoint + 0], 0x464c457f
+    cmp dword [loadpoint], 0x464c457f
     jne error
 
     ; bitness and instruction set (must be 64, so values must be 2 and 0x3e) (error code: "EB")

@@ -40,7 +40,7 @@ stage1:
     mov ecx, 8*3+12     ; size (no pointer)
     rep movsb           ; copy
 
-    ; load GDT
+    ; load the new GDT
     lgdt [gdt + 8*3]
 
     ; update selectors

@@ -3,20 +3,41 @@
 
 %include "src/asm_routines/constants.asm"
 
-%define stage1_loadpoint 0x7e00
+; disk sector size in bytes
+%define sector_size 512
+
+; number of stages, including this MBR (stage0)
+%define bootloader_stage_count 3
+
 ; locate stage1 at 0x7e00->
-%define kernel_size_sectors 200
-%define sectors_per_operation 0xff
-; 0xff is max. 127 might be the limit on some platforms, but we don't care about legacy right now
-%define kernel_loadpoint 0xA000
-; locate kernel at 0xA000->
-%define bootdrive 0x7b00
+%define stage1_loadpoint 0x7e00
+
+; kernel size in sectorrs
+%define kernel_size_sectors 400
+
+; 0x7f is max for most platforms, including Qemu
+%define sectors_per_operation 0x20
+
+; disk load buffer for kernel
+%define disk_load_buffer 0xa000
+%define disk_load_buffer_size (sectors_per_operation * sector_size)
+
 ; bootdrive location (1 byte)
+%define bootdrive 0x7b00
+
+; checks
+%if (disk_load_buffer + disk_load_buffer_size) > loadpoint
+%define qq (disk_load_buffer + disk_load_buffer_size)
+%fatal "Disk load buffer overlaps with kernel load point"
+%endif
 
 [BITS 16]
 [ORG 0x7c00]
 
 boot:
+    ; clear interrupts
+    cli
+
     ; initialize segment registers
     xor ax, ax
     mov ds, ax
@@ -25,9 +46,6 @@ boot:
 
     ; initialize stack
     mov sp, 0x7bfe
-
-    ; clear interrupts
-    cli
 
     ; save boot drive
     mov [bootdrive], dl
@@ -42,9 +60,8 @@ boot:
     mov ds, ax
     mov es, ax
 
+    ; Test that extended lba reading is enabled
     ; http://wiki.osdev.org/ATA_in_x86_RealMode_(BIOS)#LBA_in_Extended_Mode
-
-    ; test that extended lba reading is enabled
     mov ah, 0x41
     mov bx, 0x55AA
     mov dl, 0x80
@@ -53,11 +70,32 @@ boot:
     mov al, 'R'
     jc print_error
 
-    ; enable A20
+    ; Enable A20
     call enable_A20
 
-    ; load sectors
-    ; stages 1 and 2
+
+    ; Enter Big Unreal Mode
+    ; https://wiki.osdev.org/Unreal_mode#Big_Unreal_Mode
+    push ds ; Save real mode
+    lgdt [gdtr_unreal]
+
+    ; Switch to protected mode
+    mov  eax, cr0
+    or al, 1
+    mov  cr0, eax
+
+    jmp $+2                ; Tell 386/486 to not crash
+
+    mov  bx, 0x08          ; Select descriptor 1
+    mov  ds, bx
+
+    ; Switch back to real mode
+    and al, 0xFE
+    mov cr0, eax
+    pop ds ; Restore old segment
+
+    ; Load sectors
+    ; Stages 1 and 2
     mov dword [da_packet.lba_low],  1
     mov dword [da_packet.lba_high], 0
     mov  word [da_packet.count],    2
@@ -71,59 +109,64 @@ boot:
     mov al, 'D'
     jc print_error
 
-    ; kernel
-    mov dword [da_packet.lba_low],  3
-    mov dword [da_packet.lba_high], 0
-    mov  word [da_packet.count],    sectors_per_operation-3
-    mov  word [da_packet.address],  kernel_loadpoint
-    mov  word [da_packet.segment],  0
-    mov ah, 0x42
-    mov si, da_packet
-    mov dl, 0x80        ; FIXME: actual boot device?
-    int 0x13
-    mov al, 'D'
-    jc print_error
+    ; Load the kernel
+    mov ecx, bootloader_stage_count ; LBA
 
-    mov cx, ((kernel_size_sectors-(kernel_size_sectors-(sectors_per_operation-3)))+sectors_per_operation-1)/sectors_per_operation+1 ; ceil((kernel_size_sectors-(sectors_per_operation-3))/sectors_per_operation)+1
-    mov eax, sectors_per_operation
-.load_kernel_loop:
-    push cx
-        mov dword [da_packet.lba_low],  eax
-        mov dword [da_packet.lba_high], 0
+.load_loop:
+
+    push ecx
+        ; Load from disk
+        mov dword [da_packet.lba_low],  ecx
+        ; mov dword [da_packet.lba_high], 0 ; TODO: COMMENT OUT
         mov  word [da_packet.count],    sectors_per_operation
-        push eax
-            ; eax = (eax * 0x200) / 0x10 = eax * 0x20
-            imul eax, 0x20
-            mov word [da_packet.address], kernel_loadpoint
-            mov word [da_packet.segment], ax
-        pop eax
-        push eax
-            mov ah, 0x42
-            mov si, da_packet
-            mov dl, 0x80        ; FIXME: actual boot device?
-            int 0x13
-            mov al, 'D'
-            jc print_error
-        pop eax
-        add eax, sectors_per_operation
-    pop cx
-    loop .load_kernel_loop
+        mov  word [da_packet.address],  disk_load_buffer
+        ; mov  word [da_packet.segment],  0 ; TODO: COMMENT OUT
+
+        mov ah, 0x42
+        mov si, da_packet
+        mov dl, 0x80        ; FIXME: actual boot device?
+        int 0x13
+        mov al, '*'
+        jc print_error
+
+        ; Copy to correct position
+        ; loadpoint + (ecx - bootloader_stage_count) * sector_size
+        mov edi, ecx
+        sub edi, bootloader_stage_count
+        shl edi, 9 ; multiply by sector size (2**9 = 512 = 0x200)
+        add edi, loadpoint
+
+        mov esi, disk_load_buffer
+        mov ecx, disk_load_buffer_size
+        .copyloop:
+            mov al, [esi]
+            mov [edi], al
+            inc esi
+            inc edi
+            loop .copyloop, ecx
+
+    pop ecx
+
+    ; Test if all loaded
+    add ecx, sectors_per_operation
+    cmp ecx, (kernel_size_sectors - bootloader_stage_count)
+    jle .load_loop
 
     ; hide cursor by moving it out of the screen
     mov bh, 0
     mov ah, 2
-    mov dl, 100
-    mov dh, 100
-    int 10h
+    mov dx, 0xFFFF
+    int 0x10
 
     ; load protected mode GDT and a null IDT
-    cli
     lgdt [gdtr32]
     lidt [idtr32]
+
     ; set protected mode bit of cr0
     mov eax, cr0
     or eax, 1
     mov cr0, eax
+
     ; far jump to load CS with 32 bit segment
     jmp 0x08:0x7e00
 
@@ -220,9 +263,10 @@ get_memory_map:
 
 ; Constant data
 
+; GDT for protected mode
 gdtr32:
-    dw (gdt32.end - gdt32.begin) + 1    ; size
-    dd gdt32                            ; offset
+    dw gdt32.end - gdt32.begin - 1  ; size
+    dd gdt32.begin                  ; offset
 
 idtr32:
     dw 0
@@ -248,8 +292,16 @@ gdt32:  ; from AMD64 system programming manual, page 132
     db 0x00         ; base 24:31
 .end:
 
+; GDT for big unreal mode
+gdtr_unreal:
+   dw gdt_unreal.end - gdt_unreal.begin - 1
+   dd gdt_unreal.begin
 
+gdt_unreal:
+.begin:     dd 0, 0
+.flatdesc:  db 0xff, 0xff, 0, 0, 0, 10010010b, 11001111b, 0
+.end:
 
-times (0x200 - 0x2)-($-$$) db 0
+times (0x200 - 0x2) - ($ - $$) db 0
 db 0x55
 db 0xaa

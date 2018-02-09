@@ -26,7 +26,9 @@ nasm -f elf64 src/entry.asm -o build/entry.o
 echo "* kernel"
 
 # compile kernel (with full optimizations)
-RUST_TARGET_PATH=$(pwd) xargo build --target $TARGET --release
+# RUST_TARGET_PATH=$(pwd) xargo build --target $TARGET --release
+# RUST_TARGET_PATH=$(pwd) xargo rustc --target $TARGET --release -- -C opt-level=s
+RUST_TARGET_PATH=$(pwd) xargo rustc --target $TARGET --release -- -C opt-level=z
 
 echo "* kernel assembly routines"
 mkdir -p build/asm_routines/
@@ -40,7 +42,10 @@ done
 echo "Linking objects..."
 
 # link (use --print-gc-sections to debug)
-ld -z max-page-size=0x1000 --gc-sections -T buildsystem/linker.ld -o build/kernel.bin build/entry.o target/$TARGET/release/librust_os.a build/asm_routines/*.o
+# ld -z max-page-size=0x1000  -T buildsystem/linker.ld -o build/kernel.bin build/entry.o target/$TARGET/release/librust_os.a build/asm_routines/*.o
+ld -z max-page-size=0x1000 --unresolved-symbols=ignore-all -T buildsystem/linker.ld -o build/kernel.bin build/entry.o target/$TARGET/release/librust_os.a build/asm_routines/*.o
+# ld -z max-page-size=0x1000 --gc-sections --print-gc-sections  -T buildsystem/linker.ld -o build/kernel.bin build/entry.o target/$TARGET/release/librust_os.a build/asm_routines/*.o
+# strip build/kernel.bin
 
 echo "Cheking boundries..."
 

@@ -1,9 +1,9 @@
 // See http://os.phil-opp.com/double-faults.html#switching-stacks for more info
 use core::mem::size_of;
 
-use x86::bits64::task::TaskStateSegment;
-use x86::shared::segmentation::SegmentSelector;
-use x86::shared::PrivilegeLevel;
+use x86_64::structures::tss::TaskStateSegment;
+use x86_64::structures::gdt::SegmentSelector;
+use x86_64::PrivilegeLevel;
 
 const GDT_TABLE_COUNT: usize = 8;
 pub const DOUBLE_FAULT_IST_INDEX: usize = 0;
@@ -82,13 +82,11 @@ impl Gdt {
         }
     }
     pub unsafe fn load(&'static self) {
-        use x86::shared::dtables::{DescriptorTablePointer, lgdt};
-        use x86::shared::segmentation;
+        use x86_64::instructions::tables::{DescriptorTablePointer, lgdt};
         use core::mem::size_of;
 
         let ptr = DescriptorTablePointer {
-            base: self.table.as_ptr() as
-                *const segmentation::SegmentDescriptor,
+            base: (self.table.as_ptr() as *const _) as u64,
             limit: (self.table.len() * size_of::<u64>() - 1) as u16,
         };
 

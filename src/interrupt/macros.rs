@@ -118,6 +118,7 @@ macro_rules! exception_handler_with_error_code {
                     add rsp, 8  // drop error code
                     iretq       // return from exception
                 "   :::: "intel", "volatile");
+                asm!("xchg ax, ax" :::: "intel");
                 ::core::intrinsics::unreachable();
             }
         }

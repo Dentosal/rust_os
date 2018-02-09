@@ -1,7 +1,7 @@
 use core::ptr;
 use core::mem;
 
-use x86::shared::PrivilegeLevel::{self, Ring0};
+use x86_64::PrivilegeLevel::{self, Ring0};
 
 // These constants MUST have defined with same values as those in src/asm_routines/constants.asm
 // They also MUST match the ones in plan.md

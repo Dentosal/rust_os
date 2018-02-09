@@ -42,6 +42,11 @@ impl StackAllocator {
 
         // try to allocate the stack pages and a guard page
         let guard_page = range.next();
+
+        rprintln!("GI: {:#?}", guard_page.unwrap().index);
+        rprintln!("SA: {:#x}", guard_page.unwrap().start_address());
+        rprintln!("LA: {:#x}", guard_page.unwrap().last_address());
+
         let stack_start = range.next();
         let stack_end = if size_in_pages == 1 {
             stack_start

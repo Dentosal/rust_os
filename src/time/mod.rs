@@ -77,3 +77,8 @@ pub fn init() {
 pub fn buzy_sleep_until(until: SystemClock) {
     while SYSCLOCK.lock().as_microseconds() < until.as_microseconds() {}
 }
+
+pub fn sleep_ms(ms: u64) {
+    let end = SYSCLOCK.lock().after_milliseconds(ms);
+    buzy_sleep_until(end);
+}

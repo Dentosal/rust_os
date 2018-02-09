@@ -1,8 +1,10 @@
 use spin::Once;
-use x86::bits64::task::TaskStateSegment;
-use x86::shared::task::load_tr;
-use x86::shared::segmentation::{SegmentSelector, set_cs};
-use x86::shared::PrivilegeLevel;
+use x86_64::structures::tss::TaskStateSegment;
+use x86_64::structures::gdt::SegmentSelector;
+use x86_64::instructions::segmentation::set_cs;
+use x86_64::instructions::tables::load_tss;
+use x86_64::PrivilegeLevel;
+use x86_64::VirtualAddress;
 
 use core::ptr;
 use core::mem;
@@ -208,13 +210,12 @@ pub fn init(memory_controller: &mut MemoryController) {
     // Initialize TSS
     let double_fault_stack = memory_controller.alloc_stack(1).expect("could not allocate double fault stack");
 
-
-    let mut code_selector = SegmentSelector::empty();
-    let mut tss_selector = SegmentSelector::empty();
+    let mut code_selector   = SegmentSelector::new(0, PrivilegeLevel::Ring0);
+    let mut tss_selector    = SegmentSelector::new(1, PrivilegeLevel::Ring0);
 
     let tss = TSS.call_once(|| {
         let mut tss = TaskStateSegment::new();
-        tss.ist[gdt::DOUBLE_FAULT_IST_INDEX] = double_fault_stack.top as u64;
+        tss.interrupt_stack_table[gdt::DOUBLE_FAULT_IST_INDEX] = VirtualAddress(double_fault_stack.top);
         tss
     });
 
@@ -224,13 +225,14 @@ pub fn init(memory_controller: &mut MemoryController) {
         tss_selector = gdt.add_entry(gdt::Descriptor::tss_segment(&tss));
         gdt
     });
+
     unsafe {
         // load GDT
         gdt.load();
         // reload code segment register
         set_cs(code_selector);
         // load TSS
-        load_tr(tss_selector);
+        load_tss(tss_selector);
     }
 
     // Bind exception handlers

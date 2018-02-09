@@ -12,6 +12,7 @@ panic = "abort"
 
 [profile.release]
 panic = "abort"
+lto = true
 
 [dependencies]
 rlibc = "*"                     # raw libc
@@ -21,9 +22,9 @@ bitflags = "0.7.0"              # bitflags
 bit_field = "0.7.0"             # bit fields
 volatile = "0.2.3"              # volatile read and write functions
 
-[dependencies.x86]
+[dependencies.x86_64]
 default-features = false
-version = "0.8.1"
+version = "0.1.2"
 
 [dependencies.d7alloc]
 version = "*"

@@ -1,6 +1,12 @@
-#![allow(dead_code)]
-#![allow(unused_macros)]
+// Code style
+#![deny(unused_assignments)]
 
+// Code style (development time)
+#![allow(unused_macros)]
+#![allow(dead_code)]
+
+// Safety
+#![deny(overflowing_literals)]
 #![deny(safe_packed_borrows)]
 
 #![no_std]
@@ -11,6 +17,7 @@
 #![feature(ptr_internals)]
 #![feature(unique)]
 #![feature(const_fn)]
+#![feature(const_generics)]
 #![feature(naked_functions)]
 #![feature(iterator_step_by)]
 #![feature(inclusive_range_syntax)]
@@ -22,7 +29,7 @@
 extern crate volatile;
 extern crate rlibc;
 extern crate spin;
-extern crate x86;
+extern crate x86_64;
 extern crate cpuio;
 #[macro_use]
 extern crate bitflags;
@@ -95,39 +102,41 @@ pub extern fn rust_main() {
     // NIC
     // nic::init();
 
+    bochs_magic_bp!();
+
     // Multitasking
     multitasking::init();
 
-    rreset!();
+    // rreset!();
     rprintln!("Dimension 7 OS");
     rprintln!("\nSystem ready.\n");
 
-    use multitasking::PROCMAN;
-
-    {
-        let ref mut pm = PROCMAN.lock();
-        rprintln!("Did not crash!");
-        let pid = pm.spawn();
-        rprintln!("PID: {}", pid);
-        rprintln!("Did not crash!");
-    }
+    // use multitasking::PROCMAN;
+    //
+    // {
+    //     let ref mut pm = PROCMAN.lock();
+    //     rprintln!("Did not crash!");
+    //     let pid = pm.spawn();
+    //     rprintln!("PID: {}", pid);
+    //     rprintln!("Did not crash!");
+    // }
 
     loop {
         use time::{SYSCLOCK, buzy_sleep_until};
-        buzy_sleep_until(SYSCLOCK.lock().after_seconds(1));
-        rprintln!("JAS");
+        buzy_sleep_until(SYSCLOCK.lock().after_seconds(5));
+        // rprintln!("Sleep done");
 
-        let success: bool;
-        let result: u64;
-        unsafe {
-            asm!("
-                mov rax, 0x1
-                mov rdi, 0x2
-                mov rsi, 0x3
-                int 0xd7
-            " : "={rax}"(success), "={rdx}"(result) :: "eax", "rdx", "rdi", "rsi" : "intel");
-        }
-        rprintln!("{:?} {:?}", success, result);
+        // let success: u64;
+        // let result: u64;
+        // unsafe {
+        //     asm!("
+        //         mov rax, 0x1
+        //         mov rdi, 0x2
+        //         mov rsi, 0x3
+        //         int 0xd7
+        //     " : "={rax}"(success), "={rdx}"(result) :: "eax", "rdx", "rdi", "rsi" : "intel");
+        // }
+        // rprintln!("{:?} {:?}", success, result);
     }
 }
 

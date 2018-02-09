@@ -67,7 +67,7 @@ then
                 qemu-system-x86_64 -d int,in_asm,guest_errors -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio
             else
                 # qemu-system-x86_64 -d int -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio
-                qemu-system-x86_64 -d guest_errors -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio
+                qemu-system-x86_64 -d int,guest_errors -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio
             fi
         fi
     fi

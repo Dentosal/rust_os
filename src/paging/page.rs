@@ -26,6 +26,10 @@ impl Page {
         self.index * MEM_PAGE_SIZE_BYTES
     }
 
+    pub fn last_address(&self) -> usize {
+        (self.index + 1) * MEM_PAGE_SIZE_BYTES - 1
+    }
+
     pub fn p4_index(&self) -> usize {
         (self.index >> 27) & 0o777
     }
@@ -90,7 +94,7 @@ impl Add<usize> for Page {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct PageIter {
     start: Page,
     end: Page

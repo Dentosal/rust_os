@@ -52,7 +52,12 @@ macro_rules! register { // general purpose register
     });
     // write
     ($reg:ident, $value:expr) => ({
-        asm!(concat!("mov ", stringify!($reg), ", rax") :: "{rax}"($value as u64) :: "volatile", "intel");
+        if stringify!($reg) == "rax" {
+            asm!(concat!("mov ", stringify!($reg), ", rdx") :: "{rdx}"($value as u64) :: "volatile", "intel");
+        }
+        else {
+            asm!(concat!("mov ", stringify!($reg), ", rax") :: "{rax}"($value as u64) :: "volatile", "intel");
+        }
     });
 }
 

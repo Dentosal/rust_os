@@ -1,5 +1,6 @@
 // TODO: cursor visibility (reverse?)
 
+use core::mem;
 use core::ptr::Unique;
 use spin::Mutex;
 use volatile::Volatile;
@@ -35,9 +36,24 @@ pub enum Color {
 pub struct CellColor(u8);
 
 impl CellColor {
-    /// Contructor
     pub const fn new(foreground: Color, background: Color) -> CellColor {
         CellColor((background as u8) << 4 | (foreground as u8))
+    }
+
+    pub fn foreground(&self) -> Color {
+        unsafe {
+            mem::transmute::<u8, Color>(self.0 & 0xf)
+        }
+    }
+
+    pub fn background(&self) -> Color {
+        unsafe {
+            mem::transmute::<u8, Color>((self.0 & 0xf0) >> 4)
+        }
+    }
+
+    pub fn invert(&self) -> CellColor {
+        CellColor::new(self.background(), self.foreground())
     }
 }
 
@@ -87,7 +103,9 @@ impl Cursor {
 
     /// Set position
     pub fn set_position(&mut self, row: usize, col: usize) {
-        // TODO: boundary check
+        assert!(row < SCREEN_HEIGHT);
+        assert!(col < SCREEN_WIDTH);
+
         self.row = row;
         self.col = col;
     }
@@ -126,11 +144,15 @@ impl Terminal {
         }
     }
 
-    /// Write string to terminal's stdout
-    pub fn write_str(&mut self, string: &str) {
-        for b in string.bytes() {
-            self.write_byte(b);
-        }
+    /// Clear screen
+    pub fn update_cursor(&mut self) {
+        let color = self.output_color.invert();
+        let (row, col) = self.cursor.position();
+
+        let buffer = self.get_buffer();
+        buffer.chars[row][col].update(|cell| {
+            cell.color = color;
+        });
     }
 
     /// Write single byte to terminal's stdout
@@ -139,17 +161,23 @@ impl Terminal {
             self.newline();
         }
         else {
-            if self.cursor.col >= SCREEN_WIDTH {
-                self.newline();
-            }
+            assert!(self.cursor.col < SCREEN_WIDTH);
 
             let color = self.output_color;
             let (row, col) = self.cursor.position();
+
             self.get_buffer().chars[row][col].write(CharCell {
                 character: byte,
                 color: color
             });
+
             self.cursor.next();
+
+            if self.cursor.col >= SCREEN_WIDTH {
+                self.newline();
+            }
+
+            self.update_cursor();
         }
     }
 
@@ -184,22 +212,17 @@ impl Terminal {
     fn get_buffer(&mut self) -> &mut Buffer {
         unsafe {self.buffer.as_mut()}
     }
-
-    /// Create unsafe panic terminal
-    /// Outputs red-on-black text to the last lines of the terminal
-    /// DEPRECATED, remove ASAP
-    pub unsafe fn get_panic_access() -> Terminal {
-        Terminal {
-            output_color: CellColor::new(Color::Red, Color::Black),
-            cursor: Cursor {row: SCREEN_HEIGHT-1, col: 0},
-            buffer: Unique::new_unchecked(VGA_BUFFER_ADDRESS as *mut _),
-        }
-    }
 }
 
 /// Allow formatting
 impl ::core::fmt::Write for Terminal {
     fn write_str(&mut self, s: &str) -> ::core::fmt::Result {
+        if s.bytes().all(|b| b.is_ascii_whitespace()) {
+            self.set_color(CellColor::new(Color::White, Color::Blue));
+        }
+        else {
+            self.set_color(CellColor::new(Color::White, Color::Green));
+        }
         for byte in s.bytes() {
             self.write_byte(byte)
         }

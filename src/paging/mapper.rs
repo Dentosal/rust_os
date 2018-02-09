@@ -24,11 +24,6 @@ impl Mapper {
         let p2 = p3.next_table_create(page.p3_index(), allocator);
         let p1 = p2.next_table_create(page.p2_index(), allocator);
 
-        if page.start_address() == 0x4001a000 {
-            rprintln!("!! {:#x} ok={:}", page.start_address(), p1[page.p1_index()].is_unused());
-            rprintln!("!! {:?}", p1[page.p1_index()].flags());
-            // loop {}
-        }
         assert!(p1[page.p1_index()].is_unused());
         p1[page.p1_index()].set(frame, flags | PRESENT);
     }
@@ -39,13 +34,8 @@ impl Mapper {
     }
 
     pub fn map<A>(&mut self, page: Page, flags: EntryFlags, allocator: &mut A) where A: FrameAllocator {
-        rprintln!("!>");
         let frame = allocator.allocate_frame().expect("out of memory");
-        rprintln!("!<");
-        rprintln!("!<<<<< {:#x}", frame.start_address() as u64);
-        rprintln!("!>>>>>");
-        rprintln!("!? {:#x}", page.index);
-        rprintln!("!? {:#x}", 0xCAFE);
+        // rprintln!("!? {:#x} {:#x}", frame.start_address() as u64, page.index);
         self.map_to(page, frame, flags, allocator);
     }
 

@@ -1,5 +1,3 @@
-// TODO: cursor visibility (reverse?)
-
 use core::mem;
 use core::ptr::Unique;
 use spin::Mutex;
@@ -144,17 +142,6 @@ impl Terminal {
         }
     }
 
-    /// Clear screen
-    pub fn update_cursor(&mut self) {
-        let color = self.output_color.invert();
-        let (row, col) = self.cursor.position();
-
-        let buffer = self.get_buffer();
-        buffer.chars[row][col].update(|cell| {
-            cell.color = color;
-        });
-    }
-
     /// Write single byte to terminal's stdout
     pub fn write_byte(&mut self, byte: u8) {
         if byte == b'\n' {
@@ -176,8 +163,6 @@ impl Terminal {
             if self.cursor.col >= SCREEN_WIDTH {
                 self.newline();
             }
-
-            self.update_cursor();
         }
     }
 
@@ -196,12 +181,14 @@ impl Terminal {
 
     /// Scroll up one line
     fn scroll_line(&mut self) {
+        // move lines up
         for row in 0..(SCREEN_HEIGHT-1) {
             for col in 0..SCREEN_WIDTH {
                 let new_value = self.get_buffer().chars[row+1][col].read();
                 self.get_buffer().chars[row][col].write(new_value);
             }
         }
+        // clear the bottom line
         for col in 0..SCREEN_WIDTH {
             let color = self.output_color;
             self.get_buffer().chars[SCREEN_HEIGHT-1][col].write(CharCell {character: b' ', color: color});
@@ -217,12 +204,6 @@ impl Terminal {
 /// Allow formatting
 impl ::core::fmt::Write for Terminal {
     fn write_str(&mut self, s: &str) -> ::core::fmt::Result {
-        if s.bytes().all(|b| b.is_ascii_whitespace()) {
-            self.set_color(CellColor::new(Color::White, Color::Blue));
-        }
-        else {
-            self.set_color(CellColor::new(Color::White, Color::Green));
-        }
         for byte in s.bytes() {
             self.write_byte(byte)
         }

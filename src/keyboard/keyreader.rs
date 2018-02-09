@@ -1,4 +1,4 @@
-use super::key::Key;
+use super::event::KeyboardEvent;
 use super::keymap::Keymap;
 
 use alloc::Vec;
@@ -24,8 +24,8 @@ impl KeyReader {
     }
 
     /// Insert a byte into reader
-    /// Returns a key if complete, else insert more
-    pub fn insert(&mut self, b: u8) -> Option<Key> {
+    /// Returns a KeyboardEvent if complete, else inserts more
+    pub fn insert(&mut self, b: u8) -> Option<KeyboardEvent> {
         match self.buffer {
             Some(ref mut buf) => {
                 buf.push(b);
@@ -34,7 +34,7 @@ impl KeyReader {
                     buf.clear();
                 }
                 else {
-                    // XXX
+                    // TODO
                     buf.clear();
                 }
                 key

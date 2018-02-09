@@ -1,14 +1,15 @@
 mod key;
 mod keyreader;
 mod keymap;
+mod event;
 
 use spin::Mutex;
-use cpuio::{Port, UnsafePort};
+use cpuio::UnsafePort;
 
 use util::io_wait;
 
-use self::key::Key;
 use self::keyreader::KeyReader;
+use self::event::KeyboardEvent;
 
 // PS/2 ports
 const PS2_DATA:     u16 = 0x60; // rw
@@ -20,7 +21,7 @@ const PIC_CMD_EOI:  u8 = 0x20;
 const PIC_CMD_INIT: u8 = 0x11;
 
 // Sensible timeout
-const IO_WAIT_TIMEOUT: usize = 100;
+const IO_WAIT_TIMEOUT: usize = 1000;
 
 // Event buffer
 const EVENT_BUFFER_SIZE: usize = 100;
@@ -150,10 +151,10 @@ impl Keyboard {
         if !self.enabled || key == 0xFA || key == 0xEE {
             return;
         }
+        rprintln!("TEST: {:x}", key);
         match self.key_reader.insert(key) {
-            Some(key) => {
-                let event = KeyboardEvent::new(key);
-                rprintln!("YES: {:?}", event.key);
+            Some(key_event) => {
+                rprintln!("YES: {:?}", key_event);
             }
             None => {
                 rprintln!("NOPE: {:x}", key);
@@ -180,22 +181,6 @@ impl Keyboard {
             }
         }
         self.command_port.write(c)
-    }
-}
-
-#[derive(Clone,Copy,Debug)]
-pub struct KeyboardEvent {
-    pub key: Key,
-    // modifiers
-    // timestamp?
-    // event type (press, release, repeat?)
-    // char
-}
-impl KeyboardEvent {
-    pub fn new(key: Key) -> KeyboardEvent {
-        KeyboardEvent {
-            key: key
-        }
     }
 }
 

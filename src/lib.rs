@@ -102,8 +102,6 @@ pub extern fn rust_main() {
     // NIC
     // nic::init();
 
-    bochs_magic_bp!();
-
     // Multitasking
     multitasking::init();
 

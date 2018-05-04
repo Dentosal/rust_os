@@ -12,7 +12,7 @@ panic = "abort"
 
 [profile.release]
 panic = "abort"
-lto = true
+# lto = true
 
 [dependencies]
 rlibc = "*"                     # raw libc

@@ -4,7 +4,7 @@ use super::keymap::Keymap;
 use alloc::Vec;
 
 
-const BUFFER_SIZE: usize = 10;
+const BUFFER_SIZE_LIMIT: usize = 10;
 
 pub struct KeyReader {
     buffer: Option<Vec<u8>>,
@@ -26,6 +26,7 @@ impl KeyReader {
     /// Insert a byte into reader
     /// Returns a KeyboardEvent if complete, else inserts more
     pub fn insert(&mut self, b: u8) -> Option<KeyboardEvent> {
+        rprintln!("Buffer {:?}", self.buffer.clone());
         match self.buffer {
             Some(ref mut buf) => {
                 buf.push(b);
@@ -34,8 +35,13 @@ impl KeyReader {
                     buf.clear();
                 }
                 else {
-                    // TODO
-                    buf.clear();
+                    if buf.len() > BUFFER_SIZE_LIMIT {
+                        buf.clear();
+                        rprintln!("WARNING: Keyboard buffer full: detection error");
+                    }
+                    else {
+                        buf.push(b);
+                    }
                 }
                 key
             },

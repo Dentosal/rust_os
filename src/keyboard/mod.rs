@@ -151,7 +151,6 @@ impl Keyboard {
         if !self.enabled || key == 0xFA || key == 0xEE {
             return;
         }
-        rprintln!("TEST: {:x}", key);
         match self.key_reader.insert(key) {
             Some(key_event) => {
                 rprintln!("YES: {:?}", key_event);

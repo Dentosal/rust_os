@@ -27,7 +27,7 @@ echo "* kernel"
 
 # compile kernel (with full optimizations)
 # RUST_TARGET_PATH=$(pwd) xargo build --target $TARGET --release
-RUST_TARGET_PATH=$(pwd) xargo rustc --target $TARGET --release -- -C opt-level=s
+RUSTFLAGS=-g RUST_TARGET_PATH=$(pwd) xargo rustc --target $TARGET --release -- -C opt-level=s
 
 echo "* kernel assembly routines"
 mkdir -p build/asm_routines/
@@ -43,7 +43,9 @@ echo "Linking objects..."
 # link (use --print-gc-sections to debug)
 # ld -z max-page-size=0x1000  -T buildsystem/linker.ld -o build/kernel.bin build/entry.o target/$TARGET/release/librust_os.a build/asm_routines/*.o
 # ld -z max-page-size=0x1000 --unresolved-symbols=ignore-all -T buildsystem/linker.ld -o build/kernel.bin build/entry.o target/$TARGET/release/librust_os.a build/asm_routines/*.o
-ld -z max-page-size=0x1000 --gc-sections --print-gc-sections  -T buildsystem/linker.ld -o build/kernel.bin build/entry.o target/$TARGET/release/librust_os.a build/asm_routines/*.o
+# ld -z max-page-size=0x1000 --gc-sections --print-gc-sections  -T buildsystem/linker.ld -o build/kernel.bin build/entry.o target/$TARGET/release/librust_os.a build/asm_routines/*.o
+ld -z max-page-size=0x1000 --gc-sections -T buildsystem/linker.ld -o build/kernel.bin build/entry.o target/$TARGET/release/librust_os.a build/asm_routines/*.o
+cp build/kernel.bin build/kernel_unstripped.bin
 strip build/kernel.bin
 
 echo "Cheking boundries..."
@@ -77,9 +79,9 @@ echo "* copy kernel"
 dd "if=build/kernel.bin" "of=build/disk.img" "bs=512" "seek=3" "conv=notrunc"
 
 echo "Saving objdump..."
-objdump -CShdr -M intel build/kernel.bin > objdump.txt
+objdump -CShdr -M intel build/kernel_unstripped.bin > objdump.txt
 echo "Saving readelf..."
-readelf -e build/kernel.bin > readelf.txt
+readelf -e build/kernel_unstripped.bin > readelf.txt
 
 # TODO? clean?
 

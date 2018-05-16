@@ -8,6 +8,9 @@ build/
 # Cargo
 Cargo.lock
 
+# RLS
+rls/
+
 # Temp files
 tmp/
 temp/

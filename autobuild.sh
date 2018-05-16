@@ -1,6 +1,7 @@
 #!/bin/bash
 set -e
 
+# give -n to run  without virtualizing the build environment
 # give -u to run "vagrant up"
 # give -v to open in VirtualBox
 # give -b to open in Bochs
@@ -9,6 +10,7 @@ set -e
 # give -c to compile only
 # give -r to run only
 
+flag_native=0
 flag_vagrant=0
 flag_vbox=0
 flag_bochs=0
@@ -17,8 +19,9 @@ flag_debug=0
 flag_build_only=0
 flag_run_only=0
 
-while getopts 'abf:uvbsdcr' flag; do
+while getopts 'abf:nuvbsdcr' flag; do
   case "${flag}" in
+    n) flag_native=1 ;;
     u) flag_vagrant=1 ;;
     v) flag_vbox=1 ;;
     b) flag_bochs=1 ;;
@@ -36,18 +39,38 @@ then
     then
         vagrant up
     fi
-    vagrant ssh -c "cd /vagrant/ && ./build.sh"
+    if [ $flag_native -eq 1 ]
+    then
+        ./build.sh
+    else
+        vagrant ssh -c "cd /vagrant/ && ./build.sh"
+    fi
 fi
+
+
+if [ -d "/mnt/c/Windows" ]; then
+    # This is Windows subsystem for Linux
+    qemucmd='qemu-system-x86_64.exe'
+    vboxcmd='VBoxManage.exe'
+else
+    # Generic posix
+    qemucmd='qemu-system-x86_64'
+    vboxcmd='VirtualBox'
+fi
+
 
 if [ $flag_build_only -ne 1 ]
 then
     if [ $flag_vbox -eq 1 ]
     then
+        rm build/disk.vdi
+        $vboxcmd convertfromraw build/disk.img build/disk.vdi --format vdi --uuid "63f64532-cad0-47f1-a002-130863cf16a7"
+
         if [ $flag_debug -eq 1 ]
         then
-            VirtualBox startvm "RustOS" --debug
+            $vboxcmd startvm "RustOS" --debug
         else
-            VBoxManage startvm "RustOS"
+            $vboxcmd startvm "RustOS"
         fi
     elif [ $flag_bochs -eq 1 ]
     then
@@ -60,14 +83,15 @@ then
     else
         if [ $flag_qemu_s -eq 1 ]
         then
-            qemu-system-x86_64 -d int -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio -s -S
+            $qemucmd -d int -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio -s -S
         else
             if [ $flag_debug -eq 1 ]
             then
-                qemu-system-x86_64 -d int,in_asm,guest_errors -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio
+                $qemucmd -d int,in_asm,guest_errors -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio
             else
-                # qemu-system-x86_64 -d int -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio
-                qemu-system-x86_64 -d int,guest_errors -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio
+                # $qemucmd -d int -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio
+                # $qemucmd -d int,guest_errors -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio
+                $qemucmd -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide
             fi
         fi
     fi

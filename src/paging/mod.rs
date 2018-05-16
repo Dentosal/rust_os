@@ -16,6 +16,7 @@ pub use self::mapper::Mapper;
 pub use self::page_table::{ActivePageTable, InactivePageTable};
 use self::page::{Page, TemporaryPage};
 
+use d7alloc;
 
 const ENTRY_COUNT: usize = 512;
 

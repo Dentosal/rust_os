@@ -117,6 +117,7 @@ impl Keyboard {
         // configure PS/2 controller
         self.ps2_write_command(0x20);
         io_wait();
+        // https://wiki.osdev.org/%228042%22_PS/2_Controller#PS.2F2_Controller_Configuration_Byte
         let mut conf = self.read_byte();
         conf &= 0b1011_1111; // disable translation
         self.ps2_write_command(0x60);
@@ -125,7 +126,7 @@ impl Keyboard {
         // configure keyboard
         self.data_port.write(0xF0);
         io_wait();
-        self.data_port.write(0x02);
+        self.data_port.write(0x02); // scan code set 2
         io_wait();
         if !self.test_result(0xFA) {
             panic!("Unsupported keyboard");

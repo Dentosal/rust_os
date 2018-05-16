@@ -1,5 +1,6 @@
 use mem_map::Frame;
 
+#[derive(Debug)]
 pub struct Entry(u64);
 
 bitflags! {

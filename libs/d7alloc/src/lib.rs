@@ -1,5 +1,3 @@
-// FIX: https://github.com/phil-opp/blog_os/pull/348/files
-
 #![feature(allocator_api)]
 #![feature(alloc)]
 #![feature(global_allocator)]
@@ -10,12 +8,13 @@
 #![feature(const_fn)]
 
 extern crate spin;
-extern crate alloc;
 
-pub const HEAP_START: usize = 0o_000_001_000_000_0000;
-pub const HEAP_SIZE: usize = 100 * 1024; // 100 KiB
+use core::ptr::NonNull;
+use core::alloc::{Opaque, GlobalAlloc, Alloc, AllocErr, Layout};
 
-use alloc::heap::{Alloc, AllocErr, Layout};
+pub const HEAP_START: usize = 0x40000000; // At 1 GiB
+pub const HEAP_SIZE: usize = 100 * 0x400;
+
 use spin::Mutex;
 
 /// Align downwards. Returns the greatest x with alignment `align`
@@ -48,13 +47,12 @@ pub struct BumpAllocator {
 
 impl BumpAllocator {
     pub const fn new(heap_start: usize, heap_end: usize) -> Self {
-        // NOTE: requires adding #![feature(const_atomic_usize_new)] to lib.rs
         Self { heap_start, heap_end, next: AtomicUsize::new(heap_start) }
     }
 }
 
 unsafe impl<'a> Alloc for &'a BumpAllocator {
-    unsafe fn alloc(&mut self, layout: Layout) -> Result<*mut u8, AllocErr> {
+    unsafe fn alloc(&mut self, layout: Layout) -> Result<NonNull<Opaque>, AllocErr> {
         loop {
             // load current state of the `next` field
             let current_next = self.next.load(Ordering::Relaxed);
@@ -67,15 +65,38 @@ unsafe impl<'a> Alloc for &'a BumpAllocator {
                     Ordering::Relaxed);
                 if next_now == current_next {
                     // next address was successfully updated, allocation succeeded
-                    return Ok(alloc_start as *mut u8);
+                    return Ok(NonNull::new(alloc_start as *mut _).unwrap());
                 }
             } else {
-                return Err(AllocErr::Exhausted{ request: layout })
+                return Err(AllocErr)
             }
         }
     }
 
-    unsafe fn dealloc(&mut self, ptr: *mut u8, layout: Layout) {
+    unsafe fn dealloc(&mut self, _ptr: NonNull<Opaque>, _layout: Layout) {
         // do nothing, leak memory
+    }
+}
+
+
+pub struct GlobAlloc {
+    alloc: Mutex<BumpAllocator>
+}
+impl GlobAlloc {
+    pub const fn new(alloc: BumpAllocator) -> Self {
+        Self {
+            alloc: Mutex::new(alloc)
+        }
+    }
+}
+unsafe impl GlobalAlloc for GlobAlloc {
+    unsafe fn alloc(&self, layout: Layout) -> *mut Opaque {
+        let alloc = self.alloc.lock();
+        (&*alloc).alloc(layout).expect("Could not allocate").as_mut()
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut Opaque, layout: Layout) {
+        let alloc = self.alloc.lock();
+        (&*alloc).dealloc(NonNull::new(ptr as *mut _).expect("Cannot deallocate null pointer"), layout);
     }
 }

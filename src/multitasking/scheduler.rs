@@ -54,9 +54,6 @@ impl Scheduler {
         unsafe {
             PROCMAN.force_unlock();
         }
-        if !PROCMAN.lock().is_initialized() {
-            return;
-        }
 
         match self.next_switch {
             Some(s) => {

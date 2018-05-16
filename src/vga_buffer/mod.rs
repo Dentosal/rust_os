@@ -144,6 +144,8 @@ impl Terminal {
 
     /// Write single byte to terminal's stdout
     pub fn write_byte(&mut self, byte: u8) {
+        assert!(byte != 0);
+
         if byte == b'\n' {
             self.newline();
         }

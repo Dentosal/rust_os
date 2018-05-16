@@ -12,7 +12,3 @@ type ProcessId = u32;
 
 pub static SCHEDULER: Mutex<Scheduler> = Mutex::new(Scheduler::new());
 pub static PROCMAN: Mutex<ProcessManager> = Mutex::new(ProcessManager::new());
-
-pub fn init() {
-    PROCMAN.lock().init();
-}

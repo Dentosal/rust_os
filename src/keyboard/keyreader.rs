@@ -39,9 +39,6 @@ impl KeyReader {
                         buf.clear();
                         rprintln!("WARNING: Keyboard buffer full: detection error");
                     }
-                    else {
-                        buf.push(b);
-                    }
                 }
                 key
             },

@@ -80,6 +80,6 @@ pub static PCI: Mutex<PCIController> = Mutex::new(PCIController::new());
 
 pub fn init() {
     PCI.lock().init();
-    PCI.lock().print();
+    // PCI.lock().print();
     rprintln!("PCI: enabled");
 }

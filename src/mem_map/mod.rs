@@ -12,7 +12,7 @@ pub const MEM_PAGE_MAP_SIZE_BYTES:  usize   = 0x10_000;
 pub const MEM_PAGE_MAP1_ADDRESS:    usize   = 0x70_000;
 pub const MEM_PAGE_MAP2_ADDRESS:    usize   = 0x80_000;
 pub const KERNEL_LOCATION:          usize   = 0x100_000;
-pub const KERNEL_SIZE_LIMIT:        usize   = 200*0x200;
+pub const KERNEL_SIZE_LIMIT:        usize   = 0x200_000; // TODO: find a solution, or document properly
 pub const MEMORY_RESERVED_BELOW:    usize   = KERNEL_LOCATION+KERNEL_SIZE_LIMIT;
 
 // Memory frame (single allocation unit)

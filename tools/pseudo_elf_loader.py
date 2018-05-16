@@ -76,7 +76,10 @@ def main(fn, mreq):
         ptr += 0x38
 
     for r in mreq:
-        print("{:#x}: {:#x}".format(r, ram[r]))
+        if ram[r] is None:
+            print("{:#x}: No data".format(r))
+        else:
+            print("{:#x}: {:#x}".format(r, ram[r]))
 
 if __name__ == '__main__':
     main(sys.argv[1], [int(ast.literal_eval(r)) for r in sys.argv[2:]])

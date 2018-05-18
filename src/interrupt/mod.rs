@@ -145,12 +145,21 @@ extern "C" fn exception_irq0() {
 /// First ps/2 device, keyboard, sent data
 pub extern "C" fn exception_irq1() {
     unsafe {
-        rforce_unlock!();
-        let mut kbd = keyboard::KEYBOARD.lock();
-        if kbd.is_enabled() {
-            kbd.notify();
-        }
+        // rforce_unlock!();
+        // let mut kbd = keyboard::KEYBOARD.lock();
+        // if kbd.is_enabled() {
+        //     kbd.notify();
+        // }
         pic::PICS.lock().notify_eoi(0x21);
+    }
+}
+
+
+/// First ATA device is ready for data transfer
+pub extern "C" fn exception_irq14() {
+    // Since we are polling the drive, just ignore the IRQ
+    unsafe {
+        pic::PICS.lock().notify_eoi(0x2e);
     }
 }
 
@@ -245,6 +254,7 @@ pub fn init(memory_controller: &mut MemoryController) {
     handlers[0x0e] = Some(HandlerInfo::new(exception_handler_with_error_code!(exception_pf), PrivilegeLevel::Ring0, 0));
     handlers[0x20] = Some(HandlerInfo::new(irq_handler!(exception_irq0), PrivilegeLevel::Ring0, 0));
     handlers[0x21] = Some(HandlerInfo::new(irq_handler!(exception_irq1), PrivilegeLevel::Ring0, 0));
+    handlers[0x2e] = Some(HandlerInfo::new(irq_handler!(exception_irq14), PrivilegeLevel::Ring0, 0));
     handlers[0xd7] = Some(HandlerInfo::new(syscall as *const fn(), PrivilegeLevel::Ring0, 0));
 
     for index in 0..=(idt::ENTRY_COUNT-1) {

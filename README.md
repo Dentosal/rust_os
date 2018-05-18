@@ -24,6 +24,7 @@ Currently following features are under development:
 * Paging
 * Interrupts
 * Keyboard input (Somewhat)
+* Disk reading (ATA PIO)
 
 ## Planned in near future:
 * Virtual TTYs

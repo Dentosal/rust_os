@@ -51,9 +51,10 @@ impl Scheduler {
     }
 
     pub fn tick(&mut self, sysclock: SystemClock) {
-        unsafe {
-            PROCMAN.force_unlock();
-        }
+        return;
+        // unsafe {
+        //     PROCMAN.force_unlock();
+        // }
 
         match self.next_switch {
             Some(s) => {

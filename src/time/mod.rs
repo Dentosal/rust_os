@@ -3,7 +3,7 @@ use spin::Mutex;
 
 use pit::TIME_BETWEEN_E_12;
 
-#[derive(Copy,Clone)]
+#[derive(Copy, Clone)]
 pub struct SystemClock {
     seconds: u64,
     nano_fraction: u64
@@ -26,7 +26,7 @@ impl SystemClock {
         // Update multitasking scheduler
         match SCHEDULER.try_lock() {
             Some(mut s) => s.tick(self.clone()),
-            None => {rprintln!("MT: SCHED: Locking failed");}
+            None => {panic!("SCHED: Locking failed");}
         }
     }
     pub fn as_microseconds(&self) -> u64 {
@@ -74,11 +74,11 @@ pub fn init() {
     rprintln!("SYSCLOCK: enabled");
 }
 
-pub fn buzy_sleep_until(until: SystemClock) {
+pub fn busy_sleep_until(until: SystemClock) {
     while SYSCLOCK.lock().as_microseconds() < until.as_microseconds() {}
 }
 
 pub fn sleep_ms(ms: u64) {
     let end = SYSCLOCK.lock().after_milliseconds(ms);
-    buzy_sleep_until(end);
+    busy_sleep_until(end);
 }

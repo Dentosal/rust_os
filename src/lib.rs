@@ -56,6 +56,7 @@ mod keyboard;
 mod pit;
 mod memory;
 mod pci;
+mod ata_pio;
 // mod ide;
 // mod nic;
 
@@ -92,6 +93,9 @@ pub extern fn rust_main() {
     // keyboard
     keyboard::init();
 
+    // ATA PIO
+    ata_pio::init();
+
     // PCI
     pci::init();
 
@@ -102,14 +106,7 @@ pub extern fn rust_main() {
     // nic::init();
 
     // rreset!();
-    // unsafe {asm!("xchg ax,ax"::::"intel","volatile");}
-    // rprint!("D7-OS\n");
-    // rprintln!("Dimension 7 OS");
-    unsafe {asm!("xchg cx,cx"::::"intel","volatile");}
-    // rprintln!("\nSystem ready.\n");
-    unsafe {asm!("xchg ax,ax"::::"intel","volatile");}
-    unsafe {asm!("xchg cx,cx"::::"intel","volatile");}
-    rprint!("\nLONG TEXT Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.\n");
+    rprintln!("Kernel initialized.\n");
 
     // use multitasking::PROCMAN;
     //
@@ -121,11 +118,15 @@ pub extern fn rust_main() {
     //     rprintln!("Did not crash!");
     // }
 
-    loop {
-        rprint!("");
+    unsafe {
+        let data = ata_pio::ATA_PIO.lock().read(0, 1);
+        use alloc::Vec;
+        assert!(data.iter().skip(510).map(|v| *v).collect::<Vec<u8>>() == vec![0x55, 0xAA]);
+    }
 
-        use time::{SYSCLOCK, buzy_sleep_until};
-        buzy_sleep_until(SYSCLOCK.lock().after_seconds(5));
+    loop {
+        use time::{SYSCLOCK, busy_sleep_until};
+        busy_sleep_until(SYSCLOCK.lock().after_seconds(5));
         // rprintln!("Sleep done");
 
         let success: u64;

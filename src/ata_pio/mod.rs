@@ -5,11 +5,11 @@ use spin::Mutex;
 const SECTOR_SIZE: usize = 0x200;
 
 const PORT_DATA:            u16 = 0x1F0;
-const PORT_LBA0:            u16 = 0x1F2;
-const PORT_LBA1:            u16 = 0x1F3;
-const PORT_LBA2:            u16 = 0x1F4;
-const PORT_LBA3:            u16 = 0x1F5;
-const PORT_DRIVE_SELECT:    u16 = 0x1F6;
+const PORT_SECCOUNT:        u16 = 0x1F2;
+const PORT_LBA0:            u16 = 0x1F3;
+const PORT_LBA1:            u16 = 0x1F4;
+const PORT_LBA2:            u16 = 0x1F5;
+const PORT_LBA3:            u16 = 0x1F6;
 const PORT_COMMAND:         u16 = 0x1F7;
 const PORT_DEV_CTRL:        u16 = 0x3F6;
 
@@ -44,6 +44,19 @@ impl AtaPio {
             self.reset_drives();
             self.properties = Some(self.identify());
         }
+        rprintln!("LBA48 support: {}", self.properties.clone().unwrap().supports_lba48());
+    }
+
+    #[inline]
+    unsafe fn send_command(&self, cmd: u8) {
+        let mut cmd_port = UnsafePort::<u8>::new(PORT_COMMAND);
+        cmd_port.write(cmd);
+    }
+
+    #[inline]
+    unsafe fn read_status(&self) -> u8 {
+        let mut status_port = UnsafePort::<u8>::new(PORT_COMMAND);
+        status_port.read()
     }
 
     unsafe fn reset_drives(&self) {
@@ -72,25 +85,11 @@ impl AtaPio {
     unsafe fn select_drive(&self) {
         // https://wiki.osdev.org/ATA_PIO_Mode#400ns_delays
 
-
-        // // TODO: currently using (primary bus, master drive) only
-        // let mut status_port = UnsafePort::<u8>::new(PORT_COMMAND);
-
-        // let mut port = UnsafePort::<u8>::new(PORT_DRIVE_SELECT);
-        // port.write(0xA0);
-
-        // for _ in 0..4 {
-        //     let _ = status_port.read();
-        // }
-
-        // let value = status_port.read();
-
         self.reset_drives(); // HACK: selects master drive
     }
 
     unsafe fn check_floating_bus(&self) {
-        let mut status_port = UnsafePort::<u8>::new(PORT_COMMAND);
-        let data: u8 = status_port.read();
+        let data: u8 = self.read_status();
         if data == 0xFF {
             panic!("No ATA drives attached.");
         }
@@ -100,11 +99,10 @@ impl AtaPio {
     /// Polls ATA controller to see if the drive is ready
     #[inline]
     unsafe fn is_ready(&self) -> bool {
-        let mut status_port = UnsafePort::<u8>::new(PORT_COMMAND);
         for _ in 0..4 {
-            let _ = status_port.read();
+            let _ = self.read_status();
         }
-        let data: u8 = status_port.read();
+        let data: u8 = self.read_status();
         (data & 0xc0) == 0x40 // BSY clear, RDY set?
     }
 
@@ -112,7 +110,7 @@ impl AtaPio {
         while !self.is_ready() {}
     }
 
-    pub unsafe fn identify(&self) -> DriveProperties {
+    unsafe fn identify(&self) -> DriveProperties {
         // https://wiki.osdev.org/ATA_PIO_Mode#IDENTIFY_command
 
         // Clear LBA_N ports
@@ -122,17 +120,14 @@ impl AtaPio {
         let mut port_lba3 = UnsafePort::<u8>::new(PORT_LBA3); port_lba3.write(0);
 
         // Send IDENTIFY command
-        let mut cmd_port = UnsafePort::<u8>::new(PORT_COMMAND);
-        cmd_port.write(0xEC);
+        self.send_command(0xEC);
 
         use time::sleep_ms;
         sleep_ms(1);
 
-        let mut status_port = UnsafePort::<u8>::new(PORT_COMMAND);
-
         let mut first_cleared = true;
         loop {
-            let data: u8 = status_port.read();
+            let data: u8 = self.read_status();
 
             if data == 0 {
                 panic!("ATA_PIO: Drive does not exist");
@@ -197,31 +192,30 @@ impl AtaPio {
         assert!(sectors > 0);
 
         // Send bits 24-27 of LBA, drive number and LBA mode
-        let mut port = UnsafePort::<u8>::new(0x01F6);
+        let mut port = UnsafePort::<u8>::new(PORT_LBA3);
         let mut bits24_27: u8 = (lba >> 24) as u8;
         assert!(bits24_27 < 8);
         bits24_27 |= 0b11100000; // LBA mode
         port.write(bits24_27);
 
         // Send number of sectors
-        let mut port = UnsafePort::<u8>::new(0x01F2);
+        let mut port = UnsafePort::<u8>::new(PORT_SECCOUNT);
         port.write(sectors);
 
         // Send bits 0-7 of LBA
-        let mut port = UnsafePort::<u8>::new(0x01F3);
+        let mut port = UnsafePort::<u8>::new(PORT_LBA0);
         port.write((lba & 0xFF) as u8);
 
         // Send bits 8-15 of LBA
-        let mut port = UnsafePort::<u8>::new(0x01F4);
+        let mut port = UnsafePort::<u8>::new(PORT_LBA1);
         port.write(((lba & 0xFF00) >> 0x8) as u8);
 
         // Send bits 16-23 of LBA
-        let mut port = UnsafePort::<u8>::new(0x01F5);
+        let mut port = UnsafePort::<u8>::new(PORT_LBA2);
         port.write(((lba & 0xFF0000) >> 0x10) as u8);
 
         // Send command
-        let mut cmd_port = UnsafePort::<u8>::new(PORT_COMMAND);
-        cmd_port.write(0x20); // Read with retry
+        self.send_command(0x20); // Read with retry
 
         self.wait_ready();
 

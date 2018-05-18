@@ -87,7 +87,8 @@ then
         else
             if [ $flag_debug -eq 1 ]
             then
-                $qemucmd -d int,in_asm,guest_errors -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio
+                $qemucmd -d guest_errors -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio
+                # $qemucmd -d int,in_asm,guest_errors -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio
             else
                 # $qemucmd -d int -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio
                 # $qemucmd -d int,guest_errors -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio

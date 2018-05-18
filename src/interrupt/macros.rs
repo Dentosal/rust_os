@@ -61,7 +61,7 @@ macro_rules! irq_handler {
         extern "C" fn wrapper() -> ! {
             unsafe {
                 save_scratch_registers!();
-                asm!("call $0" :: "i"($name as extern "C" fn()) :: "intel", "volatile");
+                asm!("call $0" :: "i"($name as extern "C" fn()) : "memory" : "intel", "volatile");
                 restore_scratch_registers!();
                 asm!("iretq":::: "intel", "volatile");
                 ::core::intrinsics::unreachable();

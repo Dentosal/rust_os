@@ -29,3 +29,7 @@ version = "0.1.2"
 [dependencies.d7alloc]
 version = "*"
 path = "libs/d7alloc"
+
+[dependencies.d7ramfs]
+version = "*"
+path = "libs/d7ramfs"

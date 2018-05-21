@@ -15,13 +15,14 @@ Main branch should always contain a working build, that can be compiled and it b
 Feature development is done in separate branches. Rebase workflow is used to combine branches.
 
 ## Current features:
-* Long mode with Rust
+* Proper x86-64 long mode
 * Text mode terminal
 * Physical memory manager
 * Paging
 * Interrupts
-* Keyboard input (Somewhat)
+* Keyboard input
 * Disk reading (ATA PIO)
+* Simple RamFS
 
 ## Planned in near future:
 * A shell (with virtual TTYs!)

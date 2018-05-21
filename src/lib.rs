@@ -36,6 +36,7 @@ extern crate bitflags;
 extern crate bit_field;
 
 extern crate d7alloc;
+extern crate d7ramfs;
 
 #[macro_use]
 extern crate alloc;
@@ -74,14 +75,14 @@ pub extern fn rust_main() {
 
     // Finish system setup
 
-    // interrupt controller
+    // Interrupt controller
     pic::init();
     // apic::init();
 
-    // memory allocation
+    // Memory allocation
     let mut mem_ctrl = memory::init();
 
-    // interrupt system
+    // Interrupt system
     interrupt::init(&mut mem_ctrl);
 
     // PIT
@@ -139,9 +140,9 @@ pub extern fn rust_main() {
                 int 0xd7
             " : "={rax}"(success), "={rdx}"(result) :: "eax", "rdx", "rdi", "rsi" : "intel");
         }
-        let _ = success;
-        let _ = result;
-        // rprintln!("{:?} {:?}", success, result);
+        // let _ = success;
+        // let _ = result;
+        rprintln!("{:?} {:?}", success, result);
     }
 }
 

@@ -3,19 +3,16 @@ Dimension 7 is a simple x86-64 operating system written in Rust. It is in fairly
 
 ## Development
 
-This is a learning project. Currently code contributions are not accepted, as I'd like to learn to fix the problems myself. Feel free to submit issues on GitHub if you find any bugs.
+This is a learning project. Currently code contributions are not accepted, as I'd like to learn to fix the problems myself. Forking the project is of course possible, if you'd like to develop something beased on this.
+
+Feel free to submit issues on GitHub if you find any bugs.
 
 Currently everything is subject to quick changes. Any module should be considered unstable.
 
 ### Branches
 
 Main branch should always contain a working build, that can be compiled and it boots successfully.
-Feature development is done in separate branches.
-
-Currently following features are under development:
-* Generic ATA IDE driver
-* Networking: Intel E1000 NIC driver
-
+Feature development is done in separate branches. Rebase workflow is used to combine branches.
 
 ## Current features:
 * Long mode with Rust
@@ -27,8 +24,8 @@ Currently following features are under development:
 * Disk reading (ATA PIO)
 
 ## Planned in near future:
-* Virtual TTYs
-* Disk IO
+* A shell (with virtual TTYs!)
+* A simple filesystem, and writing to disk
 * Networking
  * Intel E1000 driver
 

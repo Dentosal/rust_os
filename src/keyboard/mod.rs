@@ -72,6 +72,24 @@ impl Keyboard {
         self.enabled
     }
 
+    /// Waits until output buffer has data
+    unsafe fn wait_ready_read(&mut self) {
+        loop {
+            if (self.status_port.read() & 0x1) != 0 {
+                break;
+            }
+        }
+    }
+
+    /// Waits until output buffer has space for data
+    unsafe fn wait_ready_write(&mut self) {
+        loop {
+            if (self.status_port.read() & 0x2) == 0 {
+                break;
+            }
+        }
+    }
+
     pub unsafe fn test_result(&mut self, result: u8) -> bool {
         for _ in 0..IO_WAIT_TIMEOUT {
             io_wait();
@@ -83,16 +101,19 @@ impl Keyboard {
     }
 
     pub unsafe fn test_echo(&mut self) -> bool {
+        self.wait_ready_write();
         self.data_port.write(0xEE);
         self.test_result(0xEE)
     }
 
     pub unsafe fn self_test(&mut self) -> bool {
+        self.wait_ready_write();
         self.data_port.write(0xFF);
         self.test_result(0xAA)
     }
 
     pub unsafe fn verify_keyboard(&mut self) {
+        self.wait_ready_write();
         self.data_port.write(0xF2);
 
         // This doesn't care about ack byte (0xFA), because Qemu doesn't support it, and it's not needed
@@ -115,17 +136,21 @@ impl Keyboard {
 
     pub unsafe fn configure(&mut self) {
         // configure PS/2 controller
+        self.wait_ready_write();
         self.ps2_write_command(0x20);
         io_wait();
         // https://wiki.osdev.org/%228042%22_PS/2_Controller#PS.2F2_Controller_Configuration_Byte
         let mut conf = self.read_byte();
         conf &= 0b1011_1111; // disable translation
         self.ps2_write_command(0x60);
+        self.wait_ready_write();
         self.data_port.write(conf);
 
         // configure keyboard
+        self.wait_ready_write();
         self.data_port.write(0xF0);
         io_wait();
+        self.wait_ready_write();
         self.data_port.write(0x02); // scan code set 2
         io_wait();
         if !self.test_result(0xFA) {
@@ -134,6 +159,7 @@ impl Keyboard {
     }
 
     pub unsafe fn disable_scanning(&mut self) {
+        self.wait_ready_write();
         self.data_port.write(0xF5);
         if !self.test_result(0xFA) {
             panic!("Unsupported keyboard");
@@ -141,6 +167,7 @@ impl Keyboard {
     }
 
     pub unsafe fn enable_scanning(&mut self) {
+        self.wait_ready_write();
         self.data_port.write(0xF4);
         if !self.test_result(0xFA) {
             panic!("Unsupported keyboard");
@@ -164,22 +191,11 @@ impl Keyboard {
     }
 
     unsafe fn read_byte(&mut self) -> u8 {
-        let mut c: u8 = 0;
-        loop {
-            if self.data_port.read() != c {
-                c = self.data_port.read();
-                if c > 0 {
-                    return c;
-                }
-            }
-        }
+        self.wait_ready_read();
+        self.data_port.read()
     }
     unsafe fn ps2_write_command(&mut self, c: u8) {
-        loop {
-            if self.status_port.read() & 2 == 0 {
-                break;
-            }
-        }
+        self.wait_ready_write();
         self.command_port.write(c)
     }
 }

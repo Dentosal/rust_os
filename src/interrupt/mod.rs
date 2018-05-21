@@ -145,11 +145,11 @@ extern "C" fn exception_irq0() {
 /// First ps/2 device, keyboard, sent data
 pub extern "C" fn exception_irq1() {
     unsafe {
-        // rforce_unlock!();
-        // let mut kbd = keyboard::KEYBOARD.lock();
-        // if kbd.is_enabled() {
-        //     kbd.notify();
-        // }
+        rforce_unlock!();
+        let mut kbd = keyboard::KEYBOARD.lock();
+        if kbd.is_enabled() {
+            kbd.notify();
+        }
         pic::PICS.lock().notify_eoi(0x21);
     }
 }

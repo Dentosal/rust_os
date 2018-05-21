@@ -9,7 +9,10 @@ use cpuio::UnsafePort;
 use util::io_wait;
 
 use self::keyreader::KeyReader;
-use self::event::KeyboardEvent;
+pub use self::event::{KeyboardEvent, KeyboardEventType};
+pub use self::key::Key;
+
+use alloc::Vec;
 
 // PS/2 ports
 const PS2_DATA:     u16 = 0x60; // rw
@@ -33,7 +36,9 @@ pub struct Keyboard {
     data_port: UnsafePort<u8>,
     status_port: UnsafePort<u8>,
     command_port: UnsafePort<u8>,
-    key_reader: KeyReader
+    key_reader: KeyReader,
+    /// Items that are not yet moved to KEYBOARD_EVENTS
+    pending_buffer: Vec<KeyboardEvent>,
 }
 
 impl Keyboard {
@@ -44,7 +49,8 @@ impl Keyboard {
             data_port: UnsafePort::new(PS2_DATA),
             status_port: UnsafePort::new(PS2_STATUS),
             command_port: UnsafePort::new(PS2_COMMAND),
-            key_reader: KeyReader::new()
+            key_reader: KeyReader::new(),
+            pending_buffer: Vec::new(),
         }
     }
 
@@ -179,15 +185,9 @@ impl Keyboard {
         if !self.enabled || key == 0xFA || key == 0xEE {
             return;
         }
-        match self.key_reader.insert(key) {
-            Some(key_event) => {
-                rprintln!("YES: {:?}", key_event);
-            }
-            None => {
-                rprintln!("NOPE: {:x}", key);
-            }
+        if let Some(key_event) = self.key_reader.insert(key) {
+            self.pending_buffer.push(key_event);
         }
-
     }
 
     unsafe fn read_byte(&mut self) -> u8 {
@@ -198,7 +198,15 @@ impl Keyboard {
         self.wait_ready_write();
         self.command_port.write(c)
     }
+
+    pub fn pop_event(&mut self) -> Option<KeyboardEvent> {
+        if self.pending_buffer.is_empty() {
+            return None;
+        }
+        Some(self.pending_buffer.remove(0))
+    }
 }
+
 
 pub static KEYBOARD: Mutex<Keyboard> = Mutex::new(unsafe { Keyboard::new() });
 

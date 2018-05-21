@@ -26,7 +26,6 @@ impl KeyReader {
     /// Insert a byte into reader
     /// Returns a KeyboardEvent if complete, else inserts more
     pub fn insert(&mut self, b: u8) -> Option<KeyboardEvent> {
-        rprintln!("Buffer {:?}", self.buffer.clone());
         match self.buffer {
             Some(ref mut buf) => {
                 buf.push(b);

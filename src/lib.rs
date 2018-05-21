@@ -59,13 +59,14 @@ mod memory;
 mod pci;
 mod ata_pio;
 // mod ide;
-// mod nic;
+mod nic;
 
 // Software:
 mod elf_parser;
 mod time;
 mod multitasking;
 mod syscall;
+mod kernel_shell;
 
 /// The kernel main function
 #[no_mangle]
@@ -76,7 +77,7 @@ pub extern fn rust_main() {
     // Finish system setup
 
     // Interrupt controller
-    pic::init();
+    // pic::init();
     // apic::init();
 
     // Memory allocation
@@ -90,6 +91,9 @@ pub extern fn rust_main() {
 
     // cpu data
     cpuid::init();
+
+    // RamFS
+    ramfs::init();
 
     // keyboard
     keyboard::init();
@@ -124,6 +128,8 @@ pub extern fn rust_main() {
         use alloc::Vec;
         assert!(data.iter().skip(510).map(|v| *v).collect::<Vec<u8>>() == vec![0x55, 0xAA]);
     }
+
+    kernel_shell::run();
 
     loop {
         use time::{SYSCLOCK, busy_sleep_until};

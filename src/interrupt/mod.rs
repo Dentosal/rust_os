@@ -146,6 +146,7 @@ extern "C" fn exception_irq0() {
 pub extern "C" fn exception_irq1() {
     unsafe {
         rforce_unlock!();
+        keyboard::KEYBOARD.force_unlock();
         let mut kbd = keyboard::KEYBOARD.lock();
         if kbd.is_enabled() {
             kbd.notify();

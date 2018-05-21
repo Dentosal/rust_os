@@ -78,10 +78,23 @@ pub struct Cursor {
 }
 
 impl Cursor {
+
     /// Next character
     pub fn next(&mut self) {
         if self.col < SCREEN_WIDTH {
-            self.col+=1;
+            self.col += 1;
+        }
+    }
+
+    /// Previous character
+    /// if row is true, goes to previous line if needed
+    pub fn prev(&mut self, row: bool) {
+        if self.col > 0 {
+            self.col -= 1;
+        }
+        else if row && self.row > 0 {
+            self.row -= 1;
+            self.col = SCREEN_WIDTH - 1;
         }
     }
 
@@ -149,6 +162,9 @@ impl Terminal {
         if byte == b'\n' {
             self.newline();
         }
+        else if byte == 0x8 { // ASCII backspace
+            self.backspace();
+        }
         else {
             assert!(self.cursor.col < SCREEN_WIDTH);
 
@@ -179,6 +195,13 @@ impl Terminal {
         if scroll {
             self.scroll_line();
         }
+    }
+
+    /// Backspace
+    pub fn backspace(&mut self) {
+        self.cursor.prev(true);
+        self.write_byte(b' ');
+        self.cursor.prev(true);
     }
 
     /// Scroll up one line

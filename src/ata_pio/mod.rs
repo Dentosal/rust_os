@@ -235,7 +235,7 @@ impl AtaPio {
     }
 }
 
-// Create static pointer mutex with spinlock to make TERMINAL thread-safe
+// Create static pointer mutex with spinlock to make ATA_PIO thread-safe
 pub static ATA_PIO: Mutex<AtaPio> = Mutex::new(AtaPio::new());
 
 pub fn init() {

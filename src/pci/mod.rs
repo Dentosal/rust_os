@@ -7,13 +7,13 @@ use spin::Mutex;
 const CONFIG_ADDR: usize = 0xCF8;
 const CONFIG_DATA: usize = 0xCFC;
 
-#[derive(Clone,Copy,PartialEq,Debug)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DeviceLocation(pub u8, pub u8, pub u8);
 
-#[derive(Clone,Copy,PartialEq,Debug)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DeviceClass(pub u8, pub u8, pub u8);
 
-#[derive(Clone,Copy,PartialEq,Debug)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Device {
     pub id: u16,
     pub vendor: u16,
@@ -33,8 +33,20 @@ impl Device {
     pub unsafe fn read(&self, offset: u8) -> u32 {
         util::pci_read_device(self.location, offset)
     }
+
     pub unsafe fn write(&self, offset: u8, value: u32) {
         util::pci_write_device(self.location, offset, value)
+    }
+
+    pub unsafe fn get_bars(&self) -> [u32; 6] {
+        [
+            self.read(0x10),
+            self.read(0x14),
+            self.read(0x18),
+            self.read(0x1C),
+            self.read(0x20),
+            self.read(0x24)
+        ]
     }
 
     // http://wiki.osdev.org/RTL8139#PCI_Bus_Mastering

@@ -1,8 +1,6 @@
 //! This module is only used to retrieve XSDT address from RSDT.
 //! More info: http://wiki.osdev.org/RSDP
 
-use core::mem::size_of;
-
 const RSDP_SIGNATURE: &'static [u8; 8] = b"RSD PTR ";
 
 #[repr(C,packed)]

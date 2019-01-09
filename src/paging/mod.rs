@@ -9,6 +9,7 @@ use vga_buffer::VGA_BUFFER_ADDRESS;
 use interrupt::idt;
 use mem_map::{FrameAllocator, Frame, MEM_PAGE_SIZE_BYTES};
 use mem_map::{MEM_PAGE_MAP_SIZE_BYTES, MEM_PAGE_MAP1_ADDRESS, MEM_PAGE_MAP2_ADDRESS};
+use memory::dma_allocator;
 use elf_parser;
 use elf_parser::ELFData;
 
@@ -40,16 +41,16 @@ pub fn remap_kernel<A>(allocator: &mut A, elf_metadata: ELFData) -> ActivePageTa
             if ph.loadable() {
                 let start = ph.virtual_address as usize;
                 let size = ph.size_in_memory as usize;
-                let mut flags = entry::PRESENT;
+                let mut flags = entry::EntryFlags::PRESENT;
 
-                if !ph.has_flag(elf_parser::EXECUTABLE) {
-                    flags |= entry::NO_EXECUTE;
+                if !ph.has_flag(elf_parser::ELFPermissionFlags::EXECUTABLE) {
+                    flags |= entry::EntryFlags::NO_EXECUTE;
                 }
-                if !ph.has_flag(elf_parser::READABLE) {
+                if !ph.has_flag(elf_parser::ELFPermissionFlags::READABLE) {
                     panic!("Non-readable pages are not (yet) handled");
                 }
-                if ph.has_flag(elf_parser::WRITABLE) {
-                    flags |= entry::WRITABLE;
+                if ph.has_flag(elf_parser::ELFPermissionFlags::WRITABLE) {
+                    flags |= entry::EntryFlags::WRITABLE;
                 }
 
                 assert!(start % MEM_PAGE_SIZE_BYTES == 0, "Segments must be page aligned");
@@ -64,28 +65,35 @@ pub fn remap_kernel<A>(allocator: &mut A, elf_metadata: ELFData) -> ActivePageTa
             }
         }
 
-        // identity map IDT & IDTr
+        // Identity map IDT & IDTr
         let idt_frame = Frame::containing_address(idt::ADDRESS);
-        mapper.identity_map(idt_frame, entry::WRITABLE | entry::PRESENT, allocator);
+        mapper.identity_map(idt_frame, entry::EntryFlags::WRITABLE | entry::EntryFlags::PRESENT, allocator);
 
         let idtr_frame = Frame::containing_address(idt::R_ADDRESS);
-        mapper.identity_map(idtr_frame, entry::WRITABLE | entry::PRESENT, allocator);
+        mapper.identity_map(idtr_frame, entry::EntryFlags::WRITABLE | entry::EntryFlags::PRESENT, allocator);
 
-        // identity map the VGA text buffer
+        // Identity map the VGA text buffer
         let vga_buffer_frame = Frame::containing_address(VGA_BUFFER_ADDRESS);
-        mapper.identity_map(vga_buffer_frame, entry::WRITABLE | entry::PRESENT, allocator);
+        mapper.identity_map(vga_buffer_frame, entry::EntryFlags::WRITABLE | entry::EntryFlags::PRESENT, allocator);
 
-        // identity map the physical memory allocatior bitmaps
+        // Identity map the physical memory allocatior bitmaps
         let start_frame = Frame::containing_address(MEM_PAGE_MAP1_ADDRESS);
         let end_frame = Frame::containing_address(MEM_PAGE_MAP1_ADDRESS + MEM_PAGE_MAP_SIZE_BYTES - 1);
         for frame in Frame::range_inclusive(start_frame, end_frame) {
-            mapper.identity_map(frame, entry::WRITABLE | entry::PRESENT, allocator);
+            mapper.identity_map(frame, entry::EntryFlags::WRITABLE | entry::EntryFlags::PRESENT, allocator);
         }
 
         let start_frame = Frame::containing_address(MEM_PAGE_MAP2_ADDRESS);
         let end_frame = Frame::containing_address(MEM_PAGE_MAP2_ADDRESS + MEM_PAGE_MAP_SIZE_BYTES - 1);
         for frame in Frame::range_inclusive(start_frame, end_frame) {
-            mapper.identity_map(frame, entry::WRITABLE | entry::PRESENT, allocator);
+            mapper.identity_map(frame, entry::EntryFlags::WRITABLE | entry::EntryFlags::PRESENT, allocator);
+        }
+
+        // Identity map DMA allocator
+        let start_frame = Frame::containing_address(dma_allocator::BASE);
+        let end_frame = Frame::containing_address(dma_allocator::BASE + dma_allocator::SIZE - 1);
+        for frame in Frame::range_inclusive(start_frame, end_frame) {
+            mapper.identity_map(frame, entry::EntryFlags::WRITABLE | entry::EntryFlags::PRESENT, allocator);
         }
     });
     rprintln!("Switching...");

@@ -51,7 +51,7 @@ impl Page {
                 let p3_entry = &p3[self.p3_index()];
                 // 1GiB self?
                 if let Some(start_frame) = p3_entry.pointed_frame() {
-                    if p3_entry.flags().contains(HUGE_PAGE) {
+                    if p3_entry.flags().contains(EntryFlags::HUGE_PAGE) {
                         // address must be 1GiB aligned
                         assert!(start_frame.index % (ENTRY_COUNT * ENTRY_COUNT) == 0);
                         return Some(Frame {
@@ -63,7 +63,7 @@ impl Page {
                     let p2_entry = &p2[self.p2_index()];
                     // 2MiB self?
                     if let Some(start_frame) = p2_entry.pointed_frame() {
-                        if p2_entry.flags().contains(HUGE_PAGE) {
+                        if p2_entry.flags().contains(EntryFlags::HUGE_PAGE) {
                             // address must be 2MiB aligned
                             assert!(start_frame.index % ENTRY_COUNT == 0);
                             return Some(Frame { index: start_frame.index + self.p1_index() });
@@ -160,7 +160,7 @@ impl TemporaryPage {
     pub fn map(&mut self, frame: Frame, active_table: &mut ActivePageTable) -> VirtualAddress {
         assert!(active_table.translate_page(self.page.index).is_none(), "temporary page is already mapped");
 
-        active_table.map_to(self.page, frame, WRITABLE, &mut self.allocator);
+        active_table.map_to(self.page, frame, EntryFlags::WRITABLE, &mut self.allocator);
         self.page.start_address()
     }
 

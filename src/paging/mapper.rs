@@ -25,7 +25,7 @@ impl Mapper {
         let p1 = p2.next_table_create(page.p2_index(), allocator);
 
         assert!(p1[page.p1_index()].is_unused());
-        p1[page.p1_index()].set(frame, flags | PRESENT);
+        p1[page.p1_index()].set(frame, flags | EntryFlags::PRESENT);
     }
 
     pub fn translate_page(&self, virtual_address: VirtualAddress) -> Option<PhysicalAddress> {

@@ -9,12 +9,12 @@ const GDT_TABLE_COUNT: usize = 8;
 pub const DOUBLE_FAULT_IST_INDEX: usize = 0;
 
 bitflags! {
-    flags DescriptorFlags: u64 {
-        const CONFORMING        = 1 << 42,
-        const EXECUTABLE        = 1 << 43,
-        const USER_SEGMENT      = 1 << 44,
-        const PRESENT           = 1 << 47,
-        const LONG_MODE         = 1 << 53,
+    struct DescriptorFlags: u64 {
+        const CONFORMING        = 1 << 42;
+        const EXECUTABLE        = 1 << 43;
+        const USER_SEGMENT      = 1 << 44;
+        const PRESENT           = 1 << 47;
+        const LONG_MODE         = 1 << 53;
     }
 }
 
@@ -25,7 +25,12 @@ pub enum Descriptor {
 
 impl Descriptor {
     pub fn kernel_code_segment() -> Descriptor {
-        let flags = USER_SEGMENT | PRESENT | EXECUTABLE | LONG_MODE;
+        let flags =
+            DescriptorFlags::USER_SEGMENT |
+            DescriptorFlags::PRESENT |
+            DescriptorFlags::EXECUTABLE |
+            DescriptorFlags::LONG_MODE
+        ;
         Descriptor::UserSegment(flags.bits())
     }
     pub fn tss_segment(tss: &'static TaskStateSegment) -> Descriptor {
@@ -33,7 +38,7 @@ impl Descriptor {
 
         let ptr = tss as *const _ as u64;
 
-        let mut low = PRESENT.bits();
+        let mut low = DescriptorFlags::PRESENT.bits();
         // base
         low.set_bits(16..40, ptr.get_bits(0..24));
         low.set_bits(56..64, ptr.get_bits(24..32));

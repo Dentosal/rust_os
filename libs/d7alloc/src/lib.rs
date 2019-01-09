@@ -1,5 +1,4 @@
 #![feature(allocator_api)]
-#![feature(alloc)]
 #![feature(global_allocator)]
 
 // #![deny(warnings)]
@@ -10,7 +9,7 @@
 extern crate spin;
 
 use core::ptr::NonNull;
-use core::alloc::{Opaque, GlobalAlloc, Alloc, AllocErr, Layout};
+use core::alloc::{GlobalAlloc, Alloc, AllocErr, Layout};
 
 pub const HEAP_START: usize = 0x40000000; // At 1 GiB
 pub const HEAP_SIZE: usize = 100 * 0x400;
@@ -52,7 +51,7 @@ impl BumpAllocator {
 }
 
 unsafe impl<'a> Alloc for &'a BumpAllocator {
-    unsafe fn alloc(&mut self, layout: Layout) -> Result<NonNull<Opaque>, AllocErr> {
+    unsafe fn alloc(&mut self, layout: Layout) -> Result<NonNull<u8>, AllocErr> {
         loop {
             // load current state of the `next` field
             let current_next = self.next.load(Ordering::Relaxed);
@@ -73,7 +72,7 @@ unsafe impl<'a> Alloc for &'a BumpAllocator {
         }
     }
 
-    unsafe fn dealloc(&mut self, _ptr: NonNull<Opaque>, _layout: Layout) {
+    unsafe fn dealloc(&mut self, _ptr: NonNull<u8>, _layout: Layout) {
         // do nothing, leak memory
     }
 }
@@ -90,12 +89,12 @@ impl GlobAlloc {
     }
 }
 unsafe impl GlobalAlloc for GlobAlloc {
-    unsafe fn alloc(&self, layout: Layout) -> *mut Opaque {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let alloc = self.alloc.lock();
         (&*alloc).alloc(layout).expect("Could not allocate").as_mut()
     }
 
-    unsafe fn dealloc(&self, ptr: *mut Opaque, layout: Layout) {
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         let alloc = self.alloc.lock();
         (&*alloc).dealloc(NonNull::new(ptr as *mut _).expect("Cannot deallocate null pointer"), layout);
     }

@@ -29,6 +29,7 @@ Feature development is done in separate branches. Rebase workflow is used to com
 * A simple filesystem, and writing to disk
 * Networking
  * Intel E1000 driver
+ * VirtIO-net driver
 
 ## Not-in-so-near future features:
 * Automated tests
@@ -64,7 +65,7 @@ You will also need a virtual machine. Qemu is suggested, but Bochs should work a
 
 ## Actually running
 
-With Qemu and Vagrant installed, run `./autobuild.sh -u`. With Bochs: `./autobuild.sh -ub`. To use VirtualBox, run `./autobuild.sh -c`, and then convert raw binary image `build/disk.img` to VirtualBox format.
+With Qemu and Vagrant installed, run `./autobuild.sh -u`. With Bochs: `./autobuild.sh -ub`. To use VirtualBox, run `./autobuild.sh -uv`.
 
 # License
 This project is licensed under MIT license, that can be found in the file called LICENSE.

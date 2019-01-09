@@ -5,11 +5,12 @@
 #![feature(box_syntax)]
 #![feature(box_patterns)]
 #![feature(const_fn)]
+#![feature(const_vec_new)]
+#![feature(const_string_new)]
 #![feature(alloc)]
 #![feature(never_type)]
 #![feature(vec_remove_item)]
-#![feature(alloc_system)]
-#![feature(global_allocator, allocator_api)]
+#![feature(allocator_api)]
 
 
 #![no_std]
@@ -21,7 +22,8 @@ extern crate std;
 extern crate alloc;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
-use alloc::{Vec, String};
+use alloc::string::String;
+use alloc::vec::Vec;
 
 
 
@@ -135,13 +137,13 @@ impl Drop for FileDescriptor {
 }
 
 #[derive(Debug)]
-pub struct FileSystem {
+pub struct RamFS {
     tree: Box<Node>,
     open_fds: Vec<FileDescriptor>,
 }
-impl FileSystem {
-    pub fn new() -> FileSystem {
-        FileSystem {
+impl RamFS {
+    pub fn new() -> RamFS {
+        RamFS {
             tree: Box::new(Node::root()),
             open_fds: Vec::new(),
         }
@@ -170,7 +172,7 @@ impl FileSystem {
     }
 
     fn focus<T>(&mut self, path: Vec<&str>, f: &mut FnMut(&mut Box<Node>) -> Result<T, FileSystemError>) -> Result<T, FileSystemError> {
-        FileSystem::focus_rec(&mut self.tree, path, f)
+        RamFS::focus_rec(&mut self.tree, path, f)
     }
 
     pub fn node_type(&mut self, path: Vec<&str>) -> Result<NodeType, FileSystemError> {
@@ -351,7 +353,7 @@ enum Node {
     Leaf(Leaf)
 }
 impl Node {
-    pub fn root() -> Node {
+    pub const fn root() -> Node {
         Node::Branch(Branch::new_root())
     }
 
@@ -388,7 +390,7 @@ struct Leaf {
 
 
 impl Branch {
-    pub fn new_root() -> Self {
+    pub const fn new_root() -> Self {
         Self {
             name: String::new(),
             branches: Vec::new(),
@@ -426,11 +428,11 @@ impl Leaf {
 
 #[cfg(test)]
 mod tests {
-    use super::{FileSystem, OpenMode};
+    use super::{RamFS, OpenMode};
 
     #[test]
     fn test_simple_create() {
-        let mut fs = FileSystem::new();
+        let mut fs = RamFS::new();
 
         assert!( fs.exists(vec![]));
         assert!(!fs.exists(vec!["test"]));
@@ -475,7 +477,7 @@ mod tests {
 
     #[test]
     fn test_simple_read_write() {
-        let mut fs = FileSystem::new();
+        let mut fs = RamFS::new();
         fs.create_file(vec!["file.txt"], false).unwrap();
 
         let fd1 = fs.open_file(vec!["file.txt"], OpenMode::Read).unwrap();

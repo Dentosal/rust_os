@@ -1,7 +1,7 @@
 use super::{Device, DeviceLocation, DeviceClass};
 use super::util::pci_read_device;
 
-use alloc::Vec;
+use alloc::vec::Vec;
 
 // http://wiki.osdev.org/PCI#PCI_Device_Structure
 

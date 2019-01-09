@@ -1,4 +1,4 @@
-use alloc::String;
+use alloc::string::String;
 use alloc::borrow::ToOwned;
 
 pub fn cpu_brand() -> String {

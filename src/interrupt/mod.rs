@@ -84,12 +84,12 @@ extern "C" fn exception_gpf(stack_frame: *const ExceptionStackFrame, error_code:
 
 /// Page Fault error codes
 bitflags! {
-    flags PageFaultErrorCode: u64 {
-        const PROTECTION_VIOLATION  = 1 << 0,
-        const CAUSED_BY_WRITE       = 1 << 1,
-        const USER_MODE             = 1 << 2,
-        const MALFORMED_TABLE       = 1 << 3,
-        const INSTRUCTION_FETCH     = 1 << 4,
+    struct PageFaultErrorCode: u64 {
+        const PROTECTION_VIOLATION  = 1 << 0;
+        const CAUSED_BY_WRITE       = 1 << 1;
+        const USER_MODE             = 1 << 2;
+        const MALFORMED_TABLE       = 1 << 3;
+        const INSTRUCTION_FETCH     = 1 << 4;
     }
 }
 

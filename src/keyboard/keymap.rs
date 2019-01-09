@@ -1,7 +1,7 @@
 use super::key::Key;
 use super::event::{KeyboardEvent, KeyboardEventType};
 
-use alloc::Vec;
+use alloc::vec::Vec;
 
 pub struct Keymap {
     mapping: Option<Vec<(Vec<u8>, (Key, KeyboardEventType))>>

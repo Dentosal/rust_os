@@ -1,4 +1,4 @@
-use alloc::String;
+use alloc::string::String;
 use alloc::borrow::ToOwned;
 
 #[allow(dead_code)]

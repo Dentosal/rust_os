@@ -1,7 +1,7 @@
 use super::event::KeyboardEvent;
 use super::keymap::Keymap;
 
-use alloc::Vec;
+use alloc::vec::Vec;
 
 
 const BUFFER_SIZE_LIMIT: usize = 10;

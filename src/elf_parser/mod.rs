@@ -18,10 +18,10 @@ pub struct ELFData {
 }
 
 bitflags! {
-    pub flags ELFPermissionFlags: u32 {
-        const EXECUTABLE    = 1 << 0,
-        const WRITABLE      = 1 << 1,
-        const READABLE      = 1 << 2,
+    pub struct ELFPermissionFlags: u32 {
+        const EXECUTABLE    = 1 << 0;
+        const WRITABLE      = 1 << 1;
+        const READABLE      = 1 << 2;
     }
 }
 

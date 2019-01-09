@@ -1,9 +1,19 @@
 // Code style
+#![forbid(private_in_public)]
 #![deny(unused_assignments)]
 
 // Code style (development time)
 #![allow(unused_macros)]
 #![allow(dead_code)]
+
+// Code style (temp)
+#![allow(unused_variables)]
+#![allow(unused_imports)]
+#![allow(unused_parens)]
+#![allow(unused_mut)]
+#![allow(unused_unsafe)]
+#![allow(unreachable_code)]
+#![allow(non_camel_case_types)]
 
 // Safety
 #![deny(overflowing_literals)]
@@ -15,16 +25,16 @@
 #![feature(core_intrinsics)]
 #![feature(asm)]
 #![feature(ptr_internals)]
-#![feature(unique)]
 #![feature(const_fn)]
 #![feature(const_vec_new)]
-#![feature(const_generics)]
 #![feature(naked_functions)]
-#![feature(iterator_step_by)]
-// #![feature(box_syntax, box_patterns)]
+#![feature(box_syntax, box_patterns)]
 #![feature(stmt_expr_attributes)]
 #![feature(alloc)]
-#![feature(global_allocator)]
+#![feature(allocator_api)]
+
+use core::alloc::Layout;
+use core::panic::PanicInfo;
 
 extern crate volatile;
 extern crate rlibc;
@@ -57,7 +67,8 @@ mod keyboard;
 mod pit;
 mod memory;
 mod pci;
-mod ata_pio;
+mod virtio;
+mod disk_io;
 // mod ide;
 mod nic;
 
@@ -66,6 +77,7 @@ mod elf_parser;
 mod time;
 mod multitasking;
 mod syscall;
+mod filesystem;
 mod kernel_shell;
 
 /// The kernel main function
@@ -77,7 +89,7 @@ pub extern fn rust_main() {
     // Finish system setup
 
     // Interrupt controller
-    // pic::init();
+    pic::init();
     // apic::init();
 
     // Memory allocation
@@ -89,26 +101,23 @@ pub extern fn rust_main() {
     // PIT
     pit::init();
 
-    // cpu data
+    // CPU data
     cpuid::init();
 
-    // RamFS
-    ramfs::init();
+    // Filesystem
+    filesystem::init();
 
-    // keyboard
+    // Keyboard
     keyboard::init();
-
-    // ATA PIO
-    ata_pio::init();
 
     // PCI
     pci::init();
 
-    // IDE / ATA
-    // ide::init();
+    // Disk IO (ATA, IDE, VirtIO)
+    disk_io::init();
 
     // NIC
-    // nic::init();
+    nic::init();
 
     // rreset!();
     rprintln!("Kernel initialized.\n");
@@ -122,12 +131,6 @@ pub extern fn rust_main() {
     //     rprintln!("PID: {}", pid);
     //     rprintln!("Did not crash!");
     // }
-
-    unsafe {
-        let data = ata_pio::ATA_PIO.lock().read(0, 1);
-        use alloc::Vec;
-        assert!(data.iter().skip(510).map(|v| *v).collect::<Vec<u8>>() == vec![0x55, 0xAA]);
-    }
 
     kernel_shell::run();
 
@@ -159,8 +162,7 @@ static HEAP_ALLOCATOR: d7alloc::GlobAlloc = d7alloc::GlobAlloc::new(
 
 #[lang = "oom"]
 #[no_mangle]
-#[allow(private_no_mangle_fns)]
-extern fn rust_oom() -> ! {
+extern fn rust_oom(_: Layout) -> ! {
     unsafe {
         asm!("cli"::::"intel","volatile");
         panic_indicator!(0x4f4D4f21); // !M as in "No memory"
@@ -179,19 +181,23 @@ pub extern "C" fn _Unwind_Resume() -> ! {loop {}}
 extern "C" fn eh_personality() -> ! {loop {}}
 
 #[cfg(not(test))]
-#[lang = "panic_fmt"]
+#[panic_handler]
 #[allow(unused_variables)]
-#[allow(private_no_mangle_fns)]
 #[no_mangle]
-extern "C" fn panic_fmt(fmt: core::fmt::Arguments, file: &str, line: u32) -> ! {
+extern "C" fn panic(info: &PanicInfo) -> ! {
     unsafe {
         // asm!("jmp panic"::::"intel","volatile");
 
         asm!("cli"::::"intel","volatile");
         panic_indicator!(0x4f214f21); // !!
 
-        rprintln!("Kernel Panic: file: '{}', line {}\n", file, line);
-        rprintln!("    {}\n", fmt);
+        if let Some(location) = info.location() {
+            rprintln!("Kernel Panic: file: '{}', line: {}", location.file(), location.line());
+        } else {
+            rprintln!("Kernel Panic: location unavailable");
+        }
+        loop {}
+        rprintln!("  {:?}", info.payload().downcast_ref::<&str>().unwrap());
         asm!("jmp panic"::::"intel","volatile");
     }
     loop {}

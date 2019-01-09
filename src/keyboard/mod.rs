@@ -12,7 +12,7 @@ use self::keyreader::KeyReader;
 pub use self::event::{KeyboardEvent, KeyboardEventType};
 pub use self::key::Key;
 
-use alloc::Vec;
+use alloc::vec::Vec;
 
 // PS/2 ports
 const PS2_DATA:     u16 = 0x60; // rw

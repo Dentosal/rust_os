@@ -1,7 +1,7 @@
 mod scan;
 mod util;
 
-use alloc::Vec;
+use alloc::vec::Vec;
 use spin::Mutex;
 
 const CONFIG_ADDR: usize = 0xCF8;
@@ -38,15 +38,21 @@ impl Device {
         util::pci_write_device(self.location, offset, value)
     }
 
-    pub unsafe fn get_bars(&self) -> [u32; 6] {
-        [
-            self.read(0x10),
-            self.read(0x14),
-            self.read(0x18),
-            self.read(0x1C),
-            self.read(0x20),
-            self.read(0x24)
-        ]
+    pub fn subsystem_id(&self) -> u16 {
+        (unsafe { self.read(0x2c) } >> 16) as u16
+    }
+
+    pub fn get_bars(&self) -> [u32; 6] {
+        unsafe {
+            [
+                self.read(0x10),
+                self.read(0x14),
+                self.read(0x18),
+                self.read(0x1C),
+                self.read(0x20),
+                self.read(0x24)
+            ]
+        }
     }
 
     // http://wiki.osdev.org/RTL8139#PCI_Bus_Mastering

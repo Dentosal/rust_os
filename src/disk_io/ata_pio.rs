@@ -1,6 +1,9 @@
-use alloc::Vec;
+use alloc::vec::Vec;
+use alloc::boxed::Box;
 use cpuio::UnsafePort;
 use spin::Mutex;
+
+use super::BlockDevice;
 
 const SECTOR_SIZE: usize = 0x200;
 
@@ -29,37 +32,35 @@ impl DriveProperties {
 }
 
 pub struct AtaPio {
-    properties: Option<DriveProperties>
+    properties: DriveProperties
 }
 impl AtaPio {
-    pub const fn new() -> AtaPio {
-        AtaPio {
-            properties: None
-        }
-    }
-
-    pub fn init(&mut self) {
+    pub fn try_new() -> Option<Box<BlockDevice>> {
+        rprintln!("DiskIO: Checking for ATA PIO");
         unsafe {
-            self.check_floating_bus();
-            self.reset_drives();
-            self.properties = Some(self.identify());
+            Self::check_floating_bus();
+            Self::reset_drives();
         }
-        rprintln!("LBA48 support: {}", self.properties.clone().unwrap().supports_lba48());
+        let properties = unsafe {Self::identify()};
+        rprintln!("DiskIO: ATA PIO found");
+        rprintln!("DiskIO: ATA PIO LBA48 support: {}", properties.clone().supports_lba48());
+
+        Some(box AtaPio {properties})
     }
 
     #[inline]
-    unsafe fn send_command(&self, cmd: u8) {
+    unsafe fn send_command(cmd: u8) {
         let mut cmd_port = UnsafePort::<u8>::new(PORT_COMMAND);
         cmd_port.write(cmd);
     }
 
     #[inline]
-    unsafe fn read_status(&self) -> u8 {
+    unsafe fn read_status() -> u8 {
         let mut status_port = UnsafePort::<u8>::new(PORT_COMMAND);
         status_port.read()
     }
 
-    unsafe fn reset_drives(&self) {
+    unsafe fn reset_drives() {
         // https://wiki.osdev.org/ATA_PIO_Mode#Resetting_a_drive_.2F_Software_Reset
 
         // TODO: currently using (primary bus, master drive) only
@@ -82,14 +83,14 @@ impl AtaPio {
         }
     }
 
-    unsafe fn select_drive(&self) {
+    unsafe fn select_drive() {
         // https://wiki.osdev.org/ATA_PIO_Mode#400ns_delays
 
-        self.reset_drives(); // HACK: selects master drive
+        Self::reset_drives(); // HACK: selects master drive
     }
 
-    unsafe fn check_floating_bus(&self) {
-        let data: u8 = self.read_status();
+    unsafe fn check_floating_bus() {
+        let data: u8 = Self::read_status();
         if data == 0xFF {
             panic!("No ATA drives attached.");
         }
@@ -98,19 +99,20 @@ impl AtaPio {
 
     /// Polls ATA controller to see if the drive is ready
     #[inline]
-    unsafe fn is_ready(&self) -> bool {
+    unsafe fn is_ready() -> bool {
         for _ in 0..4 {
-            let _ = self.read_status();
+            let _ = Self::read_status();
         }
-        let data: u8 = self.read_status();
+        let data: u8 = Self::read_status();
         (data & 0xc0) == 0x40 // BSY clear, RDY set?
     }
 
-    unsafe fn wait_ready(&self) {
-        while !self.is_ready() {}
+    /// Polls ATA controller to until the drive is ready
+    unsafe fn wait_ready() {
+        while !Self::is_ready() {}
     }
 
-    unsafe fn identify(&self) -> DriveProperties {
+    unsafe fn identify() -> DriveProperties {
         // https://wiki.osdev.org/ATA_PIO_Mode#IDENTIFY_command
 
         // Clear LBA_N ports
@@ -120,14 +122,14 @@ impl AtaPio {
         let mut port_lba3 = UnsafePort::<u8>::new(PORT_LBA3); port_lba3.write(0);
 
         // Send IDENTIFY command
-        self.send_command(0xEC);
+        Self::send_command(0xEC);
 
         use time::sleep_ms;
         sleep_ms(1);
 
         let mut first_cleared = true;
         loop {
-            let data: u8 = self.read_status();
+            let data: u8 = Self::read_status();
 
             if data == 0 {
                 panic!("ATA_PIO: Drive does not exist");
@@ -186,7 +188,7 @@ impl AtaPio {
         }
     }
 
-    pub unsafe fn read(&self, lba: u32, sectors: u8) -> Vec<u8> {
+    pub unsafe fn read_lba(&self, lba: u32, sectors: u8) -> Vec<u8> {
         // https://wiki.osdev.org/ATA_read/write_sectors#Read_in_LBA_mode
 
         assert!(sectors > 0);
@@ -215,9 +217,9 @@ impl AtaPio {
         port.write(((lba & 0xFF0000) >> 0x10) as u8);
 
         // Send command
-        self.send_command(0x20); // Read with retry
+        Self::send_command(0x20); // Read with retry
 
-        self.wait_ready();
+        Self::wait_ready();
 
         let mut data_port = UnsafePort::<u16>::new(PORT_DATA);
         let u16_per_sector = SECTOR_SIZE / 2;
@@ -235,9 +237,26 @@ impl AtaPio {
     }
 }
 
-// Create static pointer mutex with spinlock to make ATA_PIO thread-safe
-pub static ATA_PIO: Mutex<AtaPio> = Mutex::new(AtaPio::new());
+impl BlockDevice for AtaPio {
+    fn init(&mut self) -> bool {
+        rprintln!("DiskIO: ATA PIO initialized");
+        true
+    }
 
-pub fn init() {
-    ATA_PIO.lock().init();
+    /// Capacity in bytes
+    fn capacity_bytes(&mut self) -> u64 {
+        self.properties.sector_count(   ) * 0x200
+    }
+
+    fn read(&mut self, sector: u64) -> Vec<u8> {
+        assert!(sector < self.properties.sector_count());
+
+        unsafe {
+            self.read_lba(sector as u32, 1)
+        }
+    }
+
+    fn write(&mut self, sector: u64, data: Vec<u8>) {
+        unimplemented!("ATA PIO writing is not implemented");
+    }
 }

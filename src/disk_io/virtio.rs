@@ -32,7 +32,7 @@ bitflags! {
 #[derive(Copy, Clone)]
 #[repr(C)]
 struct BlockRequest {
-    type_: u32, // 0: read, 1: write
+    type_: u32, // 0: read, 1: write, 5: flush
     ioprio: u32, // IO priority, unused in 1.0 spec
     sector: u64, // sector number
     data: [u8; 0x200],

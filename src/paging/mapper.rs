@@ -35,12 +35,13 @@ impl Mapper {
 
     pub fn map<A>(&mut self, page: Page, flags: EntryFlags, allocator: &mut A) where A: FrameAllocator {
         let frame = allocator.allocate_frame().expect("out of memory");
-        // rprintln!("!? {:#x} {:#x}", frame.start_address() as u64, page.index);
+        // rprintln!("!m {:#x} {:#x}", frame.start_address() as u64, page.index);
         self.map_to(page, frame, flags, allocator);
     }
 
     pub fn identity_map<A>(&mut self, frame: Frame, flags: EntryFlags, allocator: &mut A) where A: FrameAllocator {
         let page = Page::containing_address(frame.start_address());
+        // rprintln!("!i {:#x} {:#x}", frame.start_address() as u64, page.index);
         self.map_to(page, frame, flags, allocator);
     }
 

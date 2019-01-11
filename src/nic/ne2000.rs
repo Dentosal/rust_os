@@ -32,8 +32,7 @@ impl Ne2000 {
     pub fn try_new() -> Option<Box<NIC>> {
         let pci_device = Ne2000::find_pci_device()?;
 
-        let bars = unsafe {pci_device.get_bars()};
-        let io_base = (bars[0] & !0x3) as u16;
+        let io_base = (unsafe {pci_device.get_bar(0)} & !0x3) as u16;
 
         Some(box Ne2000 {
             pci_device,

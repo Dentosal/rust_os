@@ -74,16 +74,16 @@ impl NIC for VirtioNet {
 
         // Feature negotiation
         let mut feature_bits = self.device.features();
-        feature_bits |= !(1 <<  5); // Require MAC address
-        feature_bits |= !(1 << 17); // Require status field
-        feature_bits &= !(1 << 17); // Disable control queue
-        feature_bits |= !(1 <<  0); // Enable checksums
-        // Disable (sometimes buggy) tcp/udp packet size
-        feature_bits &= !(1 <<  7);
-        feature_bits &= !(1 <<  8);
-        feature_bits &= !(1 << 10);
-        feature_bits &= !(1 << 15);
-        feature_bits &= !(1 << 29);
+        // feature_bits |= !(1 <<  5); // Require MAC address
+        // feature_bits |= !(1 << 17); // Require status field
+        // feature_bits &= !(1 << 17); // Disable control queue
+        // feature_bits |= !(1 <<  0); // Enable checksums
+        // // Disable (sometimes buggy) tcp/udp packet size
+        // feature_bits &= !(1 <<  7);
+        // feature_bits &= !(1 <<  8);
+        // feature_bits &= !(1 << 10);
+        // feature_bits &= !(1 << 15);
+        // feature_bits &= !(1 << 29);
 
         if !self.device.set_features(feature_bits) {
             return false;

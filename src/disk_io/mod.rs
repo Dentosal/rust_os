@@ -74,10 +74,9 @@ impl DiskController {
 
     pub fn read(&mut self, sector: u64, count: u64) -> Vec<Vec<u8>> {
         if let Some(ref mut driver) = self.driver {
-            rprintln!("DiskIO: Read from {} to {}", sector, sector + count);
+            rprintln!("DiskIO: Read sectors {}..{}", sector, sector + count);
             (0..count).map(|offset| driver.read(sector + offset)).collect()
         } else {
-            loop {}
             panic!("DiskIO: No driver available");
         }
     }

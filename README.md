@@ -20,8 +20,11 @@ Feature development is done in separate branches. Rebase workflow is used to com
 * Physical memory manager
 * Paging
 * Interrupts
-* Keyboard input
-* Disk reading (ATA PIO)
+* Time handling
+* Keyboard input (Disabled at the moment)
+* Disk IO:
+    * ATA PIO (Read only)
+    * VirtIO-blk (Read only)
 * Simple RamFS
 
 ## Planned in near future:

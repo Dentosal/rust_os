@@ -1,53 +1,62 @@
 // VirtIO block device driver
 // https://wiki.osdev.org/Virtio
 
-use crate::virtio;
 
+use volatile;
 use core::mem;
 use core::ptr;
-use alloc::boxed::Box;
-use alloc::vec::Vec;
+use alloc::prelude::*;
 
 use mem_map::MEM_PAGE_SIZE_BYTES;
 
+use crate::virtio;
+
 use super::BlockDevice;
 
-const QUEUE_RX: u16 = 0;
-const QUEUE_TX: u16 = 1;
-
 bitflags! {
+    /// http://docs.oasis-open.org/virtio/virtio/v1.0/cs04/virtio-v1.0-cs04.html#x1-2050003
     struct Features: u32 {
-        const REQUEST_BARRIERS    = 1 << 0;
+        const LEGACY_BARRIER      = 1 << 0;
         const SIZE_MAX            = 1 << 1;
         const SEG_MAX             = 1 << 2;
         const GEOMETRY            = 1 << 4;
-        const READ_ONLY_LOCK      = 1 << 5;
+        const READ_ONLY           = 1 << 5;
         const BLOCK_SIZE          = 1 << 6;
-        const SCSI_COMMANDS       = 1 << 7;
+        const LEAGCY_SCSI         = 1 << 9;
         const CACHE_FLUSH         = 1 << 9;
+        const TOPOLOGY            = 1 << 10;
+        const CONFIG_WCE          = 1 << 11;
     }
 }
 
-
-pub struct BlockRequest {
-    type_: u8, // 0: read, 1: write
-    unused: u8, // unused in 1.0 spec
-    sector: u64,
+#[derive(Copy, Clone)]
+#[repr(C)]
+struct BlockRequest {
+    type_: u32, // 0: read, 1: write
+    ioprio: u32, // IO priority, unused in 1.0 spec
+    sector: u64, // sector number
+    data: [u8; 0x200],
+    status: u8, // 0: ok, 1: error, 2: unsupported
 }
 impl BlockRequest {
+    pub const HEADER_SIZE: usize = 16;
+    pub const CONTENT_SIZE: usize = 0x200;
+    pub const FOOTER_SIZE: usize = 1;
+
     pub fn new_read(sector: u64) -> BlockRequest {
         BlockRequest {
             type_: 0,
-            unused: 0,
-            sector
+            ioprio: 0,
+            sector,
+            data: [0; 0x200],
+            status: 0xff,
         }
     }
     pub fn new_write(sector: u64) -> BlockRequest {
-        BlockRequest {
-            type_: 1,
-            unused: 0,
-            sector
-        }
+        BlockRequest {type_: 1, ..Self::new_read(sector)}
+    }
+    pub fn new_flush() -> BlockRequest {
+        BlockRequest {type_: 4, ..Self::new_read(0)}
     }
 }
 
@@ -59,7 +68,7 @@ impl VirtioBlock {
     pub fn try_new() -> Option<Box<BlockDevice>> {
         if let Some(mut device) = virtio::VirtioDevice::try_new(virtio::DeviceType::BlockDevice) {
             // Update device state
-            device.write::<u8>(0x12, virtio::DeviceStatus::ACKNOWLEDGE.bits());
+            device.set_status(virtio::DeviceStatus::ACKNOWLEDGE);
 
             Some(box VirtioBlock {
                 device,
@@ -74,13 +83,12 @@ impl VirtioBlock {
 impl BlockDevice for VirtioBlock {
     fn init(&mut self) -> bool {
         // Tell the device that it's supported by this driver
-        self.device.write::<u8>(0x12, virtio::DeviceStatus::STATE_LOADED.bits());
-
+        self.device.set_status(virtio::DeviceStatus::STATE_LOADED);
 
         // Feature negotiation
         let mut feature_bits = self.device.features();
-        // feature_bits &= !Features::READ_ONLY_LOCK; // Turn off read-only safety lock
-        feature_bits &= !Features::BLOCK_SIZE.bits(); // Disable block size detection
+        // TODO: Accept Read-Only device, and mark this as read-only
+        // feature_bits ??? Features::READ_ONLY;
 
         if !self.device.set_features(feature_bits) {
             return false;
@@ -88,9 +96,10 @@ impl BlockDevice for VirtioBlock {
 
         // Memory queues
         self.queues = self.device.init_queues();
+        assert_eq!(self.queues.len(), 1);
 
         // Update device state
-        self.device.write::<u8>(0x12, virtio::DeviceStatus::STATE_READY.bits());
+        self.device.set_status(virtio::DeviceStatus::STATE_READY);
 
         rprintln!("VirtIO-blk: Device ready");
 
@@ -99,90 +108,63 @@ impl BlockDevice for VirtioBlock {
     }
 
     fn capacity_bytes(&mut self) -> u64 {
-        let lo = self.device.read::<u32>(0x14);
-        let hi = self.device.read::<u32>(0x18);
-        (((hi as u64) << 32u64) | (lo as u64)) * 0x200
+        self.device.read_dev_config::<u64>(0x00) * 0x200
     }
 
     fn read(&mut self, sector: u64) -> Vec<u8> {
-        Vec::new()
+        let req = volatile::ReadOnly::new(BlockRequest::new_read(sector));
+
+        let mut queue = &mut self.queues[0];
+        let buf_indices = queue.find_free_n(2).expect("VirtIO-blk: Not enough queue slots free");
+
+        // Set buffer descriptor
+        let mut desc0 = virtio::VirtQueueDesc::new_read(
+            (&req) as *const _ as u64,
+            BlockRequest::HEADER_SIZE as u32
+        );
+        let desc1 = virtio::VirtQueueDesc::new_write(
+            (&req) as *const _ as u64 + BlockRequest::HEADER_SIZE as u64,
+            BlockRequest::CONTENT_SIZE as u32 + BlockRequest::FOOTER_SIZE as u32
+        );
+
+        desc0.chain(buf_indices[1]);
+
+        queue.set_desc_at(buf_indices[0], desc0);
+        queue.set_desc_at(buf_indices[1], desc1);
+
+        // Add it in the available ring
+        let mut ah = queue.available_header();
+        let index = ah.index % queue.queue_size;
+        queue.set_available_item(index, buf_indices[0]);
+        ah.index = ah.index.wrapping_add(1);
+        queue.set_available_header(ah);
+
+        // Notify the device about the change
+        self.device.notify(0);
+
+        rprintln!("VirtIO-blk: Read: Poll");
+
+        // Poll status byte
+        let data = loop {
+            let req_done = req.read();
+            match req_done.status {
+                0xff => {},
+                0 => break req_done.data,
+                1 => panic!("VirtIO read failed (1 - IOERR)"),
+                2 => panic!("VirtIO read failed (2 - UNSUPP)"),
+                n => panic!("VirtIO read failed ({} - ?)", n),
+            }
+
+            use time::sleep_ms;
+            sleep_ms(1);
+        };
+
+        rprintln!("VirtIO-blk: Read: Ok");
+
+        data.to_vec()
     }
 
-    fn write(&mut self, sector: u64, data: Vec<u8>) {
-        // assert!(packet.len() <= 0xffff);
 
 
-        // self.device.select_queue(QUEUE_TX);
-        // let mut tx_queue = &mut self.queues[QUEUE_TX as usize];
-
-        // use crate::HEAP_ALLOCATOR;
-        // use core::alloc::{GlobalAlloc, Layout};
-
-        // let length = packet.len() + mem::size_of::<NetHeader>();
-        // let layout = Layout::from_size_align(
-        //     length,
-        //     MEM_PAGE_SIZE_BYTES // page aligned
-        // ).unwrap();
-
-        // let buffer: *mut u8 = unsafe { HEAP_ALLOCATOR.alloc(layout) } as *mut u8;
-
-        // let header = NetHeader::new(packet.len() as u16);
-
-        // unsafe {
-        //     ptr::write_volatile(buffer as *mut NetHeader, header);
-        //     for i in 0..packet.len() {
-        //         ptr::write_volatile(
-        //             buffer.offset(mem::size_of::<NetHeader>() as isize + i as isize),
-        //             packet[i]
-        //         );
-        //     }
-        // }
-
-
-        // unsafe {
-        //     for i in 0..(mem::size_of::<NetHeader>()) {
-        //         rprint!("{:02x} ", ptr::read_volatile(
-        //             buffer.offset(i as isize)
-        //         ));
-        //     }
-        // rprintln!("\nHeader over");
-        //     for i in 0..packet.len() {
-        //         rprint!("{:02x} ", ptr::read_volatile(
-        //             buffer.offset(mem::size_of::<NetHeader>() as isize + i as isize)
-        //         ));
-        //     }
-        // }
-        // rprintln!("\nPacket over");
-
-        // unsafe {
-        //     assert!(ptr::read_volatile(buffer) == 0);
-        //     assert!(ptr::read_volatile(buffer.offset(mem::size_of::<NetHeader>() as isize)) == packet[0]);
-        //     assert!(ptr::read_volatile(buffer.offset((mem::size_of::<NetHeader>() + packet.len() - 1) as isize)) == packet[packet.len()-1]);
-        // }
-
-
-        // let buf_index = tx_queue.find_free().expect("No tx queue slots free");
-
-        // // Set buffer descriptor
-        // let desc = virtio::VirtQueueDesc::new_read(buffer as u64, length as u32);
-        // tx_queue.set_desc_at(buf_index, desc);
-
-        // // Add it in the available ring
-        // let mut ah = tx_queue.available_header();
-        // let index = ah.index % tx_queue.queue_size;
-        // tx_queue.set_available_ring(index, buf_index);
-        // ah.index += 1;
-        // tx_queue.set_available_header(ah);
-
-        // use time::sleep_ms;
-        // sleep_ms(10);
-
-
-        // // Notify the device about the change
-        // self.device.queue_notify(QUEUE_TX);
-        // rprintln!("VirtIO-blk: TX Queue notify");
-
-        // unsafe { HEAP_ALLOCATOR.dealloc(buffer as *mut u8, layout) };
-    }
-
+    fn write(&mut self, sector: u64, data: Vec<u8>) {}
 }

@@ -89,6 +89,12 @@ macro_rules! bochs_magic_bp {
     });
 }
 
+macro_rules! sizeof {
+    ($t:ty) => ({
+        ::core::mem::size_of::<$t>()
+    });
+}
+
 pub fn io_wait() {
     unsafe {
         let mut io_wait_port: Port<u8> = Port::new(0x80);

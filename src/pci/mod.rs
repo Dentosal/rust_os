@@ -7,6 +7,11 @@ use spin::Mutex;
 const CONFIG_ADDR: usize = 0xCF8;
 const CONFIG_DATA: usize = 0xCFC;
 
+struct CapabilityHeader {
+
+}
+
+/// Bus, device, function
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DeviceLocation(pub u8, pub u8, pub u8);
 
@@ -38,21 +43,51 @@ impl Device {
         util::pci_write_device(self.location, offset, value)
     }
 
+    pub unsafe fn read_u16(&self, offset: u8) -> u16 {
+        assert!(offset & 1 == 0, "Must align at u16 boundary");
+        let data = util::pci_read_device(self.location, offset & !0b11);
+        ((data >> (offset as u32 & 0b1)) & 0xffff) as u16
+    }
+
+    pub unsafe fn read_u8(&self, offset: u8) -> u8 {
+        let data = util::pci_read_device(self.location, offset & !0b11);
+        ((data >> (8 * (offset as u32 & 0b11))) & 0xff) as u8
+    }
+
+
+    pub fn status(&self) -> u16 {
+        (unsafe { self.read(0x04) } >> 16) as u16
+    }
+
+    /// Read the linked list of capabilities, filter by type
+    /// http://docs.oasis-open.org/virtio/virtio/v1.0/cs04/virtio-v1.0-cs04.html#x1-740004
+    pub fn read_capabilities<T>(&self, cap_type: u8, f: &Fn(&Self, u8) -> T) -> Vec<T> {
+        assert!((self.status() & (1 << 4)) != 0, "Capabilities not availble");
+        let mut cap_addr = (unsafe { self.read(0x34) } & 0b1111_1100) as u8;
+
+        let mut result = Vec::new();
+        while cap_addr != 0 {
+            unsafe {
+                let item_type = self.read_u8(cap_addr);
+                let item_size = self.read_u8(cap_addr + 2);
+
+                if item_type == cap_type {
+                    result.push(f(&self, cap_addr));
+                }
+
+                cap_addr = self.read_u8(cap_addr + 1);
+            }
+        }
+        result
+    }
+
     pub fn subsystem_id(&self) -> u16 {
         (unsafe { self.read(0x2c) } >> 16) as u16
     }
 
-    pub fn get_bars(&self) -> [u32; 6] {
-        unsafe {
-            [
-                self.read(0x10),
-                self.read(0x14),
-                self.read(0x18),
-                self.read(0x1C),
-                self.read(0x20),
-                self.read(0x24)
-            ]
-        }
+    pub fn get_bar(&self, i: u8) -> u32 {
+        assert!(i < 6);
+        unsafe { self.read(0x10 + 4 * i) }
     }
 
     // http://wiki.osdev.org/RTL8139#PCI_Bus_Mastering

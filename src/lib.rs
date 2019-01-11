@@ -13,7 +13,6 @@
 #![allow(unused_mut)]
 #![allow(unused_unsafe)]
 #![allow(unreachable_code)]
-#![allow(non_camel_case_types)]
 
 // Safety
 #![deny(overflowing_literals)]
@@ -23,18 +22,23 @@
 
 #![feature(lang_items)]
 #![feature(core_intrinsics)]
+#![feature(panic_info_message)]
 #![feature(asm)]
 #![feature(ptr_internals)]
 #![feature(const_fn)]
 #![feature(const_vec_new)]
 #![feature(naked_functions)]
 #![feature(box_syntax, box_patterns)]
+#![feature(box_into_raw_non_null)]
 #![feature(stmt_expr_attributes)]
 #![feature(alloc)]
 #![feature(allocator_api)]
 
 use core::alloc::Layout;
 use core::panic::PanicInfo;
+
+
+
 
 extern crate volatile;
 extern crate rlibc;
@@ -44,6 +48,8 @@ extern crate cpuio;
 #[macro_use]
 extern crate bitflags;
 extern crate bit_field;
+#[macro_use]
+extern crate static_assertions;
 
 extern crate d7alloc;
 extern crate d7ramfs;
@@ -70,7 +76,7 @@ mod pci;
 mod virtio;
 mod disk_io;
 // mod ide;
-mod nic;
+// mod nic;
 
 // Software:
 mod elf_parser;
@@ -93,10 +99,10 @@ pub extern fn rust_main() {
     // apic::init();
 
     // Memory allocation
-    let mut mem_ctrl = memory::init();
+    memory::init();
 
     // Interrupt system
-    interrupt::init(&mut mem_ctrl);
+    interrupt::init();
 
     // PIT
     pit::init();
@@ -105,10 +111,10 @@ pub extern fn rust_main() {
     cpuid::init();
 
     // Filesystem
-    filesystem::init();
+    // filesystem::init();
 
     // Keyboard
-    keyboard::init();
+    // keyboard::init();
 
     // PCI
     pci::init();
@@ -117,7 +123,7 @@ pub extern fn rust_main() {
     disk_io::init();
 
     // NIC
-    nic::init();
+    // nic::init();
 
     // rreset!();
     rprintln!("Kernel initialized.\n");
@@ -192,12 +198,15 @@ extern "C" fn panic(info: &PanicInfo) -> ! {
         panic_indicator!(0x4f214f21); // !!
 
         if let Some(location) = info.location() {
-            rprintln!("Kernel Panic: file: '{}', line: {}", location.file(), location.line());
+            rprintln!("\nKernel Panic: file: '{}', line: {}", location.file(), location.line());
         } else {
-            rprintln!("Kernel Panic: location unavailable");
+            rprintln!("\nKernel Panic: Location unavailable");
         }
-        loop {}
-        rprintln!("  {:?}", info.payload().downcast_ref::<&str>().unwrap());
+        if let Some(msg) = info.message() {
+            rprintln!("  {:?}", msg);
+        } else {
+            rprintln!("  Info unavailable");
+        }
         asm!("jmp panic"::::"intel","volatile");
     }
     loop {}

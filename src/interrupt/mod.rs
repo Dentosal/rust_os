@@ -19,7 +19,7 @@ mod macros;
 mod gdt;
 pub mod idt;
 
-use memory::MemoryController;
+use memory::{self, MemoryController};
 
 #[repr(C,packed)]
 struct ExceptionStackFrame {
@@ -214,11 +214,13 @@ impl HandlerInfo {
 static TSS: Once<TaskStateSegment> = Once::new();
 static GDT: Once<gdt::Gdt> = Once::new();
 
-pub fn init(memory_controller: &mut MemoryController) {
+pub fn init() {
     let mut handlers: [Option<HandlerInfo>; idt::ENTRY_COUNT] = [None; idt::ENTRY_COUNT];
 
     // Initialize TSS
-    let double_fault_stack = memory_controller.alloc_stack(1).expect("could not allocate double fault stack");
+    let double_fault_stack = memory::configure(|mem_ctrl: &mut MemoryController| {
+        mem_ctrl.alloc_stack(1).expect("could not allocate double fault stack")
+    });
 
     let mut code_selector   = SegmentSelector::new(0, PrivilegeLevel::Ring0);
     let mut tss_selector    = SegmentSelector::new(1, PrivilegeLevel::Ring0);

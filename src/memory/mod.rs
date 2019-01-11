@@ -1,3 +1,5 @@
+use spin::Mutex;
+
 pub mod dma_allocator;
 mod stack_allocator;
 
@@ -12,8 +14,8 @@ use d7alloc::{HEAP_START, HEAP_SIZE};
 pub use self::stack_allocator::Stack;
 
 pub struct MemoryController {
-    active_table: paging::ActivePageTable,
-    frame_allocator: mem_map::BitmapAllocator,
+    pub active_table: paging::ActivePageTable,
+    pub frame_allocator: mem_map::BitmapAllocator,
     stack_allocator: stack_allocator::StackAllocator,
 }
 
@@ -28,7 +30,7 @@ impl MemoryController {
     }
 }
 
-pub fn init() -> MemoryController {
+pub fn init() {
     // receive raw kernel elf image data before we allow overwriting it
     let elf_metadata = unsafe {elf_parser::parse_kernel_elf()};
 
@@ -57,9 +59,24 @@ pub fn init() -> MemoryController {
         stack_allocator::StackAllocator::new(stack_alloc_range)
     };
 
-    MemoryController {
+    let mem_ctrl = MemoryController {
         active_table: active_table,
         frame_allocator: frame_allocator,
         stack_allocator: stack_allocator
+    };
+
+    let mut guard = MEM_CTRL_CONTAINER.lock();
+    *guard = Some(mem_ctrl);
+}
+
+/// Static memory controller
+static MEM_CTRL_CONTAINER: Mutex<Option<MemoryController>> = Mutex::new(None);
+
+pub fn configure<F, T>(mut f: F) -> T where F: FnMut(&mut MemoryController) -> T {
+    let mut guard = MEM_CTRL_CONTAINER.lock();
+    if let Some(ref mut mem_ctrl) = *guard {
+        f(mem_ctrl)
+    } else {
+        unreachable!();
     }
 }

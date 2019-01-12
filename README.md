@@ -26,6 +26,7 @@ Feature development is done in separate branches. Rebase workflow is used to com
     * ATA PIO (Read only)
     * VirtIO-blk (Read only)
 * Simple RamFS
+* Simple StaticFS
 
 ## Planned in near future:
 * A shell (with virtual TTYs!)

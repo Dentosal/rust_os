@@ -9,7 +9,8 @@ Begin | Size  | Content
     0 |   200 | Stage 0 (Master boot record) / `boot_stage0`
   200 |   200 | Stage 1 / `boot_stage1`
   400 |   200 | Stage 2 / `boot_stage2`
-  600 |     ? | Kernel (and file system?)
+  600 |     ? | Kernel
+    ? |     ? | Filesystem
 
 
 Kernel Memory Layout

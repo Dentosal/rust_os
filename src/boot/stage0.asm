@@ -302,6 +302,7 @@ gdt_unreal:
 .flatdesc:  db 0xff, 0xff, 0, 0, 0, 10010010b, 11001111b, 0
 .end:
 
-times (0x200 - 0x2) - ($ - $$) db 0
-db 0x55
-db 0xaa
+
+times (0x200 - 0x6) - ($ - $$) db 0
+dd 0xd7cafed7 ; D7StaticFS pointer placeholder
+dw 0xaa55 ; Boot signature

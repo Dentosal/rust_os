@@ -52,6 +52,7 @@ extern crate bit_field;
 extern crate static_assertions;
 
 extern crate d7alloc;
+extern crate d7staticfs;
 extern crate d7ramfs;
 
 #[macro_use]
@@ -75,6 +76,7 @@ mod memory;
 mod pci;
 mod virtio;
 mod disk_io;
+mod staticfs;
 // mod ide;
 // mod nic;
 
@@ -127,6 +129,25 @@ pub extern fn rust_main() {
 
     // rreset!();
     rprintln!("Kernel initialized.\n");
+
+    // Load modules
+    if let Some(bytes) = staticfs::read_file("README.md") {
+        let mut lines = 3;
+        for b in bytes {
+            if b == 0x0a {
+                lines -= 1;
+                if lines == 0 {
+                    break;
+                }
+            }
+            if (0x20 <= b && b <= 0x7f)  || b == 0x0a {
+                rprint!("{}", b as char);
+            }
+        }
+    } else {
+        rprintln!("File not found");
+    }
+
 
     // use multitasking::PROCMAN;
     //

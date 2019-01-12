@@ -38,13 +38,16 @@ do
     nasm -f elf64 "$fpath" -o "build/asm_routines/$base.o"
 done
 
+echo "* D7_StaticFS cli tools"
+( cd libs/d7staticfs/ && cargo build --release )
+
 echo "Linking objects..."
 
 # link (use --print-gc-sections to debug)
-# ld -z max-page-size=0x1000  -T buildsystem/linker.ld -o build/kernel.bin build/entry.o target/$TARGET/release/librust_os.a build/asm_routines/*.o
-# ld -z max-page-size=0x1000 --unresolved-symbols=ignore-all -T buildsystem/linker.ld -o build/kernel.bin build/entry.o target/$TARGET/release/librust_os.a build/asm_routines/*.o
-# ld -z max-page-size=0x1000 --gc-sections --print-gc-sections  -T buildsystem/linker.ld -o build/kernel.bin build/entry.o target/$TARGET/release/librust_os.a build/asm_routines/*.o
-ld -z max-page-size=0x1000 --gc-sections -T buildsystem/linker.ld -o build/kernel.bin build/entry.o target/$TARGET/release/librust_os.a build/asm_routines/*.o
+# ld -z max-page-size=0x1000  -T build_config/linker.ld -o build/kernel.bin build/entry.o target/$TARGET/release/librust_os.a build/asm_routines/*.o
+# ld -z max-page-size=0x1000 --unresolved-symbols=ignore-all -T build_config/linker.ld -o build/kernel.bin build/entry.o target/$TARGET/release/librust_os.a build/asm_routines/*.o
+# ld -z max-page-size=0x1000 --gc-sections --print-gc-sections  -T build_config/linker.ld -o build/kernel.bin build/entry.o target/$TARGET/release/librust_os.a build/asm_routines/*.o
+ld -z max-page-size=0x1000 --gc-sections -T build_config/linker.ld -o build/kernel.bin build/entry.o target/$TARGET/release/librust_os.a build/asm_routines/*.o
 cp build/kernel.bin build/kernel_unstripped.bin
 strip build/kernel.bin
 
@@ -54,7 +57,7 @@ echo "Cheking boundries..."
 imgsize=$(wc -c build/kernel.bin | xargs -n 1 2>/dev/null | head -n 1)
 echo "imgsize: $imgsize"
 maxsize=400 # size in blocks
-toobig=$(python3 -c "print(int($imgsize//512>$maxsize))")
+toobig=$(python3 -c "print(int($imgsize//0x200>$maxsize))")
 
 if [ $toobig -eq 1 ]
 then
@@ -77,6 +80,9 @@ dd "if=build/stage2.bin" "of=build/disk.img" "bs=512" "seek=2" "count=1" "conv=n
 
 echo "* copy kernel"
 dd "if=build/kernel.bin" "of=build/disk.img" "bs=512" "seek=3" "conv=notrunc"
+
+echo "* write filesystem"
+./libs/d7staticfs/target/release/mkimg build/disk.img $(($imgsize/0x200+4)) $(< build_config/staticfs_files.txt)
 
 echo "Saving objdump..."
 objdump -CShdr -M intel build/kernel_unstripped.bin > objdump.txt

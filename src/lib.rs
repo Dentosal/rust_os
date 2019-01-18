@@ -17,6 +17,7 @@
 // Safety
 #![deny(overflowing_literals)]
 #![deny(safe_packed_borrows)]
+#![deny(unused_must_use)]
 
 #![no_std]
 
@@ -36,8 +37,6 @@
 
 use core::alloc::Layout;
 use core::panic::PanicInfo;
-
-
 
 
 extern crate volatile;

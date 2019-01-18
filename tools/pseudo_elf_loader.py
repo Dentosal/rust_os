@@ -44,8 +44,8 @@ def main(fn, mreq):
 
     for index in range(pht_len):
         print("Header #{}:".format(index+1))
-        segement_type = img[ptr]
-        if segement_type == 1:
+        segment_type = img[ptr]
+        if segment_type == 1:
             print("  This is a LOAD segment")
 
             flags    = b2i(img[(ptr+4):(ptr+4)+4])

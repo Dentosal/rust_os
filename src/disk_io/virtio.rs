@@ -142,8 +142,6 @@ impl BlockDevice for VirtioBlock {
         // Notify the device about the change
         self.device.notify(0);
 
-        rprintln!("VirtIO-blk: Read: Poll");
-
         // Poll status byte
         let data = loop {
             let req_done = req.read();
@@ -158,8 +156,6 @@ impl BlockDevice for VirtioBlock {
             use time::sleep_ms;
             sleep_ms(1);
         };
-
-        rprintln!("VirtIO-blk: Read: Ok");
 
         data.to_vec()
     }

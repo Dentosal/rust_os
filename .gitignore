@@ -23,9 +23,15 @@ dump*.txt
 objdump.txt
 readelf.txt
 
+# Log files
+*.log
+
 # Python scripting stuff
 __pycache__/
 *.pyc
+
+# Editors
+.vscode/
 
 # Misc
 .DS_Store

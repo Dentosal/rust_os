@@ -90,8 +90,8 @@ then
                 # $qemucmd -d guest_errors -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide -nic user,model=virtio -monitor stdio
                 # $qemucmd -d guest_errors -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide -nic user,model=virtio,id=u1 -monitor stdio -object filter-dump,id=f1,netdev=u1,file=dump.dat
                 # $qemucmd -d guest_errors -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide -nic user,model=virtio,id=u1 -monitor stdio -object filter-dump,id=f1,netdev=u1,file=dump.dat
-                $qemucmd -d guest_errors -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=virtio -monitor stdio
-                # $qemucmd -d int,in_asm,guest_errors -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio
+                # $qemucmd -d guest_errors -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=virtio -monitor stdio
+                $qemucmd -d int,in_asm,guest_errors -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio
             else
                 # $qemucmd -d int -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio
                 # $qemucmd -d int,guest_errors -m 4096 -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio

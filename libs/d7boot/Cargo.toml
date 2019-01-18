@@ -1,0 +1,14 @@
+[package]
+name = "d7boot"
+version = "0.1.0"
+authors = ["Hannes Karppila <hannes.karppila@gmail.com>"]
+publish = false
+
+[lib]
+crate-type = ["staticlib"]
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"

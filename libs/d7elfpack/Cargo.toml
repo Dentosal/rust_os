@@ -1,0 +1,15 @@
+[package]
+name = "d7elfpack"
+version = "0.1.0"
+authors = ["Hannes Karppila <hannes.karppila@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+num-traits = "0.2"
+bit-vec = "0.5.0"
+rayon = "1.0"
+
+# huffman-compress = "0.5.0"
+
+[dependencies.huffman-compress]
+git = "https://github.com/Dentosal/rust-huffman-compress.git"

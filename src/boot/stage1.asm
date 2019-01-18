@@ -21,6 +21,15 @@ stage1:
     ; SCREEN: top left: "00"
     mov dword [0xb8000], 0x2f302f30
 
+    ; SCREEN: clear screen
+    mov ecx, (25 * 80 * 2) ; / 4
+.clear_screen_lp:
+    mov eax,  ecx
+    shl eax, 2 ; multiply by 4
+    add eax, 0xb8000
+    mov dword [eax], 0x00200020
+    loop .clear_screen_lp
+
     call check_long_mode
     call set_up_SSE
 

@@ -1,18 +1,20 @@
 [package]
-name = "rust_os"
+name = "d7os"
 version = "0.1.0"
 authors = ["Hannes Karppila <hannes.karppila@gmail.com>"]
 publish = false
 
 [lib]
-crate-type = ["staticlib"]  # static and standalone
+# Two binaries:
+# staticlib: static + standalone, for deployment
+# rlib:      linkable, for linking drivers etc
+crate-type = ["staticlib", "rlib"]
 
 [profile.dev]
 panic = "abort"
 
 [profile.release]
 panic = "abort"
-# lto = true
 
 [dependencies]
 rlibc = "*"                     # raw libc

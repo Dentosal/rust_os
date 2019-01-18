@@ -2,7 +2,7 @@
 ; putting any concrete data here WILL cause everything (including bootloader)
 ; to break
 
-; These constants MUST match the ones in plan.md
+; These constants MUST match the ones in Plan.md
 ; If a constant defined here doesn't exists in that file, then it shpuld be fine too
 
 ; Kernel elf executable initial load point

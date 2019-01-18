@@ -25,6 +25,8 @@ Begin | Size  | Content
   1000|    100| IDTR (10 bytes used, and after that reserved)
   1100|    100| GDT (some used, and after that reserved)
   2000|   1000| Boot stage memory map from BIOS (some used, and after that reserved)
+  4000|   1000| Bootloader ELF decompression tables (0x400 used, and after that reserved)
+  8000|    400| Stage 2 bootloader (two sectors atm)
   A000|   4000| Disk load buffer
  10000|      ?| Kernel ELF image (Boot stage only) (size proabably around 0x40000)
  60000|   3000| Page tables (Boot stage only)

@@ -6,8 +6,8 @@
 ; disk sector size in bytes
 %define sector_size 512
 
-; number of stages, including this MBR (stage0)
-%define bootloader_stage_count 3
+; number of sectors, including this MBR (stage0)
+%define bootloader_sector_count 6
 
 ; locate stage1 at 0x7e00->
 %define stage1_loadpoint 0x7e00
@@ -98,7 +98,7 @@ boot:
     ; Stages 1 and 2
     mov dword [da_packet.lba_low],  1
     mov dword [da_packet.lba_high], 0
-    mov  word [da_packet.count],    2
+    mov  word [da_packet.count],    (bootloader_sector_count - 1)
     mov  word [da_packet.address],  stage1_loadpoint
     mov  word [da_packet.segment],  0
 
@@ -110,7 +110,7 @@ boot:
     jc print_error
 
     ; Load the kernel
-    mov ecx, bootloader_stage_count ; LBA
+    mov ecx, bootloader_sector_count ; LBA
 
 .load_loop:
 
@@ -130,9 +130,9 @@ boot:
         jc print_error
 
         ; Copy to correct position
-        ; loadpoint + (ecx - bootloader_stage_count) * sector_size
+        ; loadpoint + (ecx - bootloader_sector_count) * sector_size
         mov edi, ecx
-        sub edi, bootloader_stage_count
+        sub edi, bootloader_sector_count
         shl edi, 9 ; multiply by sector size (2**9 = 512 = 0x200)
         add edi, loadpoint
 
@@ -149,7 +149,7 @@ boot:
 
     ; Test if all loaded
     add ecx, sectors_per_operation
-    cmp ecx, (kernel_size_sectors - bootloader_stage_count)
+    cmp ecx, (kernel_size_sectors - bootloader_sector_count)
     jle .load_loop
 
     ; hide cursor by moving it out of the screen

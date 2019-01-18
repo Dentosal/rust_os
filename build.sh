@@ -1,23 +1,33 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 # set -x # turn on command printing
 
-# config
-TARGET="rust_os"
+# Config
+TARGET="d7os"
 
 # some constants
 PATH=$PATH:$HOME/.cargo/bin
+export RUST_BACKTRACE=1
 
-# prepare for build
+# Prepare for build
 mkdir -p build
 
 echo "Compiling source files..."
 
 echo "* bootloader"
-# compile bootloader
+# Compile bootloader
 nasm src/boot/stage0.asm -f bin -o build/stage0.bin
 nasm src/boot/stage1.asm -f bin -o build/stage1.bin
-nasm src/boot/stage2.asm -f bin -o build/stage2.bin
+# nasm src/boot/stage2.asm -f bin -o build/stage2.bin
+
+(
+    cd libs/d7boot/ &&
+    nasm -f elf64 src/entry.asm -o entry.o &&
+    RUSTFLAGS="-g -C opt-level=z" RUST_TARGET_PATH=$(pwd)  cargo xbuild --target ../../d7os.json --release &&
+    ld -z max-page-size=0x1000 --gc-sections -T linker.ld -o ../../build/stage2.bin entry.o target/d7os/release/libd7boot.a &&
+    wc -c ../../build/stage2.bin &&
+    python3 ../../tools/zeropad.py ../../build/stage2.bin 0x800
+)
 
 echo "* kernel entry point"
 # compile kernel entry point
@@ -25,9 +35,10 @@ nasm -f elf64 src/entry.asm -o build/entry.o
 
 echo "* kernel"
 
-# compile kernel (with full optimizations)
+# Compile kernel (with full optimizations)
 # RUST_TARGET_PATH=$(pwd) xargo build --target $TARGET --release
-RUSTFLAGS=-g RUST_TARGET_PATH=$(pwd) xargo rustc --target $TARGET --release -- -C opt-level=s
+# RUSTFLAGS=-g RUST_TARGET_PATH=$(pwd) xargo rustc --target $TARGET --release -- -C opt-level=s
+RUSTFLAGS="-g -C opt-level=s" RUST_TARGET_PATH=$(pwd) cargo xbuild --target $TARGET --release
 
 echo "* kernel assembly routines"
 mkdir -p build/asm_routines/
@@ -38,28 +49,30 @@ do
     nasm -f elf64 "$fpath" -o "build/asm_routines/$base.o"
 done
 
-echo "* D7_StaticFS cli tools"
+echo "* Rust cli tools"
 ( cd libs/d7staticfs/ && cargo build --release )
+( cd libs/d7elfpack/  && cargo build --release )
 
 echo "Linking objects..."
 
-# link (use --print-gc-sections to debug)
-# ld -z max-page-size=0x1000  -T build_config/linker.ld -o build/kernel.bin build/entry.o target/$TARGET/release/librust_os.a build/asm_routines/*.o
-# ld -z max-page-size=0x1000 --unresolved-symbols=ignore-all -T build_config/linker.ld -o build/kernel.bin build/entry.o target/$TARGET/release/librust_os.a build/asm_routines/*.o
-# ld -z max-page-size=0x1000 --gc-sections --print-gc-sections  -T build_config/linker.ld -o build/kernel.bin build/entry.o target/$TARGET/release/librust_os.a build/asm_routines/*.o
-ld -z max-page-size=0x1000 --gc-sections -T build_config/linker.ld -o build/kernel.bin build/entry.o target/$TARGET/release/librust_os.a build/asm_routines/*.o
-cp build/kernel.bin build/kernel_unstripped.bin
-strip build/kernel.bin
+# Link (use --print-gc-sections to debug)
+# ld -z max-page-size=0x1000  -T build_config/linker.ld -o build/kernel_orig.elf build/entry.o target/$TARGET/release/libd7os.a build/asm_routines/*.o
+# ld -z max-page-size=0x1000 --unresolved-symbols=ignore-all -T build_config/linker.ld -o build/kernel_orig.elf build/entry.o target/$TARGET/release/libd7os.a build/asm_routines/*.o
+# ld -z max-page-size=0x1000 --gc-sections --print-gc-sections  -T build_config/linker.ld -o build/kernel_orig.elf build/entry.o target/$TARGET/release/libd7os.a build/asm_routines/*.o
+ld -z max-page-size=0x1000 --gc-sections -T build_config/linker.ld -o build/kernel_orig.elf build/entry.o target/$TARGET/release/libd7os.a build/asm_routines/*.o
+cp build/kernel_orig.elf build/kernel_unstripped.elf
+strip build/kernel_orig.elf
+
+echo "Compressing kernel..."
+./libs/d7elfpack/target/release/d7elfpack build/kernel_orig.elf build/kernel.elf
 
 echo "Cheking boundries..."
 
-# image size check
-imgsize=$(wc -c build/kernel.bin | xargs -n 1 2>/dev/null | head -n 1)
+# Image size check
+imgsize=$(wc -c build/kernel.elf | xargs -n 1 | tail -n +1 | head -n 1) # https://superuser.com/a/642932/328647
 echo "imgsize: $imgsize"
 maxsize=400 # size in blocks
-toobig=$(python3 -c "print(int($imgsize//0x200>$maxsize))")
-
-if [ $toobig -eq 1 ]
+if [ $[ imgsize / 0x200 > 400] -eq 1 ]
 then
     echo "Kernel image seems to be too large."
     exit 1
@@ -69,26 +82,26 @@ echo "Creating disk image..."
 DISK_SIZE_BYTES=$(python3 -c 'print(0x200*0x800)') # a disk of 0x800=2048 0x200-byte sectors, 2**20 bytes, one mebibyte
 DISK_SIZE_SECTORS=$(python3 -c "print($DISK_SIZE_BYTES // 0x200)")
 
-# create disk
+# Create disk
 echo "* create disk"
 dd "if=/dev/zero" "of=build/disk.img" "bs=512" "count=$DISK_SIZE_SECTORS" "conv=notrunc"
 
 echo "* copy boot stages"
 dd "if=build/stage0.bin" "of=build/disk.img" "bs=512" "seek=0" "count=1" "conv=notrunc"
 dd "if=build/stage1.bin" "of=build/disk.img" "bs=512" "seek=1" "count=1" "conv=notrunc"
-dd "if=build/stage2.bin" "of=build/disk.img" "bs=512" "seek=2" "count=1" "conv=notrunc"
+dd "if=build/stage2.bin" "of=build/disk.img" "bs=512" "seek=2" "count=4" "conv=notrunc"
 
 echo "* copy kernel"
-dd "if=build/kernel.bin" "of=build/disk.img" "bs=512" "seek=3" "conv=notrunc"
+dd "if=build/kernel.elf" "of=build/disk.img" "bs=512" "seek=6" "conv=notrunc"
 
 echo "* write filesystem"
-./libs/d7staticfs/target/release/mkimg build/disk.img $(($imgsize/0x200+4)) $(< build_config/staticfs_files.txt)
+./libs/d7staticfs/target/release/mkimg build/disk.img $(($imgsize/0x200+8)) $(< build_config/staticfs_files.txt)
 
 echo "Saving objdump..."
-objdump -CShdr -M intel build/kernel_unstripped.bin > objdump.txt
+objdump -CShdr -M intel build/kernel_unstripped.bin > build/objdump.txt
 echo "Saving readelf..."
-readelf -e build/kernel_unstripped.bin > readelf.txt
+readelf -e build/kernel_unstripped.bin > build/readelf.txt
 
-# TODO? clean?
+# TODO? Clean?
 
 echo "Done"

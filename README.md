@@ -3,7 +3,7 @@ Dimension 7 is a simple x86-64 operating system written in Rust. It is in fairly
 
 ## Development
 
-This is a learning project. Currently code contributions are not accepted, as I'd like to learn to fix the problems myself. Forking the project is of course possible, if you'd like to develop something beased on this.
+This is a learning project. Currently code contributions are not accepted, as I'd like to learn to fix the problems myself. Forking the project is of course possible, if you'd like to develop something based on this.
 
 Feel free to submit issues on GitHub if you find any bugs.
 
@@ -25,6 +25,7 @@ Feature development is done in separate branches. Rebase workflow is used to com
 * Disk IO:
     * ATA PIO (Read only)
     * VirtIO-blk (Read only)
+* Kernel image compression
 * Simple RamFS
 * Simple StaticFS
 

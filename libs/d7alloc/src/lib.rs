@@ -1,10 +1,9 @@
 #![feature(allocator_api)]
-#![feature(global_allocator)]
+#![feature(const_fn)]
 
-// #![deny(warnings)]
+#![deny(warnings)]
 
 #![no_std]
-#![feature(const_fn)]
 
 extern crate spin;
 

@@ -50,7 +50,7 @@ Vagrant.configure(2) do |config|
 
     export PATH="$HOME/.cargo/bin:$PATH"
     rustup component add rust-src
-    cargo install --force xargo
+    cargo install --force xbuild
 
     echo "export PATH="$HOME/.cargo/bin:$PATH"; cd /vagrant" >> $HOME/.bashrc
   SHELL

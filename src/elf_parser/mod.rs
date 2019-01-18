@@ -145,24 +145,12 @@ pub unsafe fn parse_elf(ptr: usize) -> Result<ELFData, ELFParsingError> {
             // rprintln!("< {:x}", ph.header_type);
 
             match ph.header_type as usize {
-                0 => {},    // null, ignore
-                1 => {      // load, supported
+                1 => {      // load, (needed)
                     elf_data.ph_table[ph_table] = Some(ph);
                     ph_table += 1;
                 },
-                2 => {      // dynamic, not supported
-                    return Err(ELFParsingError::FeatureSupportMissing);
-                },
-                3 => {      // interp, not supported
-                    return Err(ELFParsingError::FeatureSupportMissing);
-                },
-                4 => {},    // notes
-                0x6474e551 => { // PT_GNU_STACK (not sure why, but it appears there so I will just let it be)
-
-                }
-                _ => {      // unknown, not supported
-                    return Err(ELFParsingError::FeatureSupportMissing);
-                }
+                0x60000000 => {} // OS Specific 0, decompression tables, (but unused here)
+                _ => {}      // unknown, not supported
             }
         }
         // // get section headers

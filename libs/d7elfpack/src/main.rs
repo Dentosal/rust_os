@@ -188,23 +188,12 @@ fn main() {
     // doesn't have to be stored, as it is always 256 elements. This is slightly
     // suboptimal if we don't have all bytes, but it doesn't really matter
     let mut weights: HashMap<u8, usize> = HashMap::new();
-    print!("Weights: [");
     for byte in 0..=0xff {
-        print!("{}", byte_counts[byte as usize].load(Ordering::Acquire).max(1));
-        if byte != 0xff {
-            print!(", ");
-        }
         weights.insert(byte, byte_counts[byte as usize].load(Ordering::Acquire).max(1));
     }
-    println!("]");
 
     let (book, tree) = CodeBuilder::from_iter(weights).finish();
     assert_eq!(book.len(), 0x100);
-
-    println!(
-        "Original_start: {:?}",
-        program_parts[0].iter().cloned().take(100).collect::<Vec<u8>>()
-    );
 
     program_parts = program_parts
         .iter()
@@ -212,20 +201,9 @@ fn main() {
         .map(|p| compress(book.clone(), p))
         .collect();
 
-    println!("{:?}", book);
 
     let (bittree, frq_table) = tree.to_bits();
     assert_eq!(bittree.len(), 511);
-
-    println!("BitTree: {:?}", bittree);
-    println!("BitTree bytes: {:?}", bittree.to_bytes());
-
-    println!("FrqTable: {:?}", frq_table);
-
-    println!(
-        "Compressed start: {:?}",
-        program_parts[0].iter().cloned().take(100).collect::<Vec<u8>>()
-    );
 
     // Write new file, from scratch
     let mut outf = File::create(out_path).expect(&format!("Could not create output file ({})", out_path));

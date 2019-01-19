@@ -43,6 +43,10 @@ use std::{
     ptr,
 };
 
+mod symtree;
+
+use symtree::SymTree;
+
 const EXTRA_CHECKS: bool = cfg!(test);
 
 macro_rules! sizeof {
@@ -60,54 +64,18 @@ macro_rules! panic_indicator {
     });
 }
 
-#[repr(transparent)]
-struct SymTable([u32; 0x100]);
-impl SymTable {
-    /// Reserved in Plan.md
-    pub const ADDR: usize = 0x4000;
-
-    /// Unsafe: Must be called only once
-    #[inline]
-    unsafe fn getmut() -> &'static mut Self {
-        &mut *(Self::ADDR as *mut Self)
-    }
-
-    #[inline]
-    fn init(&mut self) {
-        // Init symbol table to zeros
-        unsafe {
-            ptr::write_bytes(Self::ADDR as *mut u32, 0, 0x100);
-        }
-    }
-
-    #[inline]
-    fn set(&mut self, index: u8, length: u8, value: u32) {
-        self.0[index as usize] = value | ((length as u32) << 24);
-    }
-
-    #[inline]
-    fn cmp(&self, index: u8, length: u8, value: u32) -> bool {
-        self.0[index as usize] == value | ((length as u32) << 24)
-    }
-
-    /// Private mock constructor for unit testing
-    fn mock_new() -> Self {
-        Self([0; 0x100])
-    }
-}
-
 // Keep in sync with src/asm_routines/constants.asm
 const ELF_LOADPOINT: usize = 0x10_000;
 
-/// Write 'ER:_' to top top left of screen in red
+/// Write 'ER:_' to top top right of screen in red
 /// _ denotes the argument
 #[cfg(not(test))]
 fn error(c: char) -> ! {
     unsafe {
         // 'ER: _'
-        asm!("mov rax, 0x4f5f4f3a4f524f45; mov [0xb8000], rax" ::: "rax", "memory" : "volatile", "intel");
+        asm!("mov rax, 0x4f5f4f3a4f524f45; mov [0xb8000 + 76*2], rax" ::: "rax", "memory" : "volatile", "intel");
         // set arg
-        asm!("mov [0xb8008], al" :: "{al}"(c as u8) : "al", "memory" : "volatile", "intel");
+        asm!("mov [0xb8006 + 76*2], al" :: "{al}"(c as u8) : "al", "memory" : "volatile", "intel");
         asm!("hlt" :::: "volatile", "intel");
         core::hint::unreachable_unchecked();
     }
@@ -159,13 +127,13 @@ unsafe fn check_elf() {
     }
 
     // Check that the kernel entry point is correct (0x_00000000_00100000, 1MiB)
-    if EXTRA_CHECKS && unlikely(ptr::read((ELF_LOADPOINT + 0x18) as *const u64) != 0x100_000) {
+    if unlikely(ptr::read((ELF_LOADPOINT + 0x18) as *const u64) != 0x100_000) {
         error('P');
     }
 }
 
 #[inline(always)]
-unsafe fn load_decompression_table(sym_table: &mut SymTable, start: *const u8) {
+unsafe fn load_decompression_table(sym_tree: &mut SymTree, start: *const u8) {
     // Frequency table can just stay in the ELF image, but
     // Symbol table must be decompressed
 
@@ -209,7 +177,15 @@ unsafe fn load_decompression_table(sym_table: &mut SymTable, start: *const u8) {
         }
 
         // Write symbol
-        sym_table.set(i, length - 1, value >> 1);
+        let mut b = value >> 1;
+        let mut r = 0;
+        for _ in 0..(length - 1) {
+            r = (r << 1) | (b & 1);
+            b = b >> 1;
+        }
+
+        sym_tree.set(i, length - 1, r);
+        // sym_tree.set(i, length - 1, value >> 1);
 
         // Remove trailing ones
         while value & 1 == 1 {
@@ -230,7 +206,7 @@ unsafe fn load_decompression_table(sym_table: &mut SymTable, start: *const u8) {
 }
 
 unsafe fn decompress(
-    sym_table: &SymTable,
+    sym_tree: &SymTree,
     frq_table: *const u8,
     src: *const u8,
     dst: *mut u8,
@@ -271,19 +247,24 @@ unsafe fn decompress(
             error('L');
         }
 
-        for index in 0u8..=0xff {
-            if sym_table.cmp(index, length, buffer) {
-                // Matching symbol found
-                // Map through frequency table and write
-                ptr::write(
-                    dst.offset(out_offset),
-                    ptr::read(frq_table.offset(index as isize)),
-                );
-                out_offset += 1;
-                length = 0;
-                buffer = 0;
-                break;
-            }
+        let mut org: u32 = buffer;
+        let mut rev: u32 = 0;
+        for _ in 0..length {
+            rev = (rev << 1) | (org & 1);
+            org = org >> 1;
+        }
+
+        let (found, index) = sym_tree.get(length, rev);
+        if found {
+            // Matching symbol found
+            // Map through frequency table and write
+            ptr::write(
+                dst.offset(out_offset),
+                ptr::read(frq_table.offset(index as isize)),
+            );
+            out_offset += 1;
+            length = 0;
+            buffer = 0;
         }
     }
 }
@@ -296,9 +277,8 @@ pub unsafe extern "C" fn d7boot(a: u8) {
 
     check_elf();
 
-    let mut sym_table = SymTable::getmut();
-    // The initialization is not needed, as all the values will be overwritten
-    // sym_table.init();
+    let mut sym_tree = SymTree::getmut();
+    sym_tree.init();
 
     // Go through the program header table
     // Just assume that the header has standard lengths and positions
@@ -317,13 +297,13 @@ pub unsafe extern "C" fn d7boot(a: u8) {
             // Loading decompression table
             progress_indicator('?' as u8);
 
-            load_decompression_table(&mut sym_table, frq_table_addr as *const u8);
+            load_decompression_table(&mut sym_tree, frq_table_addr as *const u8);
             break;
         }
     }
 
     // Not found
-    if EXTRA_CHECKS && unlikely(frq_table_addr == 0) {
+    if unlikely(frq_table_addr == 0) {
         error('D');
     }
 
@@ -345,7 +325,7 @@ pub unsafe extern "C" fn d7boot(a: u8) {
 
             // Decompress p_filesz bytes from p_offset and write result to p_vaddr
             decompress(
-                &sym_table,
+                &sym_tree,
                 frq_table_addr as *const u8,
                 (ELF_LOADPOINT as u64 + p_offset) as *const u8,
                 p_vaddr as *mut u8,
@@ -386,7 +366,7 @@ extern "C" fn panic(info: &PanicInfo) -> ! {
 
 #[cfg(test)]
 mod test {
-    use super::{decompress, load_decompression_table, SymTable};
+    use super::{decompress, load_decompression_table, SymTree};
 
     macro_rules! sum(
         ($head:expr) => ($head);
@@ -419,31 +399,19 @@ mod test {
 
     #[test]
     fn test_load_decompression_table() {
-        let correct_table = mock_symtable();
-        let mut sym_table = SymTable::mock_new();
+        let correct_table = mock_symtree();
+        let mut sym_tree = SymTree::mock_new();
 
         let src_data: [u8; 0x100 + 64] = concat_arrays!(u8: MOCK_FREQTABLE, MOCK_BITTREE);
 
         unsafe {
-            load_decompression_table(&mut sym_table, &src_data as *const u8);
+            load_decompression_table(&mut sym_tree, &src_data as *const u8);
         }
 
-        for i in 0..=0xff {
-            let s = sym_table.0[i];
-
-            let mut found = false;
-            for i2 in 0..=0xff {
-                if correct_table.cmp(i2, (s >> 24) as u8, s & 0xffff) {
-                    found = true;
-                }
-            }
-
-            println!("i = {} [{} | {:016b}]", i, (s >> 24) as u8, s & 0xffff);
-            assert!(found);
-
-            // assert_eq!(s >> 24, c >> 24, "Length incorrect");
-            // assert_eq!(s & 0xffff, c & 0xffff, "Value incorrect");
-            // assert_eq!(s, c, "Extra bits set");
+        for (i, (l, s)) in MOCK_SYMBOLS.iter().enumerate() {
+            let a = sym_tree.get(*l, *s);
+            let b = correct_table.get(*l, *s);
+            assert_eq!(a, b);
         }
     }
 
@@ -469,11 +437,11 @@ mod test {
         ];
 
         let mut dst_table = [0x01u8; 0x10000]; // use ones and not zeros for error detection
-        let mut sym_table = mock_symtable();
+        let mut sym_tree = mock_symtree();
 
         unsafe {
             decompress(
-                &mut sym_table,
+                &mut sym_tree,
                 (&frq_table) as *const _,
                 (&mut src_table) as *mut _ as usize as *mut u8,
                 (&mut dst_table) as *mut _ as usize as *mut u8,
@@ -492,20 +460,38 @@ mod test {
     }
 
     #[test]
-    fn verify_symtable_cmp() {
-        let st = mock_symtable();
+    fn verify_symtable() {
+        let st = mock_symtree();
 
-        for i in 0..=0xff {
-            assert!(st.cmp(i as u8, MOCK_SYMTABLE[i].0, MOCK_SYMTABLE[i].1));
+        println!("{:?}", &st.nodes.to_vec()[..(st.next_free as usize)]);
+
+        let mut used: [bool; 0x100] = [false; 0x100];
+
+        for (i, (l, mut v)) in MOCK_SYMBOLS.iter().enumerate() {
+            let mut rev: u32 = 0;
+            for _ in 0..(*l) {
+                rev = (rev << 1) | (v & 1);
+                v = v >> 1;
+            }
+            println!("{} {:016b} | {} -> {:?}", i, rev, l, st.get(*l, rev));
+            let (found, index) = st.get(*l, rev);
+            assert!(found);
+            assert!(!used[index as usize]);
+            used[index as usize] = true;
         }
     }
 
-    fn mock_symtable() -> SymTable {
-        let mut sym_table = SymTable::mock_new();
-        for (i, (l, v)) in MOCK_SYMTABLE.iter().enumerate() {
-            sym_table.set(i as u8, *l, *v);
+    fn mock_symtree() -> SymTree {
+        let mut sym_tree = SymTree::mock_new();
+        for (i, (l, mut v)) in MOCK_SYMBOLS.iter().enumerate() {
+            let mut rev: u32 = 0;
+            for _ in 0..(*l) {
+                rev = (rev << 1) | (v & 1);
+                v = v >> 1;
+            }
+            sym_tree.set(i as u8, *l, rev);
         }
-        sym_table
+        sym_tree
     }
 
     const MOCK_BITTREE: [u8; 64] = [
@@ -531,7 +517,7 @@ mod test {
         59, 238, 21, 78, 17, 186, 253, 3, 101, 216, 226, 71, 129, 18, 63, 120, 178, 106, 249, 167,
     ];
 
-    const MOCK_SYMTABLE: [(u8, u32); 0x100] = [
+    const MOCK_SYMBOLS: [(u8, u32); 0x100] = [
         (1, 0b0),
         (7, 0b1000000),
         (8, 0b10000010),

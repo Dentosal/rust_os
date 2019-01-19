@@ -34,6 +34,7 @@
 #![feature(stmt_expr_attributes)]
 #![feature(alloc)]
 #![feature(allocator_api)]
+#![feature(abi_x86_interrupt)]
 
 use core::alloc::Layout;
 use core::panic::PanicInfo;
@@ -115,7 +116,7 @@ pub extern fn rust_main() {
     // filesystem::init();
 
     // Keyboard
-    // keyboard::init();
+    keyboard::init();
 
     // PCI
     pci::init();

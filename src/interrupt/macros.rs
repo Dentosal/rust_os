@@ -1,140 +1,84 @@
-macro_rules! save_scratch_registers {
-    () => {
-        asm!("push rax
-              push rcx
-              push rdx
-              push rsi
-              push rdi
-              push r8
-              push r9
-              push r10
-              push r11
-        " ::: "memory" : "intel", "volatile");
-    }
-}
-
-macro_rules! restore_scratch_registers {
-    () => {
-        asm!("pop r11
-              pop r10
-              pop r9
-              pop r8
-              pop rdi
-              pop rsi
-              pop rdx
-              pop rcx
-              pop rax
-        " ::: "memory" : "intel", "volatile");
-    }
-}
-
-macro_rules! syscall_save_scratch_registers {
-    () => {
-        asm!("push rcx
-              push rsi
-              push rdi
-              push r8
-              push r9
-              push r10
-              push r11
-        " ::: "memory" : "intel", "volatile");
-    }
-}
-
-macro_rules! syscall_restore_scratch_registers {
-    () => {
-        asm!("pop r11
-              pop r10
-              pop r9
-              pop r8
-              pop rdi
-              pop rsi
-              pop rcx
-        " ::: "memory" : "intel", "volatile");
-    }
-}
+use x86_64::PrivilegeLevel;
 
 
 macro_rules! irq_handler {
-    ($name: ident) => {{
-        #[naked]
-        extern "C" fn wrapper() -> ! {
-            unsafe {
-                save_scratch_registers!();
-                asm!("call $0" :: "i"($name as extern "C" fn()) : "memory" : "intel", "volatile");
-                restore_scratch_registers!();
-                asm!("iretq":::: "intel", "volatile");
-                ::core::intrinsics::unreachable();
-            }
+    ($name:ident) => {{
+        unsafe extern "x86-interrupt" fn wrapper(_: &mut ExceptionStackFrame) {
+            ($name)();
         }
-        wrapper as *const fn()
-    }}
+        idt::Descriptor::new(true, wrapper as u64, PrivilegeLevel::Ring0, 0)
+    }};
+}
+
+macro_rules! syscall_handler {
+    ($name:ident) => {{
+        #[naked]
+        unsafe fn wrapper(_: &mut ExceptionStackFrame) {
+            asm!("push rcx
+                push rsi
+                push rdi
+                push r8
+                push r9
+                push r10
+                push r11
+            " ::: "memory" : "intel", "volatile");
+
+            asm!("
+                call $0
+            "   :
+                : "i"($name as unsafe extern "C" fn())
+                : "rdi"
+                : "intel"
+            );
+
+            asm!("pop r11
+                pop r10
+                pop r9
+                pop r8
+                pop rdi
+                pop rsi
+                pop rcx
+            " ::: "memory" : "intel", "volatile");
+
+            asm!("iretq" :::: "intel", "volatile");
+        }
+        idt::Descriptor::new(true, wrapper as u64, PrivilegeLevel::Ring0, 0)
+    }};
 }
 
 macro_rules! exception_handler {
-    ($name: ident) => {{
-        #[naked]
-        extern "C" fn wrapper() -> ! {
-            unsafe {
-                save_scratch_registers!();
-                asm!("
-                    mov rdi, rsp  // pointer to stack as first argument
-                    add rdi, 9*8  // calculate exception stack frame pointer
-                    call $0       // call handler
-                "   :
-                    : "i"($name as extern "C" fn(*const ExceptionStackFrame))
-                    : "rdi"
-                    : "intel"
-                );
-                restore_scratch_registers!();
-                asm!("iretq":::: "intel", "volatile");
-                ::core::intrinsics::unreachable();
-            }
+    ($name:ident, $pl:expr, $tss_s:expr) => {{
+        unsafe extern "x86-interrupt" fn wrapper(sf: &mut ExceptionStackFrame) {
+            ($name)(sf);
         }
-        wrapper as *const fn()
-    }}
+        idt::Descriptor::new(true, wrapper as u64, $pl, $tss_s)
+    }};
+    ($name:ident) => {{
+        exception_handler!($name, PrivilegeLevel::Ring0, 0)
+    }};
 }
 
 macro_rules! exception_handler_with_error_code {
-    ($name: ident) => {{
-        #[naked]
-        extern "C" fn wrapper() -> ! {
-            unsafe {
-                save_scratch_registers!();
-                asm!("
-                    mov rsi, [rsp+9*8]  // load error code into rsi
-                    mov rdi, rsp        // pointer to stack as first argument
-                    add rdi, 10*8       // calculate exception stack frame pointer
-                    sub rsp, 8          // align the stack pointer
-                    call $0             // call handler
-                    add rsp, 8          // undo stack pointer alignment
-                "   :
-                    : "i"($name as extern "C" fn(*const ExceptionStackFrame, u64))
-                    : "rdi","rsi"
-                    : "intel"
-                );
-                restore_scratch_registers!();
-                asm!("
-                    add rsp, 8  // drop error code
-                    iretq       // return from exception
-                "   :::: "intel", "volatile");
-                asm!("xchg ax, ax" :::: "intel");
-                ::core::intrinsics::unreachable();
-            }
+    ($name:ident, $pl:expr, $tss_s:expr) => {{
+        unsafe extern "x86-interrupt" fn wrapper(sf: &mut ExceptionStackFrame, ec: u64) {
+            ($name)(sf, ec);
         }
-        wrapper as *const fn()
-    }}
+        idt::Descriptor::new(true, wrapper as u64, $pl, $tss_s)
+    }};
+    ($name:ident) => {{
+        exception_handler_with_error_code!($name, PrivilegeLevel::Ring0, 0)
+    }};
 }
 
-macro_rules! simple_exception {
+macro_rules! simple_exception_handler {
     ($text:expr) =>  {{
-        extern "C" fn exception(stack_frame: *const ExceptionStackFrame) {
+        unsafe extern "x86-interrupt" fn wrapper(stack_frame: &mut ExceptionStackFrame) {
             unsafe {
                 rforce_unlock!();
-                rprintln!(concat!("Exception: ", $text, "\n{}"), *stack_frame);
+                rprintln!(concat!("Exception: ", $text, "\n{}"), stack_frame);
             };
             loop {}
         }
-        exception_handler!(exception)
-    }}
+        idt::Descriptor::new(true, wrapper as u64, PrivilegeLevel::Ring0, 0)
+    }};
 }

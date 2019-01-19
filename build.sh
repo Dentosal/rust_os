@@ -14,7 +14,7 @@ mkdir -p build
 
 echo "Compiling source files..."
 
-echo "* bootloader"
+echo "* Bootloader"
 # Compile bootloader
 nasm src/boot/stage0.asm -f bin -o build/stage0.bin
 nasm src/boot/stage1.asm -f bin -o build/stage1.bin
@@ -28,18 +28,18 @@ nasm src/boot/stage1.asm -f bin -o build/stage1.bin
     python3 ../../tools/zeropad.py ../../build/stage2.bin 0x800
 )
 
-echo "* kernel entry point"
+echo "* Kernel entry point"
 # compile kernel entry point
 nasm -f elf64 src/entry.asm -o build/entry.o
 
-echo "* kernel"
+echo "* Kernel"
 
 # Compile kernel (with full optimizations)
 # RUST_TARGET_PATH=$(pwd) xargo build --target $TARGET --release
 # RUSTFLAGS=-g RUST_TARGET_PATH=$(pwd) xargo rustc --target $TARGET --release -- -C opt-level=s
 RUSTFLAGS="-g -C opt-level=s" RUST_TARGET_PATH=$(pwd) cargo xbuild --target $TARGET --release
 
-echo "* kernel assembly routines"
+echo "* Kernel assembly routines"
 mkdir -p build/asm_routines/
 for fpath in src/asm_routines/*.asm
 do
@@ -59,6 +59,13 @@ echo "Linking objects..."
 # ld -z max-page-size=0x1000 --unresolved-symbols=ignore-all -T build_config/linker.ld -o build/kernel_orig.elf build/entry.o target/$TARGET/release/libd7os.a build/asm_routines/*.o
 # ld -z max-page-size=0x1000 --gc-sections --print-gc-sections  -T build_config/linker.ld -o build/kernel_orig.elf build/entry.o target/$TARGET/release/libd7os.a build/asm_routines/*.o
 ld -z max-page-size=0x1000 --gc-sections -T build_config/linker.ld -o build/kernel_orig.elf build/entry.o target/$TARGET/release/libd7os.a build/asm_routines/*.o
+
+echo "* Saving objdump..."
+objdump -CShdr -M intel build/kernel_orig.elf > build/objdump.txt
+echo "* Saving readelf..."
+readelf -e build/kernel_orig.elf > build/readelf.txt
+
+echo "Stripping executable..."
 cp build/kernel_orig.elf build/kernel_unstripped.elf
 strip build/kernel_orig.elf
 
@@ -98,11 +105,6 @@ dd "if=build/kernel.elf" "of=build/disk.img" "bs=512" "seek=6" "conv=notrunc"
 
 echo "* write filesystem"
 ./libs/d7staticfs/target/release/mkimg build/disk.img $(($imgsize/0x200+8)) $(< build_config/staticfs_files.txt)
-
-echo "Saving objdump..."
-objdump -CShdr -M intel build/kernel_unstripped.bin > build/objdump.txt
-echo "Saving readelf..."
-readelf -e build/kernel_unstripped.bin > build/readelf.txt
 
 # TODO? Clean?
 

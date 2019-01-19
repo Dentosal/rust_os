@@ -121,8 +121,7 @@ unsafe fn exception_snp(stack_frame: &ExceptionStackFrame, error_code: u64) {
 
 /// PIT timer ticked
 unsafe fn exception_irq0() {
-    time::SYSCLOCK.force_unlock();
-    time::SYSCLOCK.lock().tick();
+    time::SYSCLOCK.tick();
     pic::PICS.lock().notify_eoi(0x20);
 }
 

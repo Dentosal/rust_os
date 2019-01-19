@@ -40,3 +40,7 @@ path = "libs/d7staticfs"
 [dependencies.d7ramfs]
 version = "*"
 path = "libs/d7ramfs"
+
+[dependencies.d7time]
+version = "*"
+path = "libs/d7time"

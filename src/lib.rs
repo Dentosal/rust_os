@@ -35,6 +35,7 @@
 #![feature(alloc)]
 #![feature(allocator_api)]
 #![feature(abi_x86_interrupt)]
+#![feature(integer_atomics)]
 
 use core::alloc::Layout;
 use core::panic::PanicInfo;
@@ -54,6 +55,8 @@ extern crate static_assertions;
 extern crate d7alloc;
 extern crate d7staticfs;
 extern crate d7ramfs;
+
+extern crate d7time;
 
 #[macro_use]
 extern crate alloc;
@@ -162,10 +165,6 @@ pub extern fn rust_main() {
     kernel_shell::run();
 
     loop {
-        use time::{SYSCLOCK, busy_sleep_until};
-        busy_sleep_until(SYSCLOCK.lock().after_seconds(5));
-        // rprintln!("Sleep done");
-
         let success: u64;
         let result: u64;
         unsafe {
@@ -179,6 +178,9 @@ pub extern fn rust_main() {
         // let _ = success;
         // let _ = result;
         rprintln!("{:?} {:?}", success, result);
+
+        use time::sleep_ms;
+        sleep_ms(1000);
     }
 }
 
@@ -217,6 +219,8 @@ extern "C" fn panic(info: &PanicInfo) -> ! {
 
         asm!("cli"::::"intel","volatile");
         panic_indicator!(0x4f214f21); // !!
+
+        rforce_unlock!();
 
         if let Some(location) = info.location() {
             rprintln!("\nKernel Panic: file: '{}', line: {}", location.file(), location.line());

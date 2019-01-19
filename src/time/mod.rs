@@ -1,84 +1,109 @@
-use core::cmp::Ordering;
-use spin::Mutex;
+use core::cell::UnsafeCell;
+use core::intrinsics::likely;
+use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+
+use multitasking::SCHEDULER;
+
+use d7time::{Duration, Instant, TimeSpec};
 
 use pit::TIME_BETWEEN_E_12;
 
-#[derive(Copy, Clone)]
 pub struct SystemClock {
-    seconds: u64,
-    nano_fraction: u64
+    lock: UnsafeCell<AtomicBool>,
+    sec: UnsafeCell<AtomicU64>,
+    nsec: UnsafeCell<AtomicU32>,
 }
-
+unsafe impl Sync for SystemClock {}
 impl SystemClock {
-    pub const fn new() -> SystemClock {
-        SystemClock {seconds: 0, nano_fraction: 0}
-    }
-    pub fn tick(&mut self) {
-        use multitasking::SCHEDULER;
-
-        // Increase current time
-        self.nano_fraction += TIME_BETWEEN_E_12/1_000;
-        if self.nano_fraction > 1_000_000_000 {
-            self.seconds += 1;
-            self.nano_fraction -= 1_000_000_000;
+    const unsafe fn new() -> Self {
+        Self {
+            lock: UnsafeCell::new(AtomicBool::new(false)),
+            sec: UnsafeCell::new(AtomicU64::new(0)),
+            nsec: UnsafeCell::new(AtomicU32::new(0)),
         }
+    }
+
+    /// Only to be used by the IRQ handler for PIT clock ticks
+    ///
+    /// # Time constraints
+    /// This function must be complete before PIT fires next interrupt,
+    /// otherwise it can deadlock
+    pub unsafe fn tick(&self) {
+        let inc: u32 = (TIME_BETWEEN_E_12 / 1_000) as u32;
+
+        // The lock is only held for clock updates
+        let mut uc_lock = self.lock.get();
+        let mut uc_sec = self.sec.get();
+        let mut uc_nsec = self.nsec.get();
+
+        // Aquire lock
+        if (*uc_lock).compare_and_swap(false, true, Ordering::AcqRel) {
+            panic!("SystemClock already locked");
+        }
+
+        // Get values
+        let mut sec = (*uc_sec).load(Ordering::Acquire);
+        let mut nsec = (*uc_nsec).load(Ordering::Acquire);
+
+        // Cannot overflow, as (2 * max nanoseconds) < u32::MAX
+        if nsec + inc >= 1_000_000_000 {
+            sec += 1;
+            nsec = (nsec + inc) - 1_000_000_000;
+        } else {
+            nsec += inc;
+        }
+
+        // Set new values
+        (*uc_sec).store(sec, Ordering::Release);
+        (*uc_nsec).store(nsec, Ordering::Release);
+
+        // It must not have been updated during this time, no check here
+        (*uc_lock).store(false, Ordering::Release);
 
         // Update multitasking scheduler
         match SCHEDULER.try_lock() {
-            Some(mut s) => s.tick(self.clone()),
-            None => {panic!("SCHED: Locking failed");}
+            Some(mut s) => s.tick(self.now()),
+            None => {
+                panic!("SCHED: Locking failed");
+            }
         }
     }
-    pub fn as_microseconds(&self) -> u64 {
-        self.seconds*1_000_000 + self.nano_fraction/1_000
-    }
-    pub fn as_milliseconds(&self) -> u64 {
-        self.seconds*1_000 + self.nano_fraction/1_000_000
-    }
-    pub fn as_seconds(&self) -> u64 {
-        self.seconds
-    }
 
-    pub fn after_microseconds(&self, delta: u64) -> SystemClock {
-        let s = self.seconds + delta / 1_000_000;
-        let n = (delta%1_000_000)*1_000;
-        SystemClock {seconds: s, nano_fraction: n}
-    }
-    pub fn after_milliseconds(&self, delta: u64) -> SystemClock {
-        let s = self.seconds + delta / 1_000;
-        let n = (delta%1_000)*1_000_000;
-        SystemClock {seconds: s, nano_fraction: n}
-    }
-    pub fn after_seconds(&self, delta: u64) -> SystemClock {
-        SystemClock {
-            seconds: self.seconds+delta,
-            nano_fraction: self.nano_fraction
+    /// Gets current time
+    pub fn now(&self) -> Instant {
+        unsafe {
+            let mut uc_sec = self.sec.get();
+            let mut uc_nsec = self.nsec.get();
+
+            let mut prev_sec = (*uc_sec).load(Ordering::Acquire);
+            let mut prev_nsec = (*uc_nsec).load(Ordering::Acquire);
+
+            // Polling needed to avoid invalid values on second borders
+            loop {
+                let sec = (*uc_sec).load(Ordering::Acquire);
+                let nsec = (*uc_nsec).load(Ordering::Acquire);
+
+                if likely(prev_sec == sec && prev_nsec <= nsec) {
+                    return Instant::create(TimeSpec { sec, nsec });
+                } else {
+                    prev_sec = sec;
+                    prev_nsec = nsec;
+                }
+            }
         }
     }
 }
-impl PartialEq for SystemClock {
-    fn eq(&self, other: &SystemClock) -> bool {
-        self.as_microseconds() == other.as_microseconds()
-    }
-}
-impl PartialOrd for SystemClock {
-    fn partial_cmp(&self, other: &SystemClock) -> Option<Ordering> {
-        Some(self.as_microseconds().cmp(&other.as_microseconds()))
-    }
-}
 
-
-pub static SYSCLOCK: Mutex<SystemClock> = Mutex::new(SystemClock::new());
+pub static SYSCLOCK: SystemClock = unsafe { SystemClock::new() };
 
 pub fn init() {
     rprintln!("SYSCLOCK: enabled");
 }
 
-pub fn busy_sleep_until(until: SystemClock) {
-    while SYSCLOCK.lock().as_microseconds() < until.as_microseconds() {}
+pub fn busy_sleep_until(until: Instant) {
+    while SYSCLOCK.now() < until {}
 }
 
 pub fn sleep_ms(ms: u64) {
-    let end = SYSCLOCK.lock().after_milliseconds(ms);
-    busy_sleep_until(end);
+    busy_sleep_until(SYSCLOCK.now() + Duration::from_millis(ms));
 }

@@ -1,13 +1,14 @@
-use time::SystemClock;
+use d7time::{Duration, Instant};
 
 use super::PROCMAN;
 use super::process_manager::ProcessManager;
+
 
 // const TIME_SLICE_MIRCOSECONDS: u64 = 1_000; // run task 1 millisecond and switch
 const TIME_SLICE_MIRCOSECONDS: u64 = 1_000_000; // XXX: tesiting with 1 sec slices
 
 pub struct Scheduler {
-    next_switch: Option<SystemClock>,
+    next_switch: Option<Instant>,
     current_index: usize
 }
 impl Scheduler {
@@ -50,7 +51,7 @@ impl Scheduler {
         }
     }
 
-    pub fn tick(&mut self, sysclock: SystemClock) {
+    pub fn tick(&mut self, now: Instant) {
         return;
         // unsafe {
         //     PROCMAN.force_unlock();
@@ -58,8 +59,8 @@ impl Scheduler {
 
         match self.next_switch {
             Some(s) => {
-                if sysclock >= s {
-                    self.next_switch = Some(sysclock.after_microseconds(TIME_SLICE_MIRCOSECONDS));
+                if now >= s {
+                    self.next_switch = Some(now + Duration::from_millis(TIME_SLICE_MIRCOSECONDS));
                     unsafe {
                         self.switch();
                     }
@@ -67,7 +68,7 @@ impl Scheduler {
             },
             None => {
                 // start switching
-                self.next_switch = Some(sysclock.after_microseconds(TIME_SLICE_MIRCOSECONDS));
+                self.next_switch = Some(now + Duration::from_millis(TIME_SLICE_MIRCOSECONDS));
             }
         }
     }

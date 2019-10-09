@@ -4,14 +4,13 @@ use super::key::Key;
 pub enum KeyboardEventType {
     Press,
     Release,
-    Repeat // ?
+    Repeat, // ?
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct KeyboardEvent {
     pub key: Key,
-    pub event_type: KeyboardEventType
-    // modifiers
+    pub event_type: KeyboardEventType, // modifiers
 }
 impl KeyboardEvent {
     pub fn new(key: Key, event_type: KeyboardEventType) -> KeyboardEvent {

@@ -1,5 +1,5 @@
-use core::ptr;
 use core::mem;
+use core::ptr;
 
 use x86_64::PrivilegeLevel::{self, Ring0};
 
@@ -11,18 +11,17 @@ pub const ADDRESS: usize = 0x0;
 pub const R_ADDRESS: usize = 0x1000;
 pub const ENTRY_COUNT: usize = 0x100;
 
-
 #[derive(Debug, Clone, Copy)]
 #[repr(C, packed)]
 pub struct Reference {
     limit: u16,
-    offset: u64
+    offset: u64,
 }
 impl Reference {
     pub fn new() -> Reference {
         Reference {
-            limit: ((ENTRY_COUNT-1)*(mem::size_of::<Descriptor>())) as u16,
-            offset: ADDRESS as u64
+            limit: ((ENTRY_COUNT - 1) * (mem::size_of::<Descriptor>())) as u16,
+            offset: ADDRESS as u64,
         }
     }
     pub unsafe fn write(&self) {
@@ -40,16 +39,17 @@ pub struct Descriptor {
     options: u8,
     pointer_middle: u16,
     pointer_high: u32,
-    reserved: u32
+    reserved: u32,
 }
 
 impl Descriptor {
     pub fn new(present: bool, pointer: u64, ring: PrivilegeLevel, ist_index: u8) -> Descriptor {
-        let ist_offset = ist_index+1;
+        let ist_offset = ist_index + 1;
         assert!(ist_offset < 0b1000);
         assert!(present || (pointer == 0 && ring == Ring0)); // pointer and ring must be 0 if not present
-        // example options: present => 1, ring 0 => 00, interrupt gate => 0, interrupt gate => 1110,
-        let options: u8 = 0b0_00_0_1110 | ((ring as u8) << 5) | ((if present {1} else {0}) << 7);
+                                                             // example options: present => 1, ring 0 => 00, interrupt gate => 0, interrupt gate => 1110,
+        let options: u8 =
+            0b0_00_0_1110 | ((ring as u8) << 5) | ((if present { 1 } else { 0 }) << 7);
 
         Descriptor {
             pointer_low: (pointer & 0xffff) as u16,
@@ -58,7 +58,7 @@ impl Descriptor {
             options: options,
             pointer_middle: ((pointer & 0xffff_0000) >> 16) as u16,
             pointer_high: ((pointer & 0xffff_ffff_0000_0000) >> 32) as u32,
-            reserved: 0
+            reserved: 0,
         }
     }
 }

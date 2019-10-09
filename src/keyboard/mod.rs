@@ -1,26 +1,26 @@
-mod key;
-mod keyreader;
-mod keymap;
 mod event;
+mod key;
+mod keymap;
+mod keyreader;
 
-use spin::Mutex;
 use cpuio::UnsafePort;
+use spin::Mutex;
 
 use util::io_wait;
 
-use self::keyreader::KeyReader;
 pub use self::event::{KeyboardEvent, KeyboardEventType};
 pub use self::key::Key;
+use self::keyreader::KeyReader;
 
 use alloc::vec::Vec;
 
 // PS/2 ports
-const PS2_DATA:     u16 = 0x60; // rw
-const PS2_STATUS:   u16 = 0x64; // r-
-const PS2_COMMAND:  u16 = 0x64; // -w
+const PS2_DATA: u16 = 0x60; // rw
+const PS2_STATUS: u16 = 0x64; // r-
+const PS2_COMMAND: u16 = 0x64; // -w
 
 // PIC commands
-const PIC_CMD_EOI:  u8 = 0x20;
+const PIC_CMD_EOI: u8 = 0x20;
 const PIC_CMD_INIT: u8 = 0x11;
 
 // Sensible timeout
@@ -28,7 +28,6 @@ const IO_WAIT_TIMEOUT: usize = 1000;
 
 // Event buffer
 const EVENT_BUFFER_SIZE: usize = 100;
-
 
 pub struct Keyboard {
     enabled: bool,
@@ -57,13 +56,15 @@ impl Keyboard {
     unsafe fn init(&mut self) {
         if self.self_test() {
             rprintln!("Keyboard: self test: ok");
-        }
-        else {
+        } else {
             rprintln!("Keyboard: self test: failed");
             panic!("Keyboard: self test: failed");
         }
 
-        rprintln!("Keyboard: echo: {}", if self.test_echo() {"ok"} else {"failed"});
+        rprintln!(
+            "Keyboard: echo: {}",
+            if self.test_echo() { "ok" } else { "failed" }
+        );
 
         self.disable_scanning();
         self.verify_keyboard();
@@ -206,7 +207,6 @@ impl Keyboard {
         Some(self.pending_buffer.remove(0))
     }
 }
-
 
 pub static KEYBOARD: Mutex<Keyboard> = Mutex::new(unsafe { Keyboard::new() });
 

@@ -1,13 +1,10 @@
 // VirtIO block device driver
 // https://wiki.osdev.org/Virtio
 
-
-use volatile;
+use alloc::prelude::v1::*;
 use core::mem;
 use core::ptr;
-use alloc::prelude::*;
-
-use mem_map::MEM_PAGE_SIZE_BYTES;
+use volatile;
 
 use crate::virtio;
 
@@ -32,7 +29,7 @@ bitflags! {
 #[derive(Copy, Clone)]
 #[repr(C)]
 struct BlockRequest {
-    type_: u32, // 0: read, 1: write, 5: flush
+    type_: u32,  // 0: read, 1: write, 5: flush
     ioprio: u32, // IO priority, unused in 1.0 spec
     sector: u64, // sector number
     data: [u8; 0x200],
@@ -53,10 +50,16 @@ impl BlockRequest {
         }
     }
     pub fn new_write(sector: u64) -> BlockRequest {
-        BlockRequest {type_: 1, ..Self::new_read(sector)}
+        BlockRequest {
+            type_: 1,
+            ..Self::new_read(sector)
+        }
     }
     pub fn new_flush() -> BlockRequest {
-        BlockRequest {type_: 4, ..Self::new_read(0)}
+        BlockRequest {
+            type_: 4,
+            ..Self::new_read(0)
+        }
     }
 }
 
@@ -65,7 +68,7 @@ pub struct VirtioBlock {
     queues: Vec<virtio::VirtQueue>,
 }
 impl VirtioBlock {
-    pub fn try_new() -> Option<Box<BlockDevice>> {
+    pub fn try_new() -> Option<Box<dyn BlockDevice>> {
         if let Some(mut device) = virtio::VirtioDevice::try_new(virtio::DeviceType::BlockDevice) {
             // Update device state
             device.set_status(virtio::DeviceStatus::ACKNOWLEDGE);
@@ -74,8 +77,7 @@ impl VirtioBlock {
                 device,
                 queues: Vec::new(),
             })
-        }
-        else {
+        } else {
             None
         }
     }
@@ -107,24 +109,30 @@ impl BlockDevice for VirtioBlock {
         true
     }
 
-    fn capacity_bytes(&mut self) -> u64 {
-        self.device.read_dev_config::<u64>(0x00) * 0x200
+    fn sector_size(&self) -> u64 {
+        0x200
+    }
+
+    fn capacity_sectors(&mut self) -> u64 {
+        self.device.read_dev_config::<u64>(0x00)
     }
 
     fn read(&mut self, sector: u64) -> Vec<u8> {
         let req = volatile::ReadOnly::new(BlockRequest::new_read(sector));
 
         let mut queue = &mut self.queues[0];
-        let buf_indices = queue.find_free_n(2).expect("VirtIO-blk: Not enough queue slots free");
+        let buf_indices = queue
+            .find_free_n(2)
+            .expect("VirtIO-blk: Not enough queue slots free");
 
         // Set buffer descriptor
         let mut desc0 = virtio::VirtQueueDesc::new_read(
             (&req) as *const _ as u64,
-            BlockRequest::HEADER_SIZE as u32
+            BlockRequest::HEADER_SIZE as u32,
         );
         let desc1 = virtio::VirtQueueDesc::new_write(
             (&req) as *const _ as u64 + BlockRequest::HEADER_SIZE as u64,
-            BlockRequest::CONTENT_SIZE as u32 + BlockRequest::FOOTER_SIZE as u32
+            BlockRequest::CONTENT_SIZE as u32 + BlockRequest::FOOTER_SIZE as u32,
         );
 
         desc0.chain(buf_indices[1]);
@@ -146,7 +154,7 @@ impl BlockDevice for VirtioBlock {
         let data = loop {
             let req_done = req.read();
             match req_done.status {
-                0xff => {},
+                0xff => {}
                 0 => break req_done.data,
                 1 => panic!("VirtIO read failed (1 - IOERR)"),
                 2 => panic!("VirtIO read failed (2 - UNSUPP)"),
@@ -159,8 +167,6 @@ impl BlockDevice for VirtioBlock {
 
         data.to_vec()
     }
-
-
 
     fn write(&mut self, sector: u64, data: Vec<u8>) {}
 }

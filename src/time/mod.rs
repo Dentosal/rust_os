@@ -1,6 +1,6 @@
 use core::cell::UnsafeCell;
 use core::intrinsics::likely;
-use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering::SeqCst};
 
 use multitasking::SCHEDULER;
 
@@ -37,13 +37,13 @@ impl SystemClock {
         let mut uc_nsec = self.nsec.get();
 
         // Aquire lock
-        if (*uc_lock).compare_and_swap(false, true, Ordering::AcqRel) {
+        if (*uc_lock).compare_and_swap(false, true, SeqCst) {
             panic!("SystemClock already locked");
         }
 
         // Get values
-        let mut sec = (*uc_sec).load(Ordering::Acquire);
-        let mut nsec = (*uc_nsec).load(Ordering::Acquire);
+        let mut sec = (*uc_sec).load(SeqCst);
+        let mut nsec = (*uc_nsec).load(SeqCst);
 
         // Cannot overflow, as (2 * max nanoseconds) < u32::MAX
         if nsec + inc >= 1_000_000_000 {
@@ -54,19 +54,14 @@ impl SystemClock {
         }
 
         // Set new values
-        (*uc_sec).store(sec, Ordering::Release);
-        (*uc_nsec).store(nsec, Ordering::Release);
+        (*uc_sec).store(sec, SeqCst);
+        (*uc_nsec).store(nsec, SeqCst);
 
         // It must not have been updated during this time, no check here
-        (*uc_lock).store(false, Ordering::Release);
+        (*uc_lock).store(false, SeqCst);
 
         // Update multitasking scheduler
-        match SCHEDULER.try_lock() {
-            Some(mut s) => s.tick(self.now()),
-            None => {
-                panic!("SCHED: Locking failed");
-            }
-        }
+        SCHEDULER.tick(self.now());
     }
 
     /// Gets current time
@@ -75,13 +70,13 @@ impl SystemClock {
             let mut uc_sec = self.sec.get();
             let mut uc_nsec = self.nsec.get();
 
-            let mut prev_sec = (*uc_sec).load(Ordering::Acquire);
-            let mut prev_nsec = (*uc_nsec).load(Ordering::Acquire);
+            let mut prev_sec = (*uc_sec).load(SeqCst);
+            let mut prev_nsec = (*uc_nsec).load(SeqCst);
 
             // Polling needed to avoid invalid values on second borders
             loop {
-                let sec = (*uc_sec).load(Ordering::Acquire);
-                let nsec = (*uc_nsec).load(Ordering::Acquire);
+                let sec = (*uc_sec).load(SeqCst);
+                let nsec = (*uc_nsec).load(SeqCst);
 
                 if likely(prev_sec == sec && prev_nsec <= nsec) {
                     return Instant::create(TimeSpec { sec, nsec });

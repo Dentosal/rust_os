@@ -1,14 +1,47 @@
-use alloc::string::String;
 use alloc::borrow::ToOwned;
+use alloc::string::String;
 
 #[allow(dead_code)]
 #[allow(non_camel_case_types)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Key {
     // Alphanumerics
-    K0, K1, K2, K3, K4, K5, K6, K7, K8, K9,
-    A, B, C, D, E, F, G, H, I, J, K, L, M,
-    N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
+    K0,
+    K1,
+    K2,
+    K3,
+    K4,
+    K5,
+    K6,
+    K7,
+    K8,
+    K9,
+    A,
+    B,
+    C,
+    D,
+    E,
+    F,
+    G,
+    H,
+    I,
+    J,
+    K,
+    L,
+    M,
+    N,
+    O,
+    P,
+    Q,
+    R,
+    S,
+    T,
+    U,
+    V,
+    W,
+    X,
+    Y,
+    Z,
 
     // ACPI keys
     ACPI_Power,
@@ -113,7 +146,6 @@ pub enum Key {
     Multimedia_WWW_Search,
     Multimedia_WWW_Stop,
 
-
     // Special keys
     Escape,
     CapsLock,
@@ -127,41 +159,65 @@ impl Key {
     pub fn produces_text(&self) -> Option<String> {
         use self::Key::*;
         let s = match self {
-            K0 => "0", K1 => "1", K2 => "2",
-            K3 => "3", K4 => "4", K5 => "5",
-            K6 => "6", K7 => "7", K8 => "8",
+            K0 => "0",
+            K1 => "1",
+            K2 => "2",
+            K3 => "3",
+            K4 => "4",
+            K5 => "5",
+            K6 => "6",
+            K7 => "7",
+            K8 => "8",
             K9 => "9",
-            A => "a", B => "b", C => "c",
-            D => "d", E => "e", F => "f",
-            G => "g", H => "h", I => "i",
-            J => "j", K => "k", L => "l",
-            M => "m", N => "n", O => "o",
-            P => "p", Q => "q", R => "r",
-            S => "s", T => "t", U => "u",
-            V => "v", W => "w", X => "x",
-            Y => "y", Z => "z",
-            Space => " ", Enter => "\n",
+            A => "a",
+            B => "b",
+            C => "c",
+            D => "d",
+            E => "e",
+            F => "f",
+            G => "g",
+            H => "h",
+            I => "i",
+            J => "j",
+            K => "k",
+            L => "l",
+            M => "m",
+            N => "n",
+            O => "o",
+            P => "p",
+            Q => "q",
+            R => "r",
+            S => "s",
+            T => "t",
+            U => "u",
+            V => "v",
+            W => "w",
+            X => "x",
+            Y => "y",
+            Z => "z",
+            Space => " ",
+            Enter => "\n",
 
             // Symbols
-            Backslash   => "\\",
-            Backtick    => "`",
-            Comma       => ",",
-            Equals      => "=",
-            Minus       => "-",
-            Period      => ".",
-            Semicolon   => ";",
+            Backslash => "\\",
+            Backtick => "`",
+            Comma => ",",
+            Equals => "=",
+            Minus => "-",
+            Period => ".",
+            Semicolon => ";",
             Singlequote => "'",
-            Slash       => "/",
+            Slash => "/",
 
-            LeftBracket     => "[",
-            RightBracket    => "]",
-            _ => ""
-        }.to_owned();
+            LeftBracket => "[",
+            RightBracket => "]",
+            _ => "",
+        }
+        .to_owned();
 
         if s.is_empty() {
             None
-        }
-        else {
+        } else {
             Some(s.to_owned())
         }
     }

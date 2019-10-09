@@ -1,6 +1,5 @@
 use x86_64::PrivilegeLevel;
 
-
 macro_rules! irq_handler {
     ($name:ident) => {{
         unsafe extern "x86-interrupt" fn wrapper(_: &mut ExceptionStackFrame) {
@@ -11,36 +10,46 @@ macro_rules! irq_handler {
 }
 
 macro_rules! syscall_handler {
-    ($name:ident) => {{
+    ($name:ident, $altreturn:ident) => {{
         #[naked]
         unsafe fn wrapper(_: &mut ExceptionStackFrame) {
-            asm!("push rcx
+            asm!("
+                // Push scratch registers
+                push rcx
                 push rsi
                 push rdi
                 push r8
                 push r9
                 push r10
                 push r11
-            " ::: "memory" : "intel", "volatile");
 
-            asm!("
+                // Call the actual hanlder
                 call $0
-            "   :
-                : "i"($name as unsafe extern "C" fn())
-                : "rdi"
-                : "intel"
-            );
 
-            asm!("pop r11
+                // Check if needed alternative return point is used
+                cmp rax, 2
+                je  altreturn
+
+                // Return normally
+                pop r11
                 pop r10
                 pop r9
                 pop r8
                 pop rdi
                 pop rsi
                 pop rcx
-            " ::: "memory" : "intel", "volatile");
+                iretq
 
-            asm!("iretq" :::: "intel", "volatile");
+                // Alternative return
+            altreturn:
+                sub rsp, 8 // Remove RIP from stack
+                // push $1
+                iretq
+            "   :
+                : "i"($name as unsafe extern "C" fn()), "i"($altreturn as unsafe fn() -> !)
+                : "rdi"
+                : "intel"
+            );
         }
         idt::Descriptor::new(true, wrapper as u64, PrivilegeLevel::Ring0, 0)
     }};
@@ -71,7 +80,7 @@ macro_rules! exception_handler_with_error_code {
 }
 
 macro_rules! simple_exception_handler {
-    ($text:expr) =>  {{
+    ($text:expr) => {{
         unsafe extern "x86-interrupt" fn wrapper(stack_frame: &mut ExceptionStackFrame) {
             unsafe {
                 rforce_unlock!();

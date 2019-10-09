@@ -1,5 +1,5 @@
-use alloc::string::String;
 use alloc::borrow::ToOwned;
+use alloc::string::String;
 
 pub fn cpu_brand() -> String {
     let mut result = String::new();
@@ -32,7 +32,6 @@ pub fn cpu_brand() -> String {
     }
     result.trim().to_owned()
 }
-
 
 fn run_feature_checks(_ecx: u32, _edx: u32) {
     // TODO

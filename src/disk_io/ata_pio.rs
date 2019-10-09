@@ -1,5 +1,5 @@
-use alloc::vec::Vec;
 use alloc::boxed::Box;
+use alloc::vec::Vec;
 use cpuio::UnsafePort;
 use spin::Mutex;
 
@@ -7,14 +7,14 @@ use super::BlockDevice;
 
 const SECTOR_SIZE: usize = 0x200;
 
-const PORT_DATA:            u16 = 0x1F0;
-const PORT_SECCOUNT:        u16 = 0x1F2;
-const PORT_LBA0:            u16 = 0x1F3;
-const PORT_LBA1:            u16 = 0x1F4;
-const PORT_LBA2:            u16 = 0x1F5;
-const PORT_LBA3:            u16 = 0x1F6;
-const PORT_COMMAND:         u16 = 0x1F7;
-const PORT_DEV_CTRL:        u16 = 0x3F6;
+const PORT_DATA: u16 = 0x1F0;
+const PORT_SECCOUNT: u16 = 0x1F2;
+const PORT_LBA0: u16 = 0x1F3;
+const PORT_LBA1: u16 = 0x1F4;
+const PORT_LBA2: u16 = 0x1F5;
+const PORT_LBA3: u16 = 0x1F6;
+const PORT_COMMAND: u16 = 0x1F7;
+const PORT_DEV_CTRL: u16 = 0x3F6;
 
 #[derive(Debug, Clone)]
 pub struct DriveProperties {
@@ -32,20 +32,23 @@ impl DriveProperties {
 }
 
 pub struct AtaPio {
-    properties: DriveProperties
+    properties: DriveProperties,
 }
 impl AtaPio {
-    pub fn try_new() -> Option<Box<BlockDevice>> {
+    pub fn try_new() -> Option<Box<dyn BlockDevice>> {
         rprintln!("DiskIO: Checking for ATA PIO");
         unsafe {
             Self::check_floating_bus();
             Self::reset_drives();
         }
-        let properties = unsafe {Self::identify()};
+        let properties = unsafe { Self::identify() };
         rprintln!("DiskIO: ATA PIO found");
-        rprintln!("DiskIO: ATA PIO LBA48 support: {}", properties.clone().supports_lba48());
+        rprintln!(
+            "DiskIO: ATA PIO LBA48 support: {}",
+            properties.clone().supports_lba48()
+        );
 
-        Some(box AtaPio {properties})
+        Some(box AtaPio { properties })
     }
 
     #[inline]
@@ -71,13 +74,15 @@ impl AtaPio {
         ctrl.write(0);
 
         // Wait for BSY to be clear and RDY set
-        for _ in 0..4 { // 400ns delay
+        for _ in 0..4 {
+            // 400ns delay
             let _ = ctrl.read();
         }
 
         loop {
             let v = ctrl.read();
-            if (v & 0xc0) == 0x40 { // BSY clear, RDY set?
+            if (v & 0xc0) == 0x40 {
+                // BSY clear, RDY set?
                 break;
             }
         }
@@ -95,7 +100,6 @@ impl AtaPio {
             panic!("No ATA drives attached.");
         }
     }
-
 
     /// Polls ATA controller to see if the drive is ready
     #[inline]
@@ -116,10 +120,14 @@ impl AtaPio {
         // https://wiki.osdev.org/ATA_PIO_Mode#IDENTIFY_command
 
         // Clear LBA_N ports
-        let mut port_lba0 = UnsafePort::<u8>::new(PORT_LBA0); port_lba0.write(0);
-        let mut port_lba1 = UnsafePort::<u8>::new(PORT_LBA1); port_lba1.write(0);
-        let mut port_lba2 = UnsafePort::<u8>::new(PORT_LBA2); port_lba2.write(0);
-        let mut port_lba3 = UnsafePort::<u8>::new(PORT_LBA3); port_lba3.write(0);
+        let mut port_lba0 = UnsafePort::<u8>::new(PORT_LBA0);
+        port_lba0.write(0);
+        let mut port_lba1 = UnsafePort::<u8>::new(PORT_LBA1);
+        port_lba1.write(0);
+        let mut port_lba2 = UnsafePort::<u8>::new(PORT_LBA2);
+        port_lba2.write(0);
+        let mut port_lba3 = UnsafePort::<u8>::new(PORT_LBA3);
+        port_lba3.write(0);
 
         // Send IDENTIFY command
         Self::send_command(0xEC);
@@ -139,7 +147,8 @@ impl AtaPio {
                 panic!("ATA_PIO: Drive controller error on IDENTIFY");
             }
 
-            if (data & (1 << 7)) != 0 { // is busy
+            if (data & (1 << 7)) != 0 {
+                // is busy
                 continue;
             }
 
@@ -171,10 +180,10 @@ impl AtaPio {
         let mut lba48_sectors: Option<u64> = None;
         if lba48_supported {
             lba48_sectors = Some(
-                ( data[100] as u64) |
-                ((data[101] as u64) << 0x10) |
-                ((data[102] as u64) << 0x20) |
-                ((data[103] as u64) << 0x30)
+                (data[100] as u64)
+                    | ((data[101] as u64) << 0x10)
+                    | ((data[102] as u64) << 0x20)
+                    | ((data[103] as u64) << 0x30),
             );
         }
 
@@ -184,7 +193,7 @@ impl AtaPio {
 
         DriveProperties {
             lba28_sectors,
-            lba48_sectors
+            lba48_sectors,
         }
     }
 
@@ -243,17 +252,19 @@ impl BlockDevice for AtaPio {
         true
     }
 
-    /// Capacity in bytes
-    fn capacity_bytes(&mut self) -> u64 {
-        self.properties.sector_count(   ) * 0x200
+    fn sector_size(&self) -> u64 {
+        0x200
+    }
+
+    /// Capacity in sectors
+    fn capacity_sectors(&mut self) -> u64 {
+        self.properties.sector_count()
     }
 
     fn read(&mut self, sector: u64) -> Vec<u8> {
         assert!(sector < self.properties.sector_count());
 
-        unsafe {
-            self.read_lba(sector as u32, 1)
-        }
+        unsafe { self.read_lba(sector as u32, 1) }
     }
 
     fn write(&mut self, sector: u64, data: Vec<u8>) {

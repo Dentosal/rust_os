@@ -25,8 +25,8 @@ bitflags! {
     }
 }
 
-#[derive(Clone,Copy)]
-#[repr(C,packed)]
+#[derive(Clone, Copy)]
+#[repr(C, packed)]
 pub struct ELFHeader {
     magic: u32,
     bitness: u8,
@@ -46,20 +46,20 @@ pub struct ELFHeader {
     ph_table_entry_count: u16,
     sh_table_entry_size: u16,
     sh_table_entry_count: u16,
-    sh_table_names: u16
+    sh_table_names: u16,
 }
 
-#[derive(Clone,Copy)]
-#[repr(C,packed)]
+#[derive(Clone, Copy)]
+#[repr(C, packed)]
 pub struct ELFProgramHeader {
     pub header_type: u32,
     pub flags: ELFPermissionFlags,
     pub offset: u64,
     pub virtual_address: u64,
-    pub _undef: u64,            // physical address, unused
+    pub _undef: u64, // physical address, unused
     pub size_in_file: u64,
     pub size_in_memory: u64,
-    pub alignment: u64
+    pub alignment: u64,
 }
 impl ELFProgramHeader {
     pub fn loadable(&self) -> bool {
@@ -86,7 +86,6 @@ impl ELFProgramHeader {
 //     pub entry_size: u64
 // }
 
-
 #[derive(Debug)]
 #[allow(dead_code)]
 pub enum ELFParsingError {
@@ -102,33 +101,24 @@ pub enum ELFParsingError {
     EmptyHeader,
 }
 
-
 pub unsafe fn parse_elf(ptr: usize) -> Result<ELFData, ELFParsingError> {
     let elf_header: ELFHeader = *(ptr as *const _);
 
     if elf_header.magic != ELF_MAGIC {
         Err(ELFParsingError::NotElf)
-    }
-    else if elf_header.bitness != ELF_BITNESS_64 {
+    } else if elf_header.bitness != ELF_BITNESS_64 {
         Err(ELFParsingError::Not64Bit)
-    }
-    else if elf_header.ph_table_entry_size != ELF_PH_TABLE_ENTRY_SIZE {
+    } else if elf_header.ph_table_entry_size != ELF_PH_TABLE_ENTRY_SIZE {
         Err(ELFParsingError::InvalidELF)
-    }
-    else if elf_header.endianness != ELF_LITTLE_ENDIAN {
+    } else if elf_header.endianness != ELF_LITTLE_ENDIAN {
         Err(ELFParsingError::WrongEndianness)
-    }
-    else if elf_header.elf_version != CURRENT_ELF_VERSION {
+    } else if elf_header.elf_version != CURRENT_ELF_VERSION {
         Err(ELFParsingError::WrongVersion)
-    }
-    else if elf_header.elf_version_2 != CURRENT_ELF_VERSION as u32 {
+    } else if elf_header.elf_version_2 != CURRENT_ELF_VERSION as u32 {
         Err(ELFParsingError::WrongVersion)
-    }
-
-    else if elf_header.instrucion_set != ELF_ARCH_X86_64 {
+    } else if elf_header.instrucion_set != ELF_ARCH_X86_64 {
         Err(ELFParsingError::WrongInstrcutionSet)
-    }
-    else {
+    } else {
         let mut elf_data = ELFData {
             header: elf_header,
             ph_table: [None; MAX_PH_ENTRY_COUNT],
@@ -138,19 +128,22 @@ pub unsafe fn parse_elf(ptr: usize) -> Result<ELFData, ELFParsingError> {
         // get program headers
         let mut ph_table = 0;
         for index in 0..elf_data.header.ph_table_entry_count {
-            let ph_ptr = ptr + (elf_data.header.ph_table_position as usize) + (elf_data.header.ph_table_entry_size as usize) * (index as usize);
+            let ph_ptr = ptr
+                + (elf_data.header.ph_table_position as usize)
+                + (elf_data.header.ph_table_entry_size as usize) * (index as usize);
             let ph: ELFProgramHeader = *(ph_ptr as *const _);
 
             // rprintln!("> {:x}", ph_ptr-ptr);
             // rprintln!("< {:x}", ph.header_type);
 
             match ph.header_type as usize {
-                1 => {      // load, (needed)
+                1 => {
+                    // load, (needed)
                     elf_data.ph_table[ph_table] = Some(ph);
                     ph_table += 1;
-                },
+                }
                 0x60000000 => {} // OS Specific 0, decompression tables, (but unused here)
-                _ => {}      // unknown, not supported
+                _ => {}          // unknown, not supported
             }
         }
         // // get section headers
@@ -178,10 +171,9 @@ pub unsafe fn parse_elf(ptr: usize) -> Result<ELFData, ELFParsingError> {
     }
 }
 
-
 pub unsafe fn parse_kernel_elf() -> ELFData {
     match parse_elf(KERNEL_ELF_IMAGE_POSITION) {
         Ok(header) => header,
-        Err(error) => panic!("Could not receive kernel image data: {:?}", error)
+        Err(error) => panic!("Could not receive kernel image data: {:?}", error),
     }
 }

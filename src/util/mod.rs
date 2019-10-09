@@ -90,9 +90,9 @@ macro_rules! bochs_magic_bp {
 }
 
 macro_rules! sizeof {
-    ($t:ty) => ({
+    ($t:ty) => {{
         ::core::mem::size_of::<$t>()
-    });
+    }};
 }
 
 pub fn io_wait() {

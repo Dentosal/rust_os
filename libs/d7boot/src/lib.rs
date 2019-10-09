@@ -1,5 +1,6 @@
 // Code style
 #![forbid(private_in_public)]
+#![forbid(bare_trait_objects)]
 // #![deny(unused_assignments)]
 // Code style (development time)
 #![allow(unused_macros)]
@@ -17,16 +18,15 @@
 #![deny(overflowing_literals)]
 #![deny(safe_packed_borrows)]
 #![deny(unused_must_use)]
-#![feature(lang_items)]
-#![feature(core_intrinsics)]
-#![feature(panic_info_message)]
+// Unstable features
 #![feature(asm)]
-#![feature(ptr_internals)]
 #![feature(const_fn)]
-#![feature(maybe_uninit)]
+#![feature(core_intrinsics)]
+#![feature(lang_items)]
 #![feature(naked_functions)]
+#![feature(panic_info_message)]
+#![feature(ptr_internals)]
 #![feature(stmt_expr_attributes)]
-#![feature(const_slice_len)]
 
 #[cfg(not(test))]
 use core::{

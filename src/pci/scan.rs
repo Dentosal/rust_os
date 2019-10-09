@@ -1,5 +1,5 @@
-use super::{Device, DeviceLocation, DeviceClass};
 use super::util::pci_read_device;
+use super::{Device, DeviceClass, DeviceLocation};
 
 use alloc::vec::Vec;
 
@@ -15,7 +15,11 @@ fn get_device_id(loc: DeviceLocation) -> u16 {
 
 fn get_devclass(loc: DeviceLocation) -> DeviceClass {
     let d = pci_read_device(loc, 0x8);
-    DeviceClass(((d & 0xFF000000) >> 24) as u8, ((d & 0x00FF0000) >> 16) as u8, ((d & 0x0000FF00) >> 8) as u8)
+    DeviceClass(
+        ((d & 0xFF000000) >> 24) as u8,
+        ((d & 0x00FF0000) >> 16) as u8,
+        ((d & 0x0000FF00) >> 8) as u8,
+    )
 }
 
 fn get_header_type(loc: DeviceLocation) -> u8 {
@@ -25,7 +29,6 @@ fn get_header_type(loc: DeviceLocation) -> u8 {
 fn get_secondary_bus(loc: DeviceLocation) -> u8 {
     ((pci_read_device(loc, 0x18) & 0x0000FF00) >> 8) as u8
 }
-
 
 fn check_device(bus: u8, dev: u8) -> Vec<Device> {
     let mut result = Vec::new();
@@ -60,7 +63,10 @@ fn check_function(loc: DeviceLocation) -> Vec<Device> {
 }
 
 fn check_bus(bus: u8) -> Vec<Device> {
-    (0..=32).map(|dev| check_device(bus, dev)).flat_map(|v| v).collect()
+    (0..=32)
+        .map(|dev| check_device(bus, dev))
+        .flat_map(|v| v)
+        .collect()
 }
 
 pub fn check_all_busses() -> Vec<Device> {
@@ -68,8 +74,7 @@ pub fn check_all_busses() -> Vec<Device> {
     if (header_type & 0x80) == 0 {
         // A single PCI host controller
         check_bus(0)
-    }
-    else {
+    } else {
         let mut result = Vec::new();
         // Multiple PCI host controllers
         for func in 0..=8 {

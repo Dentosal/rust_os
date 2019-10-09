@@ -1,8 +1,8 @@
 // See http://os.phil-opp.com/double-faults.html#switching-stacks for more info
 use core::mem::size_of;
 
-use x86_64::structures::tss::TaskStateSegment;
 use x86_64::structures::gdt::SegmentSelector;
+use x86_64::structures::tss::TaskStateSegment;
 use x86_64::PrivilegeLevel;
 
 const GDT_TABLE_COUNT: usize = 8;
@@ -20,17 +20,15 @@ bitflags! {
 
 pub enum Descriptor {
     UserSegment(u64),
-    SystemSegment(u64, u64)
+    SystemSegment(u64, u64),
 }
 
 impl Descriptor {
     pub fn kernel_code_segment() -> Descriptor {
-        let flags =
-            DescriptorFlags::USER_SEGMENT |
-            DescriptorFlags::PRESENT |
-            DescriptorFlags::EXECUTABLE |
-            DescriptorFlags::LONG_MODE
-        ;
+        let flags = DescriptorFlags::USER_SEGMENT
+            | DescriptorFlags::PRESENT
+            | DescriptorFlags::EXECUTABLE
+            | DescriptorFlags::LONG_MODE;
         Descriptor::UserSegment(flags.bits())
     }
     pub fn tss_segment(tss: &'static TaskStateSegment) -> Descriptor {
@@ -42,7 +40,7 @@ impl Descriptor {
         // base
         low.set_bits(16..40, ptr.get_bits(0..24));
         low.set_bits(56..64, ptr.get_bits(24..32));
-        low.set_bits(0..16, (size_of::<TaskStateSegment>()-1) as u64);
+        low.set_bits(0..16, (size_of::<TaskStateSegment>() - 1) as u64);
         // type (0b1001 = available 64-bit tss)
         low.set_bits(40..44, 0b1001);
 
@@ -55,13 +53,13 @@ impl Descriptor {
 
 pub struct Gdt {
     table: [u64; GDT_TABLE_COUNT],
-    next_free: usize
+    next_free: usize,
 }
 impl Gdt {
     pub fn new() -> Gdt {
         Gdt {
             table: [0; GDT_TABLE_COUNT],
-            next_free: 1 // table[0] is the zero descriptor, so it is not free
+            next_free: 1, // table[0] is the zero descriptor, so it is not free
         }
     }
     pub fn add_entry(&mut self, entry: Descriptor) -> SegmentSelector {
@@ -81,14 +79,13 @@ impl Gdt {
             self.table[index] = value;
             self.next_free += 1;
             index
-        }
-        else {
+        } else {
             panic!("GDT full");
         }
     }
     pub unsafe fn load(&'static self) {
-        use x86_64::instructions::tables::{DescriptorTablePointer, lgdt};
         use core::mem::size_of;
+        use x86_64::instructions::tables::{lgdt, DescriptorTablePointer};
 
         let ptr = DescriptorTablePointer {
             base: (self.table.as_ptr() as *const _) as u64,

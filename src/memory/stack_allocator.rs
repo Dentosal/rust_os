@@ -1,16 +1,15 @@
-use paging;
-use paging::page::{Page, PageIter};
-use memory::paging::ActivePageTable;
-use mem_map::{MEM_PAGE_SIZE_BYTES, FrameAllocator};
+use x86_64::structures::paging as pg;
+
+use super::prelude::*;
 
 #[derive(Debug)]
 pub struct Stack {
-    pub top: usize,
-    pub bottom: usize,
+    pub top: PhysAddr,
+    pub bottom: PhysAddr,
 }
 
 impl Stack {
-    fn new(top: usize, bottom: usize) -> Stack {
+    fn new(top: PhysAddr, bottom: PhysAddr) -> Stack {
         assert!(top > bottom);
         Stack {
             top: top,
@@ -20,21 +19,20 @@ impl Stack {
 }
 
 pub struct StackAllocator {
-    range: PageIter
+    range: pg::page::PageRangeInclusive,
 }
 
 impl StackAllocator {
-    pub fn new(range: PageIter) -> StackAllocator {
-        StackAllocator { range }
+    pub fn new(range: pg::page::PageRangeInclusive) -> Self {
+        Self { range }
     }
 
-    pub fn alloc_stack<FA: FrameAllocator>(
-                &mut self,
-                active_table: &mut ActivePageTable,
-                frame_allocator: &mut FA,
-                size_in_pages: usize
-            ) -> Option<Stack> {
-
+    pub fn alloc_stack<A: pg::FrameAllocator<pg::Size4KiB>>(
+        &mut self,
+        active_table: &mut pg::RecursivePageTable,
+        frame_allocator: &mut A,
+        size_in_pages: usize,
+    ) -> Option<Stack> {
         assert!(size_in_pages > 0);
 
         // Clone the range, since we only want to change it on success
@@ -46,10 +44,9 @@ impl StackAllocator {
         let stack_start = range.next();
         let stack_end = if size_in_pages == 1 {
             stack_start
-        }
-        else {
+        } else {
             // index starts at 0 and we have already allocated the start page
-            range.nth(size_in_pages-2)
+            range.nth(size_in_pages - 2)
         };
 
         if let (Some(_), Some(start), Some(end)) = (guard_page, stack_start, stack_end) {
@@ -60,14 +57,18 @@ impl StackAllocator {
 
             // Map stack pages to physical frames
             for page in Page::range_inclusive(start, end) {
-                active_table.map(page, paging::entry::EntryFlags::WRITABLE, frame_allocator);
+                // active_table.alloc_map(page, PageTableFlags::WRITABLE, frame_allocator);
+                unimplemented!();
             }
 
             // Create a new stack
-            let new_top = end.start_address() + MEM_PAGE_SIZE_BYTES;
-            Some(Stack::new(new_top, start.start_address()))
-        }
-        else {
+            let new_top = end.start_address() + Page::SIZE;
+            // TODO: Check that virtual and physical addresses match, or map
+            Some(Stack::new(
+                PhysAddr::new(new_top.as_u64()),
+                PhysAddr::new(start.start_address().as_u64()),
+            ))
+        } else {
             // Not enough pages
             None
         }

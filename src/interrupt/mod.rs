@@ -1,17 +1,17 @@
 use spin::Once;
-use x86_64::structures::tss::TaskStateSegment;
-use x86_64::structures::gdt::SegmentSelector;
 use x86_64::instructions::segmentation::set_cs;
 use x86_64::instructions::tables::load_tss;
+use x86_64::structures::gdt::SegmentSelector;
+use x86_64::structures::tss::TaskStateSegment;
 use x86_64::PrivilegeLevel;
-use x86_64::VirtualAddress;
+use x86_64::VirtAddr;
 
-
-use core::ptr;
-use core::mem;
 use core::fmt;
+use core::mem;
+use core::ptr;
 
 use crate::keyboard;
+use crate::multitasking::on_process_over;
 use crate::pic;
 use crate::time;
 
@@ -22,13 +22,13 @@ pub mod idt;
 
 use memory::{self, MemoryController};
 
-#[repr(C,packed)]
+#[repr(C, packed)]
 struct ExceptionStackFrame {
     instruction_pointer: u64,
     code_segment: u64,
     cpu_flags: u64,
     stack_pointer: u64,
-    stack_segment: u64
+    stack_segment: u64,
 }
 impl fmt::Display for ExceptionStackFrame {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -45,14 +45,22 @@ impl fmt::Display for ExceptionStackFrame {
 /// Breakpoint handler
 unsafe fn exception_bp(stack_frame: &ExceptionStackFrame) {
     rforce_unlock!();
-    rprintln!("Breakpoint at {:#x}\n{}", (*stack_frame).instruction_pointer, *stack_frame);
+    rprintln!(
+        "Breakpoint at {:#x}\n{}",
+        (*stack_frame).instruction_pointer,
+        *stack_frame
+    );
     bochs_magic_bp!();
 }
 
 /// Invalid Opcode handler (instruction undefined)
 unsafe fn exception_ud(stack_frame: &ExceptionStackFrame) {
     rforce_unlock!();
-    rprintln!("Exception: invalid opcode at {:#x}\n{}", (*stack_frame).instruction_pointer, *stack_frame);
+    rprintln!(
+        "Exception: invalid opcode at {:#x}\n{}",
+        (*stack_frame).instruction_pointer,
+        *stack_frame
+    );
     loop {}
 }
 
@@ -60,7 +68,7 @@ unsafe fn exception_ud(stack_frame: &ExceptionStackFrame) {
 #[allow(unused_variables)]
 unsafe fn exception_df(stack_frame: &ExceptionStackFrame, error_code: u64) {
     // error code is always zero
-    panic_indicator!(0x4f664f64);   // "df"
+    panic_indicator!(0x4f664f64); // "df"
     rforce_unlock!();
     rprintln!("Exception: Double Fault\n{}", *stack_frame);
     rprintln!("exception stack frame at {:#p}", stack_frame);
@@ -70,12 +78,16 @@ unsafe fn exception_df(stack_frame: &ExceptionStackFrame, error_code: u64) {
 /// General Protection Fault handler
 unsafe fn exception_gpf(stack_frame: &ExceptionStackFrame, error_code: u64) {
     rforce_unlock!();
-    rprintln!("Exception: General Protection Fault with error code {:#x}\n{}", error_code, *stack_frame);
+    rprintln!(
+        "Exception: General Protection Fault with error code {:#x}\n{}",
+        error_code,
+        *stack_frame
+    );
     loop {}
 }
 
-/// Page Fault error codes
 bitflags! {
+    /// Page Fault error codes
     struct PageFaultErrorCode: u64 {
         const PROTECTION_VIOLATION  = 1 << 0;
         const CAUSED_BY_WRITE       = 1 << 1;
@@ -88,7 +100,13 @@ bitflags! {
 /// Page Fault handler
 unsafe fn exception_pf(stack_frame: &ExceptionStackFrame, error_code: u64) {
     rforce_unlock!();
-    rprintln!("Exception: Page Fault with error code {:?} ({:?}) at {:#x}\n{}", error_code, PageFaultErrorCode::from_bits(error_code).unwrap(), register!(cr2), *stack_frame);
+    rprintln!(
+        "Exception: Page Fault with error code {:?} ({:?}) at {:#x}\n{}",
+        error_code,
+        PageFaultErrorCode::from_bits(error_code).unwrap(),
+        register!(cr2),
+        *stack_frame
+    );
     loop {}
 }
 
@@ -97,13 +115,14 @@ unsafe fn exception_pf(stack_frame: &ExceptionStackFrame, error_code: u64) {
 enum SegmentNotPresentTable {
     GDT,
     IDT,
-    LDT
+    LDT,
 }
 
 /// Segment Not Present handler
 unsafe fn exception_snp(stack_frame: &ExceptionStackFrame, error_code: u64) {
     rforce_unlock!();
-    rprintln!("Exception: Segment Not Present with error code {:#x} (e={:b},t={:?},i={:#x})\n{}",
+    rprintln!(
+        "Exception: Segment Not Present with error code {:#x} (e={:b},t={:?},i={:#x})\n{}",
         error_code,
         error_code & 0b1,
         match (error_code & 0b110) >> 1 {
@@ -111,7 +130,9 @@ unsafe fn exception_snp(stack_frame: &ExceptionStackFrame, error_code: u64) {
             0b01 => SegmentNotPresentTable::IDT,
             0b10 => SegmentNotPresentTable::LDT,
             0b11 => SegmentNotPresentTable::IDT,
-            _ => {unreachable!();}
+            _ => {
+                unreachable!();
+            }
         },
         (error_code & 0xFFFF) >> 4, // FIXME: 3 ?
         *stack_frame
@@ -125,9 +146,8 @@ unsafe fn exception_irq0() {
     pic::PICS.lock().notify_eoi(0x20);
 }
 
-
 /// First ps/2 device, keyboard, sent data
-unsafe fn exception_irq1()  {
+unsafe fn exception_irq1() {
     rforce_unlock!();
     keyboard::KEYBOARD.force_unlock();
     let mut kbd = keyboard::KEYBOARD.lock();
@@ -137,18 +157,16 @@ unsafe fn exception_irq1()  {
     pic::PICS.lock().notify_eoi(0x21);
 }
 
-
 /// First ATA device is ready for data transfer
 pub unsafe fn exception_irq14() {
     // Since we are polling the drive, just ignore the IRQ
     pic::PICS.lock().notify_eoi(0x2e);
 }
 
-
 /// System calls
 #[naked]
 pub unsafe extern "C" fn syscall() {
-    use super::syscall::{SyscallResult, call};
+    use super::syscall::call;
 
     let routine: u64;
     let arg0: u64;
@@ -166,34 +184,39 @@ pub unsafe extern "C" fn syscall() {
         "intel"
     );
 
-    let result = call(routine, (arg0, arg1, arg2, arg3));
-    register!(rax, result.success);
-    register!(rdx, result.result);
+    if let Some(result) = call(routine, (arg0, arg1, arg2, arg3)) {
+        register!(rax, result.success);
+        register!(rdx, result.result);
+    } else {
+        register!(rax, 2); // Special value used to signal no return
+    }
 }
-
 
 static TSS: Once<TaskStateSegment> = Once::new();
 static GDT: Once<gdt::Gdt> = Once::new();
 
 pub fn init() {
     // Initialize TSS
-    let double_fault_stack = memory::configure(|mem_ctrl: &mut MemoryController| {
-        mem_ctrl.alloc_stack(1).expect("could not allocate double fault stack")
-    });
+    // let double_fault_stack = memory::configure(|mem_ctrl: &mut MemoryController| {
+    //     mem_ctrl
+    //         .alloc_stack(1)
+    //         .expect("could not allocate double fault stack")
+    // });
 
-    let mut code_selector   = SegmentSelector::new(0, PrivilegeLevel::Ring0);
-    let mut tss_selector    = SegmentSelector::new(1, PrivilegeLevel::Ring0);
+    let mut code_selector = SegmentSelector::new(0, PrivilegeLevel::Ring0);
+    // let mut tss_selector = SegmentSelector::new(1, PrivilegeLevel::Ring0);
 
-    let tss = TSS.call_once(|| {
-        let mut tss = TaskStateSegment::new();
-        tss.interrupt_stack_table[gdt::DOUBLE_FAULT_IST_INDEX] = VirtualAddress(double_fault_stack.top);
-        tss
-    });
+    // let tss = TSS.call_once(|| {
+    //     let mut tss = TaskStateSegment::new();
+    //     tss.interrupt_stack_table[gdt::DOUBLE_FAULT_IST_INDEX] =
+    //         VirtAddr::new(double_fault_stack.top.as_u64());
+    //     tss
+    // });
 
     let gdt = GDT.call_once(|| {
         let mut gdt = gdt::Gdt::new();
         code_selector = gdt.add_entry(gdt::Descriptor::kernel_code_segment());
-        tss_selector = gdt.add_entry(gdt::Descriptor::tss_segment(&tss));
+        // tss_selector = gdt.add_entry(gdt::Descriptor::tss_segment(&tss));
         gdt
     });
 
@@ -203,12 +226,11 @@ pub fn init() {
         // reload code segment register
         set_cs(code_selector);
         // load TSS
-        load_tss(tss_selector);
+        // load_tss(tss_selector);
     }
 
-    let mut handlers: [idt::Descriptor; idt::ENTRY_COUNT] = [
-        idt::Descriptor::new(false, 0, PrivilegeLevel::Ring0, 0); idt::ENTRY_COUNT
-    ];
+    let mut handlers: [idt::Descriptor; idt::ENTRY_COUNT] =
+        [idt::Descriptor::new(false, 0, PrivilegeLevel::Ring0, 0); idt::ENTRY_COUNT];
 
     // Bind exception handlers
     handlers[0x00] = simple_exception_handler!("Divide-by-zero Error");
@@ -221,11 +243,14 @@ pub fn init() {
     handlers[0x20] = irq_handler!(exception_irq0);
     handlers[0x21] = irq_handler!(exception_irq1);
     handlers[0x2e] = irq_handler!(exception_irq14);
-    handlers[0xd7] = syscall_handler!(syscall);
+    handlers[0xd7] = syscall_handler!(syscall, on_process_over);
 
-    for index in 0..=(idt::ENTRY_COUNT-1) {
+    for index in 0..=(idt::ENTRY_COUNT - 1) {
         unsafe {
-            ptr::write_volatile((idt::ADDRESS + index * mem::size_of::<idt::Descriptor>()) as *mut _, handlers[index]);
+            ptr::write_volatile(
+                (idt::ADDRESS + index * mem::size_of::<idt::Descriptor>()) as *mut _,
+                handlers[index],
+            );
         }
     }
 

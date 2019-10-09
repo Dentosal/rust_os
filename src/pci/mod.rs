@@ -7,9 +7,7 @@ use spin::Mutex;
 const CONFIG_ADDR: usize = 0xCF8;
 const CONFIG_DATA: usize = 0xCFC;
 
-struct CapabilityHeader {
-
-}
+struct CapabilityHeader {}
 
 /// Bus, device, function
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -23,7 +21,7 @@ pub struct Device {
     pub id: u16,
     pub vendor: u16,
     pub location: DeviceLocation,
-    pub class: DeviceClass
+    pub class: DeviceClass,
 }
 impl Device {
     fn new(id: u16, vendor: u16, location: DeviceLocation, class: DeviceClass) -> Device {
@@ -31,7 +29,7 @@ impl Device {
             id: id,
             vendor: vendor,
             location: location,
-            class: class
+            class: class,
         }
     }
 
@@ -54,14 +52,13 @@ impl Device {
         ((data >> (8 * (offset as u32 & 0b11))) & 0xff) as u8
     }
 
-
     pub fn status(&self) -> u16 {
         (unsafe { self.read(0x04) } >> 16) as u16
     }
 
     /// Read the linked list of capabilities, filter by type
     /// http://docs.oasis-open.org/virtio/virtio/v1.0/cs04/virtio-v1.0-cs04.html#x1-740004
-    pub fn read_capabilities<T>(&self, cap_type: u8, f: &Fn(&Self, u8) -> T) -> Vec<T> {
+    pub fn read_capabilities<T>(&self, cap_type: u8, f: &dyn Fn(&Self, u8) -> T) -> Vec<T> {
         assert!((self.status() & (1 << 4)) != 0, "Capabilities not availble");
         let mut cap_addr = (unsafe { self.read(0x34) } & 0b1111_1100) as u8;
 
@@ -97,13 +94,11 @@ impl Device {
 }
 
 pub struct PCIController {
-    devices: Option<Vec<Device>>
+    devices: Option<Vec<Device>>,
 }
 impl PCIController {
     const fn new() -> PCIController {
-        PCIController {
-            devices: None
-        }
+        PCIController { devices: None }
     }
 
     fn init(&mut self) {
@@ -119,7 +114,9 @@ impl PCIController {
     }
 
     pub fn find<P>(&self, pred: P) -> Option<Device>
-        where P: Fn(Device) -> bool {
+    where
+        P: Fn(Device) -> bool,
+    {
         for dev in self.devices.clone().unwrap() {
             if pred(dev) {
                 return Some(dev);

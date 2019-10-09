@@ -29,15 +29,15 @@ fn main() {
         let halfs = filearg.splitn(2, '=').collect::<Vec<_>>();
         assert_eq!(halfs.len(), 2);
 
-        let fs_filename = halfs[0];
-        let rl_filename = halfs[1];
+        let fs_filename = halfs[0].trim();
+        let rl_filename = halfs[1].trim();
 
         for (_, e, _) in &files {
             assert!(!e.name_matches(fs_filename), "Duplicate names not allowed");
         }
 
-        let f = File::open(rl_filename).expect(&format!("File not found: {}", rl_filename));
-        let meta = f.metadata().unwrap();
+        let f = File::open(rl_filename).expect(&format!("File not found: {:?}", rl_filename));
+        let meta = f.metadata().expect("Metadata not found");
         assert!(meta.is_file());
 
         let size_sectors = round_up_sector(meta.len());
@@ -48,8 +48,8 @@ fn main() {
     }
 
     let meta = {
-        let f = File::open(disk_img_path).unwrap();
-        f.metadata().unwrap()
+        let f = File::open(disk_img_path).expect("Target file not found");
+        f.metadata().expect("Target file metadata not available")
     };
     let size_sectors = round_up_sector(meta.len());
     assert!(size_sectors <= u32::MAX as u64);
@@ -64,7 +64,7 @@ fn main() {
     ) < size_sectors);
 
     { // Check placeholder magic
-        let mut f = File::open(disk_img_path).unwrap();
+        let mut f = File::open(disk_img_path).expect("Target file not found");
         let mut magic_check: [u8; 4] = [0; 4];
         f.seek(SeekFrom::Start(MBR_POSITION as u64)).unwrap();
         f.read(&mut magic_check).unwrap();
@@ -72,7 +72,7 @@ fn main() {
     }
 
     { // Check kernel skip index
-        let mut f = File::open(disk_img_path).unwrap();
+        let mut f = File::open(disk_img_path).expect("Target file not found");
         let mut empty_check: [u8; 4] = [0; 4];
         f.seek(SeekFrom::Start((kernel_skip_index as u64) * SECTOR_SIZE)).unwrap();
         f.read(&mut empty_check).unwrap();
@@ -125,7 +125,7 @@ fn main() {
 
         // Copy files to disk image
         for (i, (path, entry, _)) in files.clone().iter().enumerate() {
-            let mut rf = File::open(path).unwrap();
+            let mut rf = File::open(path).expect(&format!("Source file '{}' not found", path));
 
             files[i].2 = files_sectors_count as u32;
 

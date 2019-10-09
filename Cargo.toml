@@ -18,16 +18,16 @@ panic = "abort"
 
 [dependencies]
 rlibc = "*"                     # raw libc
-spin = "0.4.10"                 # spinlocks
+spin = "0.5"                    # spinlocks
 cpuio = "0.2.0"                 # cpu port IO
-bitflags = "1.0"                # bitflags
-bit_field = "0.7.0"             # bit fields
-volatile = "0.2.3"              # volatile read and write functions
+bitflags = "1.2"                # bitflags
+bit_field = "0.10.0"            # bit fields
+volatile = "0.2.6"              # volatile read and write functions
 static_assertions = "0.3.1"     # compile time assertions
+# x86_64 = "0.7.5"                # x86-64 instructions and data structures
 
-[dependencies.x86_64]
-default-features = false
-version = "0.1.2"
+[dependencies.x86_64]           # x86-64 instructions and data structures
+git = "https://github.com/Dentosal/x86_64"
 
 [dependencies.d7alloc]
 version = "*"

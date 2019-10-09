@@ -1,12 +1,13 @@
 use spin::Mutex;
 
-use mem_map::MEM_PAGE_SIZE_BYTES;
+use super::prelude::*;
+use x86_64::structures::paging::PageSize;
 
 // Must be kept in sync with plan.md
-pub const BASE: usize = 0x20000;
-pub const SIZE: usize = 0x50000;
+pub const BASE: PhysAddr = unsafe { PhysAddr::new_unchecked(0x20000) };
+pub const SIZE: u64 = 0x50000;
 
-pub const ENTRY_COUNT: usize = SIZE / MEM_PAGE_SIZE_BYTES;
+pub const ENTRY_COUNT: usize = (SIZE / Page::SIZE) as usize;
 const BITMAP_SIZE: usize = (ENTRY_COUNT + 7) / 8;
 
 pub struct Allocator {
@@ -15,7 +16,7 @@ pub struct Allocator {
 impl Allocator {
     const fn new() -> Allocator {
         Allocator {
-            reserved: [0; BITMAP_SIZE]
+            reserved: [0; BITMAP_SIZE],
         }
     }
 
@@ -48,7 +49,7 @@ impl Allocator {
             for i in 0..count {
                 self.reserve(index + i);
             }
-            return Some((BASE + index * MEM_PAGE_SIZE_BYTES) as *mut _);
+            return Some((BASE + (index as u64) * Page::SIZE).as_u64() as *mut _);
         }
 
         None

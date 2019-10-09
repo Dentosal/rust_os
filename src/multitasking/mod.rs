@@ -1,4 +1,4 @@
-use alloc::vec::Vec;
+use core::fmt;
 use spin::Mutex;
 
 mod process;
@@ -8,7 +8,25 @@ mod scheduler;
 use self::process_manager::ProcessManager;
 use self::scheduler::Scheduler;
 
-type ProcessId = u32;
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ProcessId(u32);
+impl ProcessId {
+    fn next(&self) -> Self {
+        Self(self.0.wrapping_add(1))
+    }
+}
+impl fmt::Display for ProcessId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
-pub static SCHEDULER: Mutex<Scheduler> = Mutex::new(Scheduler::new());
-pub static PROCMAN: Mutex<ProcessManager> = Mutex::new(ProcessManager::new());
+pub static SCHEDULER: Scheduler = unsafe { Scheduler::new() };
+pub static PROCMAN: ProcessManager = unsafe { ProcessManager::new() };
+
+/// Forcibly yield control to next process
+/// Blocks if not available
+#[naked]
+pub unsafe fn on_process_over() -> ! {
+    SCHEDULER.force_yield();
+}

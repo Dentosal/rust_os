@@ -3,19 +3,18 @@
 // and from, public domain:
 // http://wiki.osdev.org/PIC#Programming_the_PIC_chips
 
-use spin::Mutex;
 use cpuio::{Port, UnsafePort};
+use spin::Mutex;
 
 // PIC ports
 const PIC1_COMMAND: u16 = 0x20;
 const PIC2_COMMAND: u16 = 0xA0;
-const PIC1_DATA:    u16 = 0x21;
-const PIC2_DATA:    u16 = 0xA1;
+const PIC1_DATA: u16 = 0x21;
+const PIC2_DATA: u16 = 0xA1;
 
 // PIC commands
-const PIC_CMD_EOI:  u8 = 0x20;
+const PIC_CMD_EOI: u8 = 0x20;
 const PIC_CMD_INIT: u8 = 0x11;
-
 
 struct Pic {
     offset: u8,
@@ -33,7 +32,6 @@ impl Pic {
     }
 }
 
-
 pub struct ChainedPics {
     pics: [Pic; 2],
 }
@@ -44,22 +42,22 @@ impl ChainedPics {
             pics: [
                 Pic {
                     offset: pic1_offset,
-                    command_port:   UnsafePort::new(PIC1_COMMAND),
-                    data_port:      UnsafePort::new(PIC1_DATA),
+                    command_port: UnsafePort::new(PIC1_COMMAND),
+                    data_port: UnsafePort::new(PIC1_DATA),
                 },
                 Pic {
                     offset: pic2_offset,
-                    command_port:   UnsafePort::new(PIC2_COMMAND),
-                    data_port:      UnsafePort::new(PIC2_DATA),
+                    command_port: UnsafePort::new(PIC2_COMMAND),
+                    data_port: UnsafePort::new(PIC2_DATA),
                 },
-            ]
+            ],
         }
     }
     /// Init - remap irqs (http://wiki.osdev.org/PIC#Initialisation, https://pdos.csail.mit.edu/6.828/2005/readings/hardware/8259A.pdf)
     pub unsafe fn init(&mut self) {
         // Create local IO wait function
         let mut io_wait_port: Port<u8> = Port::new(0x80);
-        let mut io_wait = || { io_wait_port.write(0) };
+        let mut io_wait = || io_wait_port.write(0);
 
         // Save masks
         let mut mask1: u8 = self.pics[0].data_port.read();
@@ -113,6 +111,7 @@ impl ChainedPics {
     }
 }
 
+// Rempap interrupts to 0x20..0x30
 pub static PICS: Mutex<ChainedPics> = Mutex::new(unsafe { ChainedPics::new(0x20, 0x28) });
 
 pub fn init() {

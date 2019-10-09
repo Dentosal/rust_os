@@ -1,9 +1,8 @@
 // TODO: Some kind of version problem
 
-
 use acpi::rsdt;
 
-#[repr(C,packed)]
+#[repr(C, packed)]
 struct ACPISDTHeader {
     signature: [u8; 4],
     length: u32,
@@ -19,7 +18,7 @@ struct ACPISDTHeader {
 #[derive(Debug)]
 pub enum XSDPParseError {
     RSDPParseError(rsdt::RSDPParseError),
-    IncorrectChecksum
+    IncorrectChecksum,
 }
 
 pub unsafe fn get_xsdp() -> Result<bool, XSDPParseError> {
@@ -29,6 +28,6 @@ pub unsafe fn get_xsdp() -> Result<bool, XSDPParseError> {
             // TODO: checksum
             Ok(true)
         }
-        Err(e) => {Err(XSDPParseError::RSDPParseError(e))}
+        Err(e) => Err(XSDPParseError::RSDPParseError(e)),
     }
 }

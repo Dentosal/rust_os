@@ -7,7 +7,7 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use alloc::string::String;
 
-use mem_map::MEM_PAGE_SIZE_BYTES;
+use memory::Page::SIZE;
 
 use super::NIC;
 use virtio;
@@ -114,7 +114,7 @@ impl NIC for VirtioNet {
         let length = packet.len() + mem::size_of::<NetHeader>();
         let layout = Layout::from_size_align(
             length,
-            MEM_PAGE_SIZE_BYTES // page aligned
+            Page::SIZE // page aligned
         ).unwrap();
 
         let buffer: *mut u8 = unsafe { HEAP_ALLOCATOR.alloc(layout) } as *mut u8;

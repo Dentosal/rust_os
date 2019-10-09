@@ -4,8 +4,8 @@ version = "0.1.0"
 authors = ["Hannes Karppila <hannes.karppila@gmail.com>"]
 
 [dependencies]
-spin = "0.4.5"
+spin = "0.5"
 
 [dependencies.lazy_static]
-version = "0.2.1"
+version = "1.4.0"
 features = ["spin_no_std"]

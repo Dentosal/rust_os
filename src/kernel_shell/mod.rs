@@ -1,13 +1,11 @@
-use alloc::string::String;
 use alloc::borrow::ToOwned;
+use alloc::string::String;
 
 use keyboard;
 
 pub fn wait_enter() {
     loop {
-        if let Some(event) = {
-            (*keyboard::KEYBOARD.lock()).pop_event()
-        } {
+        if let Some(event) = { (*keyboard::KEYBOARD.lock()).pop_event() } {
             if event.event_type == keyboard::KeyboardEventType::Press {
                 if event.key == keyboard::Key::Enter {
                     break;
@@ -20,17 +18,14 @@ pub fn wait_enter() {
 fn read_line() -> String {
     let mut buffer = String::new();
     loop {
-        if let Some(event) = {
-            (*keyboard::KEYBOARD.lock()).pop_event()
-        } {
+        if let Some(event) = { (*keyboard::KEYBOARD.lock()).pop_event() } {
             if event.event_type == keyboard::KeyboardEventType::Press {
                 if event.key == keyboard::Key::Backspace {
                     if !buffer.is_empty() {
                         rprint!("\u{8}");
                         buffer.pop();
                     }
-                }
-                else if let Some(c) = event.key.produces_text() {
+                } else if let Some(c) = event.key.produces_text() {
                     if c == "\n".to_owned() {
                         return buffer;
                     }
@@ -39,7 +34,6 @@ fn read_line() -> String {
                 }
             }
         }
-
     }
 }
 
@@ -56,7 +50,7 @@ pub fn run() {
         }
 
         if let Ok(line) = line.parse::<u64>() {
-            let data = unsafe {crate::disk_io::DISK_IO.lock().read(line, 1)[0].clone()};
+            let data = unsafe { crate::disk_io::DISK_IO.lock().read(line, 1)[0].clone() };
             let mut iter = data.iter();
 
             'outer: loop {
@@ -64,8 +58,7 @@ pub fn run() {
                     for _ in 0..8 {
                         if let Some(x) = iter.next() {
                             rprint!("{:02x} ", x);
-                        }
-                        else {
+                        } else {
                             rprintln!("");
                             break 'outer;
                         }

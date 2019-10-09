@@ -7,10 +7,10 @@ TARGET="d7os"
 
 # some constants
 PATH=$PATH:$HOME/.cargo/bin
-export RUST_BACKTRACE=1
+# export RUST_BACKTRACE=1
 
 # Prepare for build
-mkdir -p build
+mkdir -p build/modules/
 
 echo "Compiling source files..."
 
@@ -18,7 +18,6 @@ echo "* Bootloader"
 # Compile bootloader
 nasm src/boot/stage0.asm -f bin -o build/stage0.bin
 nasm src/boot/stage1.asm -f bin -o build/stage1.bin
-# nasm src/boot/stage2.asm -f bin -o build/stage2.bin
 
 (
     cd libs/d7boot/ &&
@@ -35,9 +34,7 @@ nasm -f elf64 src/entry.asm -o build/entry.o
 echo "* Kernel"
 
 # Compile kernel (with full optimizations)
-# RUST_TARGET_PATH=$(pwd) xargo build --target $TARGET --release
-# RUSTFLAGS=-g RUST_TARGET_PATH=$(pwd) xargo rustc --target $TARGET --release -- -C opt-level=s
-RUSTFLAGS="-g -C opt-level=s" RUST_TARGET_PATH=$(pwd) cargo xbuild --target $TARGET --release
+RUSTFLAGS="-g -C opt-level=s" cargo xbuild --target d7os.json --release
 
 echo "* Kernel assembly routines"
 mkdir -p build/asm_routines/
@@ -51,6 +48,16 @@ done
 echo "* Rust cli tools"
 ( cd libs/d7staticfs/ && cargo build --release )
 ( cd libs/d7elfpack/  && cargo build --release )
+
+echo "* Kernel modules"
+for d in modules/*/ ; do
+    (
+        cd "$d" &&
+        cargo xbuild --target ../../libs/d7abi/d7abi.json --release &&
+        ld -z max-page-size=0x1000 --gc-sections -T ../../libs/d7abi/linker.ld -o  "../../build/modules/$(basename $(pwd)).elf" target/d7abi/release/*.a &&
+        strip "../../build/modules/$(basename $(pwd)).elf"
+    )
+done
 
 echo "Linking objects..."
 

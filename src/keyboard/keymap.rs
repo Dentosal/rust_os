@@ -1,17 +1,15 @@
-use super::key::Key;
 use super::event::{KeyboardEvent, KeyboardEventType};
+use super::key::Key;
 
 use alloc::vec::Vec;
 
 pub struct Keymap {
-    mapping: Option<Vec<(Vec<u8>, (Key, KeyboardEventType))>>
+    mapping: Option<Vec<(Vec<u8>, (Key, KeyboardEventType))>>,
 }
 
 impl Keymap {
     pub const fn new() -> Keymap {
-        Keymap {
-            mapping: None
-        }
+        Keymap { mapping: None }
     }
 
     pub fn init(&mut self) {
@@ -227,20 +225,41 @@ impl Keymap {
             (vec![0xF0, 0x7E], (Key::ScrollLock, Release)),
             (vec![0xF0, 0x83], (Key::F7, Release)),
             (vec![0xE0, 0x12, 0xE0, 0x7C], (Key::PrintScreen, Press)),
-            (vec![0xE0, 0xF0, 0x10], (Key::Multimedia_WWW_Search, Release)),
+            (
+                vec![0xE0, 0xF0, 0x10],
+                (Key::Multimedia_WWW_Search, Release),
+            ),
             (vec![0xE0, 0xF0, 0x11], (Key::RightAlt, Release)),
             (vec![0xE0, 0xF0, 0x14], (Key::RightControl, Release)),
-            (vec![0xE0, 0xF0, 0x15], (Key::Multimedia_PreviousTrack, Release)),
-            (vec![0xE0, 0xF0, 0x18], (Key::Multimedia_WWW_Favourites, Release)),
+            (
+                vec![0xE0, 0xF0, 0x15],
+                (Key::Multimedia_PreviousTrack, Release),
+            ),
+            (
+                vec![0xE0, 0xF0, 0x18],
+                (Key::Multimedia_WWW_Favourites, Release),
+            ),
             (vec![0xE0, 0xF0, 0x1F], (Key::GUI_Left, Release)),
-            (vec![0xE0, 0xF0, 0x20], (Key::Multimedia_WWW_Refresh, Release)),
-            (vec![0xE0, 0xF0, 0x21], (Key::Multimedia_VolumeDown, Release)),
+            (
+                vec![0xE0, 0xF0, 0x20],
+                (Key::Multimedia_WWW_Refresh, Release),
+            ),
+            (
+                vec![0xE0, 0xF0, 0x21],
+                (Key::Multimedia_VolumeDown, Release),
+            ),
             (vec![0xE0, 0xF0, 0x23], (Key::Multimedia_Mute, Release)),
             (vec![0xE0, 0xF0, 0x27], (Key::GUI_Right, Release)),
             (vec![0xE0, 0xF0, 0x28], (Key::Multimedia_WWW_Stop, Release)),
-            (vec![0xE0, 0xF0, 0x2B], (Key::Multimedia_Calculator, Release)),
+            (
+                vec![0xE0, 0xF0, 0x2B],
+                (Key::Multimedia_Calculator, Release),
+            ),
             (vec![0xE0, 0xF0, 0x2F], (Key::Apps, Release)),
-            (vec![0xE0, 0xF0, 0x30], (Key::Multimedia_WWW_Forward, Release)),
+            (
+                vec![0xE0, 0xF0, 0x30],
+                (Key::Multimedia_WWW_Forward, Release),
+            ),
             (vec![0xE0, 0xF0, 0x32], (Key::Multimedia_VolumeUp, Release)),
             (vec![0xE0, 0xF0, 0x34], (Key::Multimedia_PlayPause, Release)),
             (vec![0xE0, 0xF0, 0x37], (Key::ACPI_Power, Release)),
@@ -248,11 +267,17 @@ impl Keymap {
             (vec![0xE0, 0xF0, 0x3A], (Key::Multimedia_WWW_Home, Release)),
             (vec![0xE0, 0xF0, 0x3B], (Key::Multimedia_Stop, Release)),
             (vec![0xE0, 0xF0, 0x3F], (Key::ACPI_Sleep, Release)),
-            (vec![0xE0, 0xF0, 0x40], (Key::Multimedia_MyComputer, Release)),
+            (
+                vec![0xE0, 0xF0, 0x40],
+                (Key::Multimedia_MyComputer, Release),
+            ),
             (vec![0xE0, 0xF0, 0x48], (Key::Multimedia_Email, Release)),
             (vec![0xE0, 0xF0, 0x4A], (Key::Keypad_Divide, Release)),
             (vec![0xE0, 0xF0, 0x4D], (Key::Multimedia_NextTrack, Release)),
-            (vec![0xE0, 0xF0, 0x50], (Key::Multimedia_MediaSelect, Release)),
+            (
+                vec![0xE0, 0xF0, 0x50],
+                (Key::Multimedia_MediaSelect, Release),
+            ),
             (vec![0xE0, 0xF0, 0x5A], (Key::Keypad_Enter, Release)),
             (vec![0xE0, 0xF0, 0x5E], (Key::ACPI_Wake, Release)),
             (vec![0xE0, 0xF0, 0x69], (Key::End, Release)),
@@ -265,19 +290,25 @@ impl Keymap {
             (vec![0xE0, 0xF0, 0x75], (Key::CursorUp, Release)),
             (vec![0xE0, 0xF0, 0x7A], (Key::PageDown, Release)),
             (vec![0xE0, 0xF0, 0x7D], (Key::PageUp, Release)),
-            (vec![0xE0, 0xF0, 0x7C, 0xE0, 0xF0, 0x12], (Key::PrintScreen, Release)),
-            (vec![0xE1, 0x14, 0x77, 0xE1, 0xF0, 0x14, 0xF0, 0x77], (Key::Pause, Press)),
+            (
+                vec![0xE0, 0xF0, 0x7C, 0xE0, 0xF0, 0x12],
+                (Key::PrintScreen, Release),
+            ),
+            (
+                vec![0xE1, 0x14, 0x77, 0xE1, 0xF0, 0x14, 0xF0, 0x77],
+                (Key::Pause, Press),
+            ),
         ]);
     }
 
     pub fn get(&self, v: Vec<u8>) -> Option<KeyboardEvent> {
         match self.mapping {
-            Some(ref mapping) => {
-                mapping.iter()
-                .find(|x| x.0==v).map(|x| x.1)
-                .map(|x| KeyboardEvent::new(x.0, x.1))
-            },
-            None => None
+            Some(ref mapping) => mapping
+                .iter()
+                .find(|x| x.0 == v)
+                .map(|x| x.1)
+                .map(|x| KeyboardEvent::new(x.0, x.1)),
+            None => None,
         }
     }
 }

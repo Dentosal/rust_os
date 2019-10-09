@@ -2,27 +2,28 @@
 //! https://wiki.osdev.org/Virtio (Uses legacy pre-1.0 spec, not nice)
 //! http://docs.oasis-open.org/virtio/virtio/v1.0/cs04/virtio-v1.0-cs04.html
 
-mod virtq;
-pub use self::virtq::*;
-
 use core::mem;
 use core::ptr;
 use cpuio::UnsafePort;
-use alloc::vec::Vec;
 use volatile;
+use x86_64::structures::paging::Mapper;
 
-use pci;
-use mem_map::MEM_PAGE_SIZE_BYTES;
-use memory::{self, MemoryController, dma_allocator::DMA_ALLOCATOR};
+use alloc::prelude::v1::Vec;
+
+use crate::memory::prelude::PhysAddr;
+use crate::memory::{self, MemoryController};
+use crate::pci;
+
+mod virtq;
+pub use self::virtq::*;
 
 /// http://docs.oasis-open.org/virtio/virtio/v1.0/cs04/virtio-v1.0-cs04.html#x1-2830006
 const FEATURE_RING_EVENT_IDX: (usize, u32) = (0, 1 << 29);
-const FEATURE_VIRTIO_1:       (usize, u32) = (1, 1 <<  0);
-
+const FEATURE_VIRTIO_1: (usize, u32) = (1, 1 << 0);
 
 #[derive(Debug, Copy, Clone)]
 pub struct FeatureBits {
-    fields: [u32; 2]
+    fields: [u32; 2],
 }
 impl FeatureBits {
     pub fn new(fields: [u32; 2]) -> FeatureBits {
@@ -113,25 +114,24 @@ pub enum DeviceType {
 enum CommonCfg {
     // Whole VirtIO device
     DeviceFeatureSelect = 0x00, // u32 rw
-    DeviceFeature       = 0x04, // u32 r-
+    DeviceFeature = 0x04,       // u32 r-
     DriverFeatureSelect = 0x08, // u32 rw
-    DriverFeature       = 0x0c, // u32 rw
-    MSIxConfig          = 0x10, // u16 rw
-    NumQueues           = 0x12, // u16 r-
-    DeviceStatus        = 0x14, //  u8 rw
-    ConfigGeneration    = 0x15, //  u8 r-
+    DriverFeature = 0x0c,       // u32 rw
+    MSIxConfig = 0x10,          // u16 rw
+    NumQueues = 0x12,           // u16 r-
+    DeviceStatus = 0x14,        //  u8 rw
+    ConfigGeneration = 0x15,    //  u8 r-
 
     // Current VirtQueue
-    QueueSelect         = 0x16, // u16 rw
-    QueueSize           = 0x18, // u16 rw,  power of 2 (or 0)
-    QueueMSIxVector     = 0x1a, // u16 rw
-    QueueEnable         = 0x1c, // u16 rw
-    QueueNotifyOff      = 0x1e, // u16 r-
-    QueueDesc           = 0x20, // u64 rw
-    QueueAvail          = 0x28, // u64 rw
-    QueueUsed           = 0x30, // u64 rw
+    QueueSelect = 0x16,     // u16 rw
+    QueueSize = 0x18,       // u16 rw,  power of 2 (or 0)
+    QueueMSIxVector = 0x1a, // u16 rw
+    QueueEnable = 0x1c,     // u16 rw
+    QueueNotifyOff = 0x1e,  // u16 r-
+    QueueDesc = 0x20,       // u64 rw
+    QueueAvail = 0x28,      // u64 rw
+    QueueUsed = 0x30,       // u64 rw
 }
-
 
 pub struct VirtioDevice {
     pci_dev: pci::Device,
@@ -152,15 +152,13 @@ impl VirtioDevice {
 
     /// http://docs.oasis-open.org/virtio/virtio/v1.0/cs04/virtio-v1.0-cs04.html#x1-740004
     fn pci_capabilities(pci_dev: pci::Device) -> Vec<CapabilityInfo> {
-        pci_dev.read_capabilities(0x09, &|dev, addr| {
-            unsafe {
-                CapabilityInfo {
-                    pci_cfg_addr: addr,
-                    cfg_type: dev.read_u8(addr + 3),
-                    bar: dev.read_u8(addr + 4),
-                    offset: dev.read(addr + 8),
-                    length: dev.read(addr + 12),
-                }
+        pci_dev.read_capabilities(0x09, &|dev, addr| unsafe {
+            CapabilityInfo {
+                pci_cfg_addr: addr,
+                cfg_type: dev.read_u8(addr + 3),
+                bar: dev.read_u8(addr + 4),
+                offset: dev.read(addr + 8),
+                length: dev.read(addr + 12),
             }
         })
     }
@@ -172,7 +170,7 @@ impl VirtioDevice {
         let mut dev = VirtioDevice {
             pci_dev,
             capabilities,
-            notify_offsets: (0, vec![])
+            notify_offsets: (0, vec![]),
         };
         dev.mem_map_io_capability(CapabilityType::Common);
         dev.mem_map_io_capability(CapabilityType::Device);
@@ -183,35 +181,42 @@ impl VirtioDevice {
         Some(dev)
     }
 
-
     fn mem_map_io_capability(&mut self, ct: CapabilityType) {
         let start = self.capability_addr(ct);
         let size = self.capability_size(ct);
 
         memory::configure(|mem_ctrl: &mut MemoryController| {
-            use crate::mem_map::Frame;
-            use crate::paging::EntryFlags;
+            use crate::memory::PhysFrame;
+            use x86_64::structures::paging::PageTableFlags as Flags;
 
-            let f_start = Frame::containing_address(start as usize);
-            let f_end = Frame::containing_address((start + size - 1) as usize);
-            for frame in Frame::range_inclusive(f_start, f_end) {
-                mem_ctrl.active_table.identity_map(
-                    frame,
-                    EntryFlags::WRITABLE | EntryFlags::NO_EXECUTE,
-                    &mut mem_ctrl.frame_allocator
-                );
+            let f_start = PhysFrame::containing_address(start);
+            let f_end = PhysFrame::containing_address(PhysAddr::new((start + size).as_u64() - 1));
+            for frame in PhysFrame::range_inclusive(f_start, f_end) {
+                // mem_ctrl.paging(|p| {
+                //     p
+                //     .identity_map(
+                //         frame,
+                //         Flags::WRITABLE | Flags::NO_EXECUTE,
+                //         &mut mem_ctrl.frame_allocator,
+                //     )
+                //     .expect("Could not map configuration space")
+                //     .flush();
+                // })
             }
         });
     }
 
     fn capability(&self, cfg_type: CapabilityType) -> Option<CapabilityInfo> {
-        self.capabilities.iter().find(|ci| ci.cfg_type == (cfg_type as u8)).cloned()
+        self.capabilities
+            .iter()
+            .find(|ci| ci.cfg_type == (cfg_type as u8))
+            .cloned()
     }
 
-    fn capability_addr(&self, ct: CapabilityType) -> u64 {
+    fn capability_addr(&self, ct: CapabilityType) -> PhysAddr {
         let cap = self.capability(ct).expect("No config available");
-        let bar_lo = unsafe {self.pci_dev.get_bar(cap.bar)};
-        let bar_hi = unsafe {self.pci_dev.get_bar(cap.bar + 1)};
+        let bar_lo = unsafe { self.pci_dev.get_bar(cap.bar) };
+        let bar_hi = unsafe { self.pci_dev.get_bar(cap.bar + 1) };
 
         // https://wiki.osdev.org/Pci#Base_Address_Registers
         assert!(bar_lo & 1 == 0, "Memory BAR required");
@@ -219,7 +224,7 @@ impl VirtioDevice {
 
         let base_addr = (bar_lo & !0xfu32) as u64 | ((bar_hi as u64) << 32);
 
-        base_addr + (cap.offset as u64)
+        PhysAddr::new(base_addr + (cap.offset as u64))
     }
 
     fn capability_size(&self, ct: CapabilityType) -> u64 {
@@ -227,41 +232,33 @@ impl VirtioDevice {
     }
 
     /// Common config address
-    fn config_addr(&self, cc: CommonCfg) -> u64 {
+    fn config_addr(&self, cc: CommonCfg) -> PhysAddr {
         self.capability_addr(CapabilityType::Common) + (cc as u64)
     }
 
     /// Read common config variable at index
     fn read_config<T>(&mut self, cc: CommonCfg) -> T {
-        unsafe {
-            ptr::read_volatile(self.config_addr(cc) as *const T)
-        }
+        unsafe { ptr::read_volatile(self.config_addr(cc).as_u64() as *const T) }
     }
 
     /// Write common config variable at index
     fn write_config<T>(&mut self, cc: CommonCfg, value: T) {
-        unsafe {
-            ptr::write_volatile(self.config_addr(cc) as *mut T, value)
-        }
+        unsafe { ptr::write_volatile(self.config_addr(cc).as_u64() as *mut T, value) }
     }
 
     /// Device specific area config address
-    fn dev_config_addr(&self, cc: u64) -> u64 {
+    fn dev_config_addr(&self, cc: u64) -> PhysAddr {
         self.capability_addr(CapabilityType::Device) + cc
     }
 
     /// Read device specific config variable at index
     pub fn read_dev_config<T>(&mut self, cc: u64) -> T {
-        unsafe {
-            ptr::read_volatile(self.dev_config_addr(cc) as *const T)
-        }
+        unsafe { ptr::read_volatile(self.dev_config_addr(cc).as_u64() as *const T) }
     }
 
     /// Write device specific config variable at index
     pub fn write_dev_config<T>(&mut self, cc: u64, value: T) {
-        unsafe {
-            ptr::write_volatile(self.dev_config_addr(cc) as *mut T, value)
-        }
+        unsafe { ptr::write_volatile(self.dev_config_addr(cc).as_u64() as *mut T, value) }
     }
 
     pub fn get_status(&mut self) -> DeviceStatus {
@@ -292,7 +289,6 @@ impl VirtioDevice {
     /// # Returns
     /// Was setting features successful
     pub fn set_features(&mut self, features: FeatureBits) -> bool {
-
         // Check global driver features
         if !features.is_enabled(FEATURE_RING_EVENT_IDX) || !features.is_enabled(FEATURE_VIRTIO_1) {
             rprintln!("VirtIO: Device does not support VirtIO 1.0, disabled.");
@@ -339,9 +335,9 @@ impl VirtioDevice {
         let base_addr = vq.addr() as u64;
         let (a, b, _) = vq.sizes();
 
-        self.write_config::<u64>(CommonCfg::QueueDesc,  base_addr);
+        self.write_config::<u64>(CommonCfg::QueueDesc, base_addr);
         self.write_config::<u64>(CommonCfg::QueueAvail, base_addr + (a as u64));
-        self.write_config::<u64>(CommonCfg::QueueUsed,  base_addr + ((a + b) as u64));
+        self.write_config::<u64>(CommonCfg::QueueUsed, base_addr + ((a + b) as u64));
     }
 
     /// Enable or disable a queue
@@ -355,13 +351,11 @@ impl VirtioDevice {
     pub fn notify(&mut self, queue_index: u16) {
         // TODO: are there separate queue and index variables?
 
-        let notify_target = (
-            self.capability_addr(CapabilityType::Notify) +
-            self.notify_offsets.0 as u64 * self.notify_offsets.1[queue_index as usize] as u64
-        );
+        let notify_target = (self.capability_addr(CapabilityType::Notify)
+            + self.notify_offsets.0 as u64 * self.notify_offsets.1[queue_index as usize] as u64);
 
         unsafe {
-            ptr::write_volatile(notify_target as *mut u16, queue_index);
+            ptr::write_volatile(notify_target.as_u64() as *mut u16, queue_index);
         }
     }
 
@@ -370,7 +364,9 @@ impl VirtioDevice {
         assert!(self.notify_offsets.0 == 0);
 
         // VirtIO device must have at least one notification method (by spec)
-        let cap = self.capability(CapabilityType::Notify).expect("VirtIO: No notification capability");
+        let cap = self
+            .capability(CapabilityType::Notify)
+            .expect("VirtIO: No notification capability");
 
         // Global notification offset
         self.notify_offsets.0 = unsafe { self.pci_dev.read(cap.pci_cfg_addr + 16) };

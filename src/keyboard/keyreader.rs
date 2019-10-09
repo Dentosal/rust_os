@@ -3,18 +3,17 @@ use super::keymap::Keymap;
 
 use alloc::vec::Vec;
 
-
 const BUFFER_SIZE_LIMIT: usize = 10;
 
 pub struct KeyReader {
     buffer: Option<Vec<u8>>,
-    keymap: Keymap
+    keymap: Keymap,
 }
 impl KeyReader {
     pub const fn new() -> KeyReader {
         KeyReader {
             buffer: None,
-            keymap: Keymap::new()
+            keymap: Keymap::new(),
         }
     }
 
@@ -32,18 +31,15 @@ impl KeyReader {
                 let key = self.keymap.get(buf.clone());
                 if key.is_some() {
                     buf.clear();
-                }
-                else {
+                } else {
                     if buf.len() > BUFFER_SIZE_LIMIT {
                         buf.clear();
                         rprintln!("WARNING: Keyboard buffer full: detection error");
                     }
                 }
                 key
-            },
-            None => {
-                None
             }
+            None => None,
         }
     }
 }

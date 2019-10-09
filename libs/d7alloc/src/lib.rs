@@ -1,5 +1,6 @@
 #![feature(allocator_api)]
 #![feature(const_fn)]
+#![feature(integer_atomics)]
 
 #![deny(warnings)]
 
@@ -10,14 +11,14 @@ extern crate spin;
 use core::ptr::NonNull;
 use core::alloc::{GlobalAlloc, Alloc, AllocErr, Layout};
 
-pub const HEAP_START: usize = 0x40000000; // At 1 GiB
-pub const HEAP_SIZE: usize = 100 * 0x400;
+pub const HEAP_START: u64 = 0x40_000_000; // At 1 GiB
+pub const HEAP_SIZE: u64 = 100 * 0x400;
 
 use spin::Mutex;
 
 /// Align downwards. Returns the greatest x with alignment `align`
 /// so that x <= addr. The alignment must be a power of 2.
-pub fn align_down(addr: usize, align: usize) -> usize {
+pub fn align_down(addr: u64, align: u64) -> u64 {
     if align.is_power_of_two() {
         addr & !(align - 1)
     } else if align == 0 {
@@ -29,23 +30,23 @@ pub fn align_down(addr: usize, align: usize) -> usize {
 
 /// Align upwards. Returns the smallest x with alignment `align`
 /// so that x >= addr. The alignment must be a power of 2.
-pub fn align_up(addr: usize, align: usize) -> usize {
+pub fn align_up(addr: u64, align: u64) -> u64 {
     align_down(addr + align - 1, align)
 }
 
-use core::sync::atomic::{AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicU64, Ordering};
 
 /// A simple allocator that allocates memory linearly and ignores freed memory.
 #[derive(Debug)]
 pub struct BumpAllocator {
-    heap_start: usize,
-    heap_end: usize,
-    next: AtomicUsize,
+    heap_start: u64,
+    heap_end: u64,
+    next: AtomicU64,
 }
 
 impl BumpAllocator {
-    pub const fn new(heap_start: usize, heap_end: usize) -> Self {
-        Self { heap_start, heap_end, next: AtomicUsize::new(heap_start) }
+    pub const fn new(heap_start: u64, heap_end: u64) -> Self {
+        Self { heap_start, heap_end, next: AtomicU64::new(heap_start) }
     }
 }
 
@@ -54,8 +55,8 @@ unsafe impl<'a> Alloc for &'a BumpAllocator {
         loop {
             // load current state of the `next` field
             let current_next = self.next.load(Ordering::Relaxed);
-            let alloc_start = align_up(current_next, layout.align());
-            let alloc_end = alloc_start.saturating_add(layout.size());
+            let alloc_start = align_up(current_next, layout.align() as u64);
+            let alloc_end = alloc_start.saturating_add(layout.size() as u64);
 
             if alloc_end <= self.heap_end {
                 // update the `next` pointer if it still has the value `current_next`
@@ -63,7 +64,7 @@ unsafe impl<'a> Alloc for &'a BumpAllocator {
                     Ordering::Relaxed);
                 if next_now == current_next {
                     // next address was successfully updated, allocation succeeded
-                    return Ok(NonNull::new(alloc_start as *mut _).unwrap());
+                    return Ok(NonNull::new(alloc_start as *mut _).expect("Tried to alloc null ptr"));
                 }
             } else {
                 return Err(AllocErr)

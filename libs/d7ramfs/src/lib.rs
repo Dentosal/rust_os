@@ -1,18 +1,13 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
-
-#![feature(nll)]
-#![feature(box_syntax)]
-#![feature(box_patterns)]
-#![feature(const_fn)]
-#![feature(const_vec_new)]
-#![feature(const_string_new)]
-#![feature(alloc)]
-#![feature(never_type)]
-#![feature(vec_remove_item)]
+#![deny(bare_trait_objects)]
 #![feature(allocator_api)]
-
-
+#![feature(box_patterns)]
+#![feature(box_syntax)]
+#![feature(const_fn)]
+#![feature(never_type)]
+#![feature(nll)]
+#![feature(vec_remove_item)]
 #![no_std]
 
 // #[cfg(test)]
@@ -20,12 +15,10 @@
 // extern crate std;
 
 extern crate alloc;
-use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
+use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
-
-
 
 // https://github.com/rust-lang/rust/issues/45599
 
@@ -35,8 +28,6 @@ extern crate alloc_system;
 #[cfg(any(test))]
 #[global_allocator]
 static A: alloc_system::System = alloc_system::System;
-
-
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NodeType {
@@ -67,7 +58,7 @@ impl OpenMode {
         match self {
             Read => true,
             Write => false,
-            ReadWrite => true
+            ReadWrite => true,
         }
     }
     fn can_write(&self) -> bool {
@@ -75,7 +66,7 @@ impl OpenMode {
         match self {
             Read => false,
             Write => true,
-            ReadWrite => true
+            ReadWrite => true,
         }
     }
 }
@@ -111,7 +102,7 @@ impl FileDescriptor {
             id,
             path: path.iter().map(|v| (*v).to_owned()).collect(),
             cursor: 0,
-            mode
+            mode,
         }
     }
 
@@ -149,7 +140,11 @@ impl RamFS {
         }
     }
 
-    fn focus_rec<T>(mut cont: &mut Box<Node>, mut path: Vec<&str>, f: &mut FnMut(&mut Box<Node>) -> Result<T, FileSystemError>) -> Result<T, FileSystemError> {
+    fn focus_rec<T>(
+        mut cont: &mut Box<Node>,
+        mut path: Vec<&str>,
+        f: &mut dyn FnMut(&mut Box<Node>) -> Result<T, FileSystemError>,
+    ) -> Result<T, FileSystemError> {
         if path.is_empty() {
             return f(&mut cont);
         }
@@ -171,7 +166,11 @@ impl RamFS {
         }
     }
 
-    fn focus<T>(&mut self, path: Vec<&str>, f: &mut FnMut(&mut Box<Node>) -> Result<T, FileSystemError>) -> Result<T, FileSystemError> {
+    fn focus<T>(
+        &mut self,
+        path: Vec<&str>,
+        f: &mut dyn FnMut(&mut Box<Node>) -> Result<T, FileSystemError>,
+    ) -> Result<T, FileSystemError> {
         RamFS::focus_rec(&mut self.tree, path, f)
     }
 
@@ -189,13 +188,11 @@ impl RamFS {
         let mut pre_path: Vec<&str> = path.clone();
         let name = pre_path.pop().unwrap();
 
-        self.focus(pre_path, &mut |cont| {
-            match *cont {
-                box Node::Leaf(_) => unimplemented!(),
-                box Node::Branch(ref mut b) => {
-                    b.add_branch(box Node::Branch(Branch::new(name)));
-                    Ok(())
-                }
+        self.focus(pre_path, &mut |cont| match *cont {
+            box Node::Leaf(_) => unimplemented!(),
+            box Node::Branch(ref mut b) => {
+                b.add_branch(box Node::Branch(Branch::new(name)));
+                Ok(())
             }
         })
     }
@@ -209,13 +206,11 @@ impl RamFS {
         let mut pre_path: Vec<&str> = path.clone();
         let name = pre_path.pop().unwrap();
 
-        self.focus(pre_path, &mut |cont| {
-            match *cont {
-                box Node::Leaf(_) => unimplemented!(),
-                box Node::Branch(ref mut b) => {
-                    b.add_branch(box Node::Leaf(Leaf::new(name)));
-                    Ok(())
-                }
+        self.focus(pre_path, &mut |cont| match *cont {
+            box Node::Leaf(_) => unimplemented!(),
+            box Node::Branch(ref mut b) => {
+                b.add_branch(box Node::Leaf(Leaf::new(name)));
+                Ok(())
             }
         })
     }
@@ -243,7 +238,11 @@ impl RamFS {
         }
     }
 
-    pub fn open_file(&mut self, path: Vec<&str>, mode: OpenMode) -> Result<FileDescriptor, FileSystemError> {
+    pub fn open_file(
+        &mut self,
+        path: Vec<&str>,
+        mode: OpenMode,
+    ) -> Result<FileDescriptor, FileSystemError> {
         // TODO: check that path+mode can be opened
         // ^: is it already open? etc.
 
@@ -259,15 +258,20 @@ impl RamFS {
     pub fn file_size(&mut self, fd: &FileDescriptor) -> Result<usize, FileSystemError> {
         assert!(fd.id.is_valid());
 
-        self.focus(fd.path.iter().map(|v| v.as_str()).collect(), &mut |cont| {
-            match cont {
+        self.focus(
+            fd.path.iter().map(|v| v.as_str()).collect(),
+            &mut |cont| match cont {
                 box Node::Leaf(ref mut leaf) => Ok(leaf.bytes.len()),
-                box Node::Branch(_) => Err(FileSystemError::FileRequired)
-            }
-        })
+                box Node::Branch(_) => Err(FileSystemError::FileRequired),
+            },
+        )
     }
 
-    pub fn file_seek(&mut self, fd: &mut FileDescriptor, offset: usize) -> Result<usize, FileSystemError> {
+    pub fn file_seek(
+        &mut self,
+        fd: &mut FileDescriptor,
+        offset: usize,
+    ) -> Result<usize, FileSystemError> {
         assert!(fd.id.is_valid());
 
         // Prevent lookup when offset == 0
@@ -279,7 +283,11 @@ impl RamFS {
         Ok(fd.cursor)
     }
 
-    pub fn file_read(&mut self, fd: &mut FileDescriptor, count: Option<usize>) -> Result<Vec<u8>, FileSystemError> {
+    pub fn file_read(
+        &mut self,
+        fd: &mut FileDescriptor,
+        count: Option<usize>,
+    ) -> Result<Vec<u8>, FileSystemError> {
         assert!(fd.id.is_valid());
 
         if !fd.mode.can_read() {
@@ -288,29 +296,32 @@ impl RamFS {
 
         let cursor = fd.cursor;
 
-        let result: Result<Vec<u8>, FileSystemError> = self.focus(fd.path.iter().map(|v| v.as_str()).collect(), &mut |cont| {
-            match cont {
+        let result: Result<Vec<u8>, FileSystemError> = self.focus(
+            fd.path.iter().map(|v| v.as_str()).collect(),
+            &mut |cont| match cont {
                 box Node::Leaf(ref mut leaf) => {
                     let iter = leaf.bytes.iter().skip(cursor);
                     if let Some(limit) = count {
                         Ok(iter.take(limit).map(|v| *v).collect())
-                    }
-                    else {
+                    } else {
                         Ok(iter.map(|v| *v).collect())
                     }
                 }
-                box Node::Branch(_) => Err(FileSystemError::FileRequired)
-            }
-        });
+                box Node::Branch(_) => Err(FileSystemError::FileRequired),
+            },
+        );
 
         if let Ok(ref bytes) = result {
             fd.cursor = bytes.len();
         }
         result
-
     }
 
-    pub fn file_write(&mut self, fd: &mut FileDescriptor, write_bytes: Vec<u8>) -> Result<(), FileSystemError> {
+    pub fn file_write(
+        &mut self,
+        fd: &mut FileDescriptor,
+        write_bytes: Vec<u8>,
+    ) -> Result<(), FileSystemError> {
         assert!(fd.id.is_valid());
 
         if !fd.mode.can_write() {
@@ -319,25 +330,24 @@ impl RamFS {
 
         let mut cursor = fd.cursor;
 
-        let result = self.focus(fd.path.iter().map(|v| v.as_str()).collect(), &mut |node| {
-            match node {
+        let result = self.focus(
+            fd.path.iter().map(|v| v.as_str()).collect(),
+            &mut |node| match node {
                 box Node::Leaf(ref mut leaf) => {
                     for i in 0..write_bytes.len() {
                         if cursor == leaf.bytes.len() {
                             leaf.bytes.push(write_bytes[i]);
-                        }
-                        else {
+                        } else {
                             leaf.bytes[cursor] = write_bytes[i];
-
                         }
 
                         cursor += 1;
                     }
                     Ok(())
-                },
-                box Node::Branch(_) => Err(FileSystemError::FileRequired)
-            }
-        });
+                }
+                box Node::Branch(_) => Err(FileSystemError::FileRequired),
+            },
+        );
 
         if result.is_ok() {
             fd.cursor = cursor;
@@ -346,11 +356,10 @@ impl RamFS {
     }
 }
 
-
 #[derive(Debug)]
 enum Node {
     Branch(Branch),
-    Leaf(Leaf)
+    Leaf(Leaf),
 }
 impl Node {
     pub const fn root() -> Node {
@@ -360,16 +369,16 @@ impl Node {
     pub fn name(&self) -> String {
         use Node::*;
         match self {
-            Branch(n)   => n.name(),
-            Leaf(n)     => n.name()
+            Branch(n) => n.name(),
+            Leaf(n) => n.name(),
         }
     }
 
     pub fn kind(&self) -> NodeType {
         use Node::*;
         match self {
-            Branch(n)   => NodeType::Directory,
-            Leaf(n)     => NodeType::File
+            Branch(n) => NodeType::Directory,
+            Leaf(n) => NodeType::File,
         }
     }
 }
@@ -387,7 +396,6 @@ struct Leaf {
     name: String,
     bytes: Vec<u8>,
 }
-
 
 impl Branch {
     pub const fn new_root() -> Self {
@@ -428,29 +436,28 @@ impl Leaf {
 
 #[cfg(test)]
 mod tests {
-    use super::{RamFS, OpenMode};
+    use super::{OpenMode, RamFS};
 
     #[test]
     fn test_simple_create() {
         let mut fs = RamFS::new();
 
-        assert!( fs.exists(vec![]));
+        assert!(fs.exists(vec![]));
         assert!(!fs.exists(vec!["test"]));
         assert!(!fs.exists(vec!["test", "test_inner"]));
 
         fs.create_directory(vec!["test"]).unwrap();
 
-        assert!( fs.exists(vec![]));
-        assert!( fs.exists(vec!["test"]));
+        assert!(fs.exists(vec![]));
+        assert!(fs.exists(vec!["test"]));
         assert!(!fs.exists(vec!["test", "test_inner"]));
 
         fs.create_directory(vec!["test", "test_inner"]).unwrap();
 
-        assert!( fs.exists(vec![]));
-        assert!( fs.exists(vec!["test"]));
-        assert!( fs.exists(vec!["test", "test_inner"]));
+        assert!(fs.exists(vec![]));
+        assert!(fs.exists(vec!["test"]));
+        assert!(fs.exists(vec!["test", "test_inner"]));
         assert!(!fs.exists(vec!["file.txt"]));
-
 
         assert!(!fs.exists(vec!["file.txt"]));
         assert!(!fs.exists(vec!["test", "file.txt"]));
@@ -459,20 +466,21 @@ mod tests {
         fs.create_file(vec!["test", "file.txt"], false).unwrap();
 
         assert!(!fs.exists(vec!["file.txt"]));
-        assert!( fs.exists(vec!["test", "file.txt"]));
+        assert!(fs.exists(vec!["test", "file.txt"]));
         assert!(!fs.exists(vec!["test", "test_inner", "file.txt"]));
 
         fs.create_file(vec!["file.txt"], false).unwrap();
 
-        assert!( fs.exists(vec!["file.txt"]));
-        assert!( fs.exists(vec!["test", "file.txt"]));
+        assert!(fs.exists(vec!["file.txt"]));
+        assert!(fs.exists(vec!["test", "file.txt"]));
         assert!(!fs.exists(vec!["test", "test_inner", "file.txt"]));
 
-        fs.create_file(vec!["test", "test_inner", "file.txt"], false).unwrap();
+        fs.create_file(vec!["test", "test_inner", "file.txt"], false)
+            .unwrap();
 
-        assert!( fs.exists(vec!["file.txt"]));
-        assert!( fs.exists(vec!["test", "file.txt"]));
-        assert!( fs.exists(vec!["test", "test_inner", "file.txt"]));
+        assert!(fs.exists(vec!["file.txt"]));
+        assert!(fs.exists(vec!["test", "file.txt"]));
+        assert!(fs.exists(vec!["test", "test_inner", "file.txt"]));
     }
 
     #[test]
@@ -486,13 +494,17 @@ mod tests {
 
         let mut fd2 = fs.open_file(vec!["file.txt"], OpenMode::Write).unwrap();
         assert_eq!(fs.file_size(&fd2), Ok(0));
-        fs.file_write(&mut fd2, "Hello World!".bytes().collect()).unwrap();
+        fs.file_write(&mut fd2, "Hello World!".bytes().collect())
+            .unwrap();
         assert_eq!(fs.file_size(&fd2), Ok(12));
         fs.close_file(fd2).unwrap(); // fd2 moved, cannot be reused
 
         let mut fd3 = fs.open_file(vec!["file.txt"], OpenMode::Read).unwrap();
         assert_eq!(fs.file_size(&fd3), Ok(12));
-        assert_eq!(fs.file_read(&mut fd3, None), Ok("Hello World!".bytes().collect()));
+        assert_eq!(
+            fs.file_read(&mut fd3, None),
+            Ok("Hello World!".bytes().collect())
+        );
         fs.close_file(fd3).unwrap(); // fd1 moved, cannot be reused
     }
 }

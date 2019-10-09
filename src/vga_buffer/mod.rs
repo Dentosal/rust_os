@@ -3,30 +3,35 @@ use core::ptr::Unique;
 use spin::Mutex;
 use volatile::Volatile;
 
+use crate::memory::prelude::{PhysAddr, VirtAddr};
+
 const SCREEN_HEIGHT: usize = 25;
 const SCREEN_WIDTH: usize = 80;
-pub const VGA_BUFFER_ADDRESS: usize = 0xb8000;
+pub const VGA_BUFFER_ADDR_U64: u64 = 0xb8000;
+pub const VGA_BUFFER_PHYSADDR: PhysAddr = unsafe { PhysAddr::new_unchecked(VGA_BUFFER_ADDR_U64) };
+pub const VGA_BUFFER_VIRTADDR: VirtAddr =
+    unsafe { VirtAddr::new_unchecked_raw(VGA_BUFFER_ADDR_U64) };
 
 /// A VGA color
 #[allow(dead_code)]
 #[repr(u8)]
 pub enum Color {
-    Black      = 0,
-    Blue       = 1,
-    Green      = 2,
-    Cyan       = 3,
-    Red        = 4,
-    Magenta    = 5,
-    Brown      = 6,
-    LightGray  = 7,
-    DarkGray   = 8,
-    LightBlue  = 9,
+    Black = 0,
+    Blue = 1,
+    Green = 2,
+    Cyan = 3,
+    Red = 4,
+    Magenta = 5,
+    Brown = 6,
+    LightGray = 7,
+    DarkGray = 8,
+    LightBlue = 9,
     LightGreen = 10,
-    LightCyan  = 11,
-    LightRed   = 12,
-    Pink       = 13,
-    Yellow     = 14,
-    White      = 15,
+    LightCyan = 11,
+    LightRed = 12,
+    Pink = 13,
+    Yellow = 14,
+    White = 15,
 }
 
 /// Color of single cell, back- and foreground
@@ -39,15 +44,11 @@ impl CellColor {
     }
 
     pub fn foreground(&self) -> Color {
-        unsafe {
-            mem::transmute::<u8, Color>(self.0 & 0xf)
-        }
+        unsafe { mem::transmute::<u8, Color>(self.0 & 0xf) }
     }
 
     pub fn background(&self) -> Color {
-        unsafe {
-            mem::transmute::<u8, Color>((self.0 & 0xf0) >> 4)
-        }
+        unsafe { mem::transmute::<u8, Color>((self.0 & 0xf0) >> 4) }
     }
 
     pub fn invert(&self) -> CellColor {
@@ -57,7 +58,7 @@ impl CellColor {
 
 /// Character cell: one character and color in screen
 #[derive(Clone, Copy)]
-#[repr(C,packed)]
+#[repr(C, packed)]
 pub struct CharCell {
     pub character: u8,
     pub color: CellColor,
@@ -68,7 +69,6 @@ pub struct Buffer {
     pub chars: [[Volatile<CharCell>; SCREEN_WIDTH]; SCREEN_HEIGHT],
 }
 
-
 /// Cursor
 pub struct Cursor {
     /// Current row
@@ -78,7 +78,6 @@ pub struct Cursor {
 }
 
 impl Cursor {
-
     /// Next character
     pub fn next(&mut self) {
         if self.col < SCREEN_WIDTH {
@@ -91,8 +90,7 @@ impl Cursor {
     pub fn prev(&mut self, row: bool) {
         if self.col > 0 {
             self.col -= 1;
-        }
-        else if row && self.row > 0 {
+        } else if row && self.row > 0 {
             self.row -= 1;
             self.col = SCREEN_WIDTH - 1;
         }
@@ -103,11 +101,10 @@ impl Cursor {
     /// true if terminal should be scrolled
     pub fn newline(&mut self) -> bool {
         self.col = 0;
-        if self.row < SCREEN_HEIGHT-1 {
+        if self.row < SCREEN_HEIGHT - 1 {
             self.row += 1;
             false
-        }
-        else {
+        } else {
             true
         }
     }
@@ -161,11 +158,10 @@ impl Terminal {
 
         if byte == b'\n' {
             self.newline();
-        }
-        else if byte == 0x8 { // ASCII backspace
+        } else if byte == 0x8 {
+            // ASCII backspace
             self.backspace();
-        }
-        else {
+        } else {
             assert!(self.cursor.col < SCREEN_WIDTH);
 
             let color = self.output_color;
@@ -173,7 +169,7 @@ impl Terminal {
 
             self.get_buffer().chars[row][col].write(CharCell {
                 character: byte,
-                color: color
+                color: color,
             });
 
             self.cursor.next();
@@ -207,22 +203,25 @@ impl Terminal {
     /// Scroll up one line
     fn scroll_line(&mut self) {
         // move lines up
-        for row in 0..(SCREEN_HEIGHT-1) {
+        for row in 0..(SCREEN_HEIGHT - 1) {
             for col in 0..SCREEN_WIDTH {
-                let new_value = self.get_buffer().chars[row+1][col].read();
+                let new_value = self.get_buffer().chars[row + 1][col].read();
                 self.get_buffer().chars[row][col].write(new_value);
             }
         }
         // clear the bottom line
         for col in 0..SCREEN_WIDTH {
             let color = self.output_color;
-            self.get_buffer().chars[SCREEN_HEIGHT-1][col].write(CharCell {character: b' ', color: color});
+            self.get_buffer().chars[SCREEN_HEIGHT - 1][col].write(CharCell {
+                character: b' ',
+                color: color,
+            });
         }
     }
 
     /// Get pointer to memory buffer
     fn get_buffer(&mut self) -> &mut Buffer {
-        unsafe {self.buffer.as_mut()}
+        unsafe { self.buffer.as_mut() }
     }
 }
 
@@ -232,7 +231,7 @@ impl ::core::fmt::Write for Terminal {
         for byte in s.bytes() {
             self.write_byte(byte)
         }
-        Ok(())  // Success. Always.
+        Ok(()) // Success. Always.
     }
 }
 
@@ -245,8 +244,8 @@ pub fn print(fmt: ::core::fmt::Arguments) {
 // Create static pointer mutex with spinlock to make TERMINAL thread-safe
 pub static TERMINAL: Mutex<Terminal> = Mutex::new(Terminal {
     output_color: CellColor::new(Color::White, Color::Black),
-    cursor: Cursor {row: 0, col: 0},
-    buffer: unsafe { Unique::new_unchecked(VGA_BUFFER_ADDRESS as *mut _) },
+    cursor: Cursor { row: 0, col: 0 },
+    buffer: unsafe { Unique::new_unchecked(VGA_BUFFER_VIRTADDR.as_mut_ptr_unchecked()) },
 });
 
 /// "Raw" output macros
@@ -260,14 +259,14 @@ macro_rules! rprintln {
     ($fmt:expr, $($arg:tt)*) => (rprint!(concat!($fmt, "\n"), $($arg)*));
 }
 macro_rules! rreset {
-    () => ({
+    () => {{
         $crate::vga_buffer::TERMINAL.lock().reset();
-    });
+    }};
 }
 macro_rules! rforce_unlock {
-    () => ({
+    () => {{
         $crate::vga_buffer::TERMINAL.force_unlock();
-    });
+    }};
 }
 macro_rules! panic_indicator {
     ($x:expr) => ({

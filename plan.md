@@ -43,11 +43,18 @@ Begin   | Size  | Content
     1000|    100| IDTR (10 bytes used, and after that reserved)
     1100|    100| GDT (some used, and after that reserved)
    20000|  50000| DMA / VirtIO memory buffers (requires "low" memory)
-   70000|  10000| Memory bitmap 1 (currently free memory) (this allows (8*0x10000*0x1000)/1024**3 = 2GiB memory)
-   80000|  10000| Memory bitmap 2 (hardware memory status)
    90000|      ?| Reserved for EBDA, ROM, Video Memory and other stuff there.
-  100000|      ?| Kernel (Extended memory) (Size around 0x100000)
+  100000|      ?| Kernel (Extended memory) (Size around 0x200000)
+  300000|  70000| Usable memory bitmap for sections over 2GiB mark
        ?|      ?| Free memory (must be allocated using the frame allocator)
 40000000|      ?| Allocator-managed memory (This is 1GiB)
 
 TODO: Bump allocator
+
+
+# Interrupts
+
+Numbers     | Description
+------------|-------------
+0x00..=0x1f | Standard intel interrupts
+0x20..=0x2f | PIC interrupts

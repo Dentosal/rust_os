@@ -104,7 +104,7 @@ unsafe fn exception_pf(stack_frame: &ExceptionStackFrame, error_code: u64) {
         "Exception: Page Fault with error code {:?} ({:?}) at {:#x}\n{}",
         error_code,
         PageFaultErrorCode::from_bits(error_code).unwrap(),
-        register!(cr2),
+        x86_64::registers::control::Cr2::read().as_u64(),
         *stack_frame
     );
     loop {}
@@ -185,10 +185,11 @@ pub unsafe extern "C" fn syscall() {
     );
 
     if let Some(result) = call(routine, (arg0, arg1, arg2, arg3)) {
-        register!(rax, result.success);
-        register!(rdx, result.result);
+        asm!("mov rax, rdx" :: "{rdx}"(result.success) :: "volatile", "intel");
+        asm!("mov rdx, rdx" :: "{rdx}"(result.result) :: "volatile", "intel");
     } else {
-        register!(rax, 2); // Special value used to signal no return
+        // Special value used to signal no return
+        asm!("mov rax, 2" :::: "volatile", "intel");
     }
 }
 
@@ -233,17 +234,24 @@ pub fn init() {
         [idt::Descriptor::new(false, 0, PrivilegeLevel::Ring0, 0); idt::ENTRY_COUNT];
 
     // Bind exception handlers
-    handlers[0x00] = simple_exception_handler!("Divide-by-zero Error");
-    handlers[0x03] = exception_handler!(exception_bp);
-    handlers[0x06] = exception_handler!(exception_ud);
-    handlers[0x08] = exception_handler_with_error_code!(exception_df, PrivilegeLevel::Ring0, 5);
-    handlers[0x0b] = exception_handler_with_error_code!(exception_snp);
-    handlers[0x0d] = exception_handler_with_error_code!(exception_gpf);
-    handlers[0x0e] = exception_handler_with_error_code!(exception_pf);
+    handlers[0x00] = last_resort_exception_handler!();
+    handlers[0x03] = last_resort_exception_handler!();
+    handlers[0x06] = last_resort_exception_handler!();
+    handlers[0x08] = last_resort_exception_handler!();
+    handlers[0x0b] = last_resort_exception_handler!();
+    handlers[0x0d] = last_resort_exception_handler!();
+    handlers[0x0e] = last_resort_exception_handler!();
+    // handlers[0x00] = simple_exception_handler!("Divide-by-zero Error");
+    // handlers[0x03] = exception_handler!(exception_bp);
+    // handlers[0x06] = exception_handler!(exception_ud);
+    // handlers[0x08] = exception_handler_with_error_code!(exception_df, PrivilegeLevel::Ring0, 5);
+    // handlers[0x0b] = exception_handler_with_error_code!(exception_snp);
+    // handlers[0x0d] = exception_handler_with_error_code!(exception_gpf);
+    // handlers[0x0e] = exception_handler_with_error_code!(exception_pf);
     handlers[0x20] = irq_handler!(exception_irq0);
     handlers[0x21] = irq_handler!(exception_irq1);
     handlers[0x2e] = irq_handler!(exception_irq14);
-    handlers[0xd7] = syscall_handler!(syscall, on_process_over);
+    // handlers[0xd7] = syscall_handler!(syscall, on_process_over);
 
     for index in 0..=(idt::ENTRY_COUNT - 1) {
         unsafe {

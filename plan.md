@@ -30,8 +30,6 @@ Begin | Size  | Content
   A000|   4000| Disk load buffer
  10000|      ?| Kernel ELF image (Boot stage only) (size proabably around 0x40000)
  60000|   3000| Page tables (Boot stage only)
- 70000|  10000| Memory bitmap 1 (currently free memory) (this allows (8*0x10000*0x1000)/1024**3 = 2GiB memory)
- 80000|  10000| Memory bitmap 2 (hardware memory status)
 100000|      ?| Relocated and expanded kernel from ELF image (will be huge)
 
 Final layout
@@ -43,13 +41,23 @@ Begin   | Size  | Content
     1000|    100| IDTR (10 bytes used, and after that reserved)
     1100|    100| GDT (some used, and after that reserved)
    20000|  50000| DMA / VirtIO memory buffers (requires "low" memory)
+   70000|  20000| *reserved*
    90000|      ?| Reserved for EBDA, ROM, Video Memory and other stuff there.
   100000|      ?| Kernel (Extended memory) (Size around 0x200000)
-  300000|  70000| Usable memory bitmap for sections over 2GiB mark
        ?|      ?| Free memory (must be allocated using the frame allocator)
 40000000|      ?| Allocator-managed memory (This is 1GiB)
 
 TODO: Bump allocator
+
+Virtual address space
+----------------------
+
+TODO: Higher half kernel
+TODO: Proper virtual memory map
+
+Begin   | Size  | Content
+--------|-------|---------
+10000000|      ?| Page tables
 
 
 # Interrupts

@@ -96,7 +96,8 @@ then
                 # $qemucmd -d int -m 4G -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio
                 # $qemucmd -d int,guest_errors -m 4G -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio
                 # $qemucmd -m 4G -no-reboot -drive file=build/disk.img,format=raw,if=ide -nic user,model=ne2k_pci -net nic,model=virtio
-                $qemucmd -m 4G -no-reboot -drive file=build/disk.img,format=raw,if=ide -nic user,model=virtio
+                # $qemucmd -m 4G -no-reboot -drive file=build/disk.img,format=raw,if=ide -nic user,model=virtio
+                $qemucmd -m 4G -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio
             fi
         fi
     fi

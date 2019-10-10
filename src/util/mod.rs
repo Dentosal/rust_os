@@ -43,37 +43,6 @@ macro_rules! dump_memory_at {
     ($ptr:expr) => (rprintln!("{:x} {:x} {:x} {:x}", raw_ptr!(u16 $ptr; 0), raw_ptr!(u16 $ptr; 2), raw_ptr!(u16 $ptr; 4), raw_ptr!(u16 $ptr; 6)));
 }
 
-macro_rules! register { // general purpose register
-    // read
-    ($reg:ident) => ({
-        let value: u64;
-        asm!(concat!("mov rax, ", stringify!($reg)) : "={rax}"(value) ::: "volatile", "intel");
-        value
-    });
-    // write
-    ($reg:ident, $value:expr) => ({
-        if stringify!($reg) == "rax" {
-            asm!(concat!("mov ", stringify!($reg), ", rdx") :: "{rdx}"($value as u64) :: "volatile", "intel");
-        }
-        else {
-            asm!(concat!("mov ", stringify!($reg), ", rax") :: "{rax}"($value as u64) :: "volatile", "intel");
-        }
-    });
-}
-
-macro_rules! msr { // model specific register
-    // read
-    ($msr:expr) => ({
-        let value: u64;
-        asm!("rdmsr" : "={rax}"(value) : "{rcx}"($msr as u64) :: "volatile", "intel");
-        value
-    });
-    // write
-    ($msr:expr, $value:expr) => ({
-        asm!("wrmsr" :: "{rax}"($value as u64), "{rcx}"($msr as u64) :: "volatile", "intel");
-    });
-}
-
 macro_rules! int {
     ($num:expr) => ({
         asm!(concat!("int ", stringify!($num)) :::: "volatile", "intel");
@@ -87,6 +56,18 @@ macro_rules! bochs_magic_bp {
             asm!("xchg bx, bx" :::: "volatile", "intel");
         };
     });
+}
+
+macro_rules! no_interrupts {
+    ($block:expr) => {
+        unsafe {
+            asm!("cli" :::: "volatile", "intel");
+        }
+        $block;
+        unsafe {
+            asm!("sti" :::: "volatile", "intel");
+        }
+    }
 }
 
 macro_rules! sizeof {

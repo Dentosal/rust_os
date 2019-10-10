@@ -91,3 +91,15 @@ macro_rules! simple_exception_handler {
         idt::Descriptor::new(true, wrapper as u64, PrivilegeLevel::Ring0, 0)
     }};
 }
+
+macro_rules! last_resort_exception_handler {
+    () => {{
+        unsafe extern "x86-interrupt" fn wrapper(_stack_frame: &mut ExceptionStackFrame) {
+            unsafe {
+                asm!("jmp panic"::::"intel","volatile");
+                ::core::hint::unreachable_unchecked();
+            };
+        }
+        idt::Descriptor::new(true, wrapper as u64, PrivilegeLevel::Ring0, 0)
+    }};
+}

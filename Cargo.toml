@@ -23,8 +23,7 @@ cpuio = "0.2.0"                 # cpu port IO
 bitflags = "1.2"                # bitflags
 bit_field = "0.10.0"            # bit fields
 volatile = "0.2.6"              # volatile read and write functions
-static_assertions = "0.3.1"     # compile time assertions
-# x86_64 = "0.7.5"                # x86-64 instructions and data structures
+static_assertions = "1.0"       # compile time assertions
 
 [dependencies.x86_64]           # x86-64 instructions and data structures
 git = "https://github.com/Dentosal/x86_64"

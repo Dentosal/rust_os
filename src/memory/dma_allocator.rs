@@ -4,8 +4,8 @@ use super::prelude::*;
 use x86_64::structures::paging::PageSize;
 
 // Must be kept in sync with plan.md
-pub const BASE: PhysAddr = unsafe { PhysAddr::new_unchecked(0x20000) };
-pub const SIZE: u64 = 0x50000;
+pub const BASE: PhysAddr = unsafe { PhysAddr::new_unchecked(0x20_000) };
+pub const SIZE: u64 = 0x50_000;
 
 pub const ENTRY_COUNT: usize = (SIZE / Page::SIZE) as usize;
 const BITMAP_SIZE: usize = (ENTRY_COUNT + 7) / 8;

@@ -1,5 +1,6 @@
 use x86_64::structures::paging as pg;
 
+use super::my_paging::PageMap;
 use super::prelude::*;
 
 #[derive(Debug)]
@@ -29,7 +30,7 @@ impl StackAllocator {
 
     pub fn alloc_stack<A: pg::FrameAllocator<pg::Size4KiB>>(
         &mut self,
-        active_table: &mut pg::RecursivePageTable,
+        active_table: &mut PageMap,
         frame_allocator: &mut A,
         size_in_pages: usize,
     ) -> Option<Stack> {

@@ -122,7 +122,7 @@ error:
 ; http://os.phil-opp.com/entering-longmode.html#set-up-identity-paging
 ; http://wiki.osdev.org/Paging
 ; http://pages.cs.wisc.edu/~remzi/OSTEP/vm-paging.pdf
-; Identity map first 1GiB (0x200000 * 0x200) ???
+; Identity map first 1GiB (0x200000 * 0x200)
 ; using 2MiB pages
 set_up_page_tables:
     ; map first P4 entry to P3 table
@@ -148,12 +148,6 @@ set_up_page_tables:
     inc ecx
     cmp ecx, 0x200                  ; is the whole P2 table is mapped?
     jne .map_page_table_p2_loop     ; next entry
-
-    ; recursively map the last the last page in p4
-    ; http://os.phil-opp.com/modifying-page-tables.html#implementation
-    mov eax, page_table_p4
-    or eax, 0b11 ; present + writable
-    mov [page_table_p4 + 511 * 8], eax
 
     ; done
     ret

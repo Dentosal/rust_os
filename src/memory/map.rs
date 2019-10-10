@@ -65,7 +65,7 @@ pub(crate) fn load_memory_map() -> [Option<PhysMemoryRange>; MAX_OK_ENTRIES] {
         for index in 0..(entry_count as isize) {
             let (e_start, e_size, e_type, e_acpi_data) = read_item(index);
             rprintln!(
-                "Section {}: {:>16x}-{:>16x}: type: {:#x}, acpi: {:#x}",
+                "Section {:>3}: {:>16x}-{:>16x}: type: {:#x}, acpi: {:#x}",
                 index,
                 e_start,
                 e_start + e_size,
@@ -99,7 +99,7 @@ pub(crate) fn load_memory_map() -> [Option<PhysMemoryRange>; MAX_OK_ENTRIES] {
     for entry in ok_entries.iter() {
         if let Some(area) = entry {
             memory_counter_bytes += area.size_bytes() as u64;
-            rprintln!("Area: {:>16x}-{:>16x}", area.start(), area.end());
+            rprintln!("Area       : {:>16x}-{:>16x}", area.start(), area.end());
         }
     }
 

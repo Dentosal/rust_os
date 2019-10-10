@@ -10,6 +10,7 @@ mod constants;
 pub mod dma_allocator;
 mod frame_allocator;
 mod map;
+mod my_paging;
 pub mod paging;
 pub mod prelude;
 mod stack_allocator;
@@ -20,36 +21,23 @@ pub use self::prelude::*;
 pub use self::stack_allocator::Stack;
 pub use self::utils::*;
 
+use self::my_paging::PageMap;
+
 use d7alloc::{HEAP_SIZE, HEAP_START};
 
 pub struct MemoryController {
-    active_table_addr: PhysAddr,
+    active_table: PageMap,
     pub frame_allocator: frame_allocator::Allocator,
     stack_allocator: stack_allocator::StackAllocator,
 }
 
 impl MemoryController {
-    fn paging<F, T>(&mut self, f: F) -> T
-    where
-        F: FnOnce(&mut Self, &mut pg::OffsetPageTable) -> T,
-    {
-        let mut p4_table = unsafe { &mut *(self.active_table_addr.as_u64() as *mut PageTable) };
-        f(
-            self,
-            &mut pg::OffsetPageTable::new(p4_table).expect("Invalid page table"),
-        )
-    }
-
     pub fn alloc_stack(&mut self, size_in_pages: usize) -> Option<Stack> {
-        self.paging(|mem_ctrl, active_table| {
-            let &mut MemoryController {
-                ref mut frame_allocator,
-                ref mut stack_allocator,
-                ..
-            } = mem_ctrl;
-
-            stack_allocator.alloc_stack(active_table, frame_allocator, size_in_pages)
-        })
+        self.stack_allocator.alloc_stack(
+            &mut self.active_table,
+            &mut self.frame_allocator,
+            size_in_pages,
+        )
     }
 
     // pub fn alloc_executable(&mut self, size_in_pages: usize) -> MemoryArea {
@@ -91,18 +79,16 @@ pub fn init() {
 
     // initalize paging system
     unsafe {
-        paging::enable_nxe();
-        paging::enable_write_protection();
+        my_paging::enable_nxe();
+        my_paging::enable_write_protection();
     }
-
-    bochs_magic_bp!();
 
     let mut frame_allocator = unsafe { self::frame_allocator::Allocator::new(memory_map) };
 
+    bochs_magic_bp!();
+
     // Remap kernel and get page table
-    let mut active_table_addr = paging::init(&mut frame_allocator, elf_metadata);
-    let mut p4_table = unsafe { &mut *(active_table_addr.as_u64() as *mut PageTable) };
-    let mut active_table = pg::RecursivePageTable::new(p4_table).expect("Invalid page table");
+    let mut active_table = unsafe { my_paging::init(&mut frame_allocator, elf_metadata) };
 
     // Identity map heap
     let heap_start_page = pg::Page::containing_address(VirtAddr::new(HEAP_START));
@@ -117,7 +103,6 @@ pub fn init() {
                     Flags::WRITABLE | Flags::NO_EXECUTE,
                     &mut frame_allocator,
                 )
-                .expect("Could not map page")
                 .flush();
         }
     }
@@ -130,7 +115,7 @@ pub fn init() {
     };
 
     let mem_ctrl = MemoryController {
-        active_table_addr,
+        active_table,
         frame_allocator,
         stack_allocator,
     };

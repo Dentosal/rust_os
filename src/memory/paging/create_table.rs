@@ -8,36 +8,9 @@
 use core::mem;
 use core::ptr;
 use x86_64::structures::paging::page_table::{PageTable, PageTableEntry, PageTableFlags as Flags};
-use x86_64::ux;
+use x86_64::structures::paging::{Mapper, OffsetPageTable};
 
 use super::super::prelude::*;
-
-const REC_INDEX: ux::u9 = ux::u9::MAX;
-const REC_PAGE: VirtAddr = unsafe { VirtAddr::new_unchecked_raw((1u64 << 63) - 0x1000) };
-
-fn p3_ptr(page: Page) -> *mut PageTable {
-    p3_page(page).start_address().as_mut_ptr()
-}
-
-fn p3_page(page: Page) -> Page {
-    Page::from_page_table_indices(REC_INDEX, REC_INDEX, REC_INDEX, page.p4_index())
-}
-
-fn p2_ptr(page: Page) -> *mut PageTable {
-    p2_page(page).start_address().as_mut_ptr()
-}
-
-fn p2_page(page: Page) -> Page {
-    Page::from_page_table_indices(REC_INDEX, REC_INDEX, page.p4_index(), page.p3_index())
-}
-
-fn p1_ptr(page: Page) -> *mut PageTable {
-    p1_page(page).start_address().as_mut_ptr()
-}
-
-fn p1_page(page: Page) -> Page {
-    Page::from_page_table_indices(REC_INDEX, page.p4_index(), page.p3_index(), page.p2_index())
-}
 
 /// Create the page table of the next level if needed.
 ///
@@ -58,10 +31,6 @@ where
 
     if create_new {
         let frame = allocator.allocate_frame().expect("Alloc failed");
-
-        rforce_unlock!();
-        rprintln!("ENTRYFRAME {:#?}", (entry.clone(), frame.clone()));
-
         entry.set_frame(frame, Flags::PRESENT | Flags::WRITABLE);
     }
 
@@ -79,51 +48,7 @@ where
     page_table
 }
 
-unsafe fn map_to<A>(
-    p4_table: &mut PageTable,
-    page: Page,
-    frame: PhysFrame,
-    flags: Flags,
-    allocator: &mut A,
-) where
-    A: FrameAllocator<PageSizeType>,
-{
-    let p3_page = p3_page(page);
-    let p3_table = create_next_table(&mut p4_table[page.p4_index()], p3_page, allocator);
-
-    let p2_page = p2_page(page);
-    let p2_table = create_next_table(&mut p3_table[page.p3_index()], p2_page, allocator);
-
-    let p1_page = p1_page(page);
-    let p1_table = create_next_table(&mut p2_table[page.p2_index()], p1_page, allocator);
-
-    if !p1_table[page.p1_index()].is_unused() {
-        panic!("Page already mapped");
-    }
-
-    p1_table[page.p1_index()].set_frame(frame, flags);
-}
-
-unsafe fn identity_map<A>(
-    p4_table: &mut PageTable,
-    frame: PhysFrame,
-    flags: Flags,
-    allocator: &mut A,
-) where
-    A: FrameAllocator<PageSizeType>,
-{
-    map_to(
-        p4_table,
-        Page::from_start_address(VirtAddr::new(frame.start_address().as_u64())).unwrap(),
-        frame,
-        flags,
-        allocator,
-    );
-}
-
-// Create new page table using 4KiB pages
-// * Identity map first 1GiB (0x40_000 * 0x1_000)
-// * Recursively map last entry to the page table itself
+// Create new page table using 4KiB pages, identity mapping the first 1GiB (0x40_000 * 0x1_000)
 pub fn create_table<'a, A>(allocator: &mut A) -> PhysAddr
 where
     A: FrameAllocator<PageSizeType>,
@@ -135,25 +60,17 @@ where
     let mut p4_table = unsafe { &mut *(p4_frame.start_address().as_u64() as *mut PageTable) };
     p4_table.zero();
 
-    let start_frame = PhysFrame::from_start_address(PhysAddr::new(0)).unwrap();
-    let end_frame = PhysFrame::containing_address(PhysAddr::new(0x40_000_000 - 1));
-    for frame in PhysFrame::range_inclusive(start_frame, end_frame) {
-        unsafe {
-            identity_map(p4_table, frame, Flags::PRESENT | Flags::WRITABLE, allocator);
-        }
-    }
+    // let mut table = unsafe { OffsetPageTable::new(p4_table, VirtAddr::new(0x0)) };
 
-    // Recursively map the last the last page in p4
-    // http://os.phil-opp.com/modifying-page-tables.html#implementation
-    unsafe {
-        map_to(
-            p4_table,
-            Page::from_start_address(REC_PAGE).unwrap(),
-            p4_frame,
-            Flags::PRESENT | Flags::WRITABLE,
-            allocator,
-        );
-    }
-
+    // let start_frame = PhysFrame::from_start_address(PhysAddr::new(0x0)).unwrap();
+    // let end_frame = PhysFrame::containing_address(PhysAddr::new(0x40_000_000 - 1));
+    // for frame in PhysFrame::range_inclusive(start_frame, end_frame) {
+    //     unsafe {
+    //         let flusher = table
+    //             .identity_map(frame, Flags::PRESENT | Flags::WRITABLE, allocator)
+    //             .expect("Mapping failed");
+    //         flusher.ignore();
+    //     }
+    // }
     p4_frame.start_address()
 }

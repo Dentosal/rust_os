@@ -105,7 +105,7 @@ pub extern "C" fn rust_main() -> ! {
     interrupt::init();
 
     // Memory allocation
-    memory::init();
+    no_interrupts!(memory::init());
 
     rprintln!("OK");
     loop {}

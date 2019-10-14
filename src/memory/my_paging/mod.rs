@@ -19,7 +19,7 @@ use crate::vga_buffer::VGA_BUFFER_PHYSADDR;
 
 use super::constants::BOOT_TMP_PAGE_TABLE_P4;
 use super::prelude::*;
-use super::{dma_allocator, FrameAllocator, Mapper, Page, PhysFrame};
+use super::{dma_allocator, Mapper, Page, PhysFrame};
 
 pub unsafe fn enable_nxe() {
     Efer::update(|flags| flags.set(EferFlags::NO_EXECUTE_ENABLE, true))
@@ -31,35 +31,8 @@ pub unsafe fn enable_write_protection() {
     })
 }
 
-/// Returns the physical address for a virtual address, if mapped
-pub fn translate_addr(addr: u64, table: &pg::OffsetPageTable) -> Option<PhysAddr> {
-    use x86_64::structures::paging::mapper::TranslateError;
-
-    let addr = VirtAddr::new(addr);
-    let page: Page = Page::containing_address(addr);
-
-    let pg_off: u64 = addr.page_offset().into();
-
-    // perform the translation
-    let frame = table.translate_page(page);
-    match frame.map(|frame| frame.start_address() + pg_off) {
-        Ok(v) => Some(v),
-        Err(TranslateError::PageNotMapped) => None,
-        Err(err) => {
-            panic!("Page translation failed: {:?}", err);
-        }
-    }
-}
-
 /// Maps elf executable based om program headers
-pub fn identity_map_elf<A>(
-    allocator: &mut A,
-    table: &mut PageMap,
-    elf_metadata: ELFData,
-    flush: bool,
-) where
-    A: FrameAllocator<PageSizeType>,
-{
+pub fn identity_map_elf(table: &mut PageMap, elf_metadata: ELFData, flush: bool) {
     for ph in elf_metadata.ph_table.iter().filter_map(|x| *x) {
         if ph.loadable() {
             let start = PhysAddr::new(ph.virtual_address);
@@ -84,7 +57,7 @@ pub fn identity_map_elf<A>(
             let start_frame = PhysFrame::containing_address(start);
             let end_frame = PhysFrame::containing_address(start + (size - 1));
             for frame in PhysFrame::range_inclusive(start_frame, end_frame) {
-                let mflush = unsafe { table.identity_map(frame, flags, allocator) };
+                let mflush = unsafe { table.identity_map(frame, flags) };
                 if flush {
                     mflush.flush();
                 } else {
@@ -116,17 +89,14 @@ unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static mut
 
 /// Remap kernel and other necessary memory areas
 #[must_use]
-pub unsafe fn init<A>(allocator: &mut A, elf_metadata: ELFData) -> PageMap
-where
-    A: FrameAllocator<PageSizeType>,
-{
+pub unsafe fn init(elf_metadata: ELFData) -> PageMap {
     rprintln!("Remapping kernel...");
 
     // Create new page table
-    let mut new_table = unsafe { PageMap::init(allocator) };
+    let mut new_table = unsafe { PageMap::init() };
 
     // Kernel code and data segments
-    identity_map_elf(allocator, &mut new_table, elf_metadata, false);
+    identity_map_elf(&mut new_table, elf_metadata, false);
 
     // Identity map IDT & IDTr
     let idt_frame = PhysFrame::containing_address(PhysAddr::new(idt::ADDRESS as u64));
@@ -135,7 +105,6 @@ where
             .identity_map(
                 idt_frame,
                 Flags::PRESENT | Flags::WRITABLE, // | Flags::NO_EXECUTE,
-                allocator,
             )
             .ignore();
     }
@@ -146,7 +115,6 @@ where
             .identity_map(
                 idtr_frame,
                 Flags::PRESENT | Flags::WRITABLE, // | Flags::NO_EXECUTE,
-                allocator,
             )
             .ignore();
     }
@@ -158,28 +126,25 @@ where
             .identity_map(
                 vga_buffer_frame,
                 Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE,
-                allocator,
             )
             .ignore();
     }
 
     // Identity map DMA memory allocator
-    // let start_frame = PhysFrame::containing_address(dma_allocator::BASE);
-    // let end_frame = PhysFrame::containing_address(dma_allocator::BASE + (dma_allocator::SIZE - 1));
-    // for frame in PhysFrame::range_inclusive(start_frame, end_frame) {
-    //     unsafe {
-    //         new_table
-    //             .identity_map(frame, Flags::WRITABLE | Flags::PRESENT | Flags::NO_EXECUTE, allocator)
-    //             .ignore();
-    //     }
-    // }
+    let start_frame = PhysFrame::containing_address(dma_allocator::BASE);
+    let end_frame = PhysFrame::containing_address(dma_allocator::BASE + (dma_allocator::SIZE - 1));
+    for frame in PhysFrame::range_inclusive(start_frame, end_frame) {
+        unsafe {
+            new_table
+                .identity_map(frame, Flags::WRITABLE | Flags::PRESENT | Flags::NO_EXECUTE)
+                .ignore();
+        }
+    }
 
     rprintln!("Switching to new table...");
     unsafe {
         new_table.activate();
     }
-
     rprintln!("Remapping done.");
-    loop {}
     new_table
 }

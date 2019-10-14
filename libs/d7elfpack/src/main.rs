@@ -5,8 +5,6 @@
 #![deny(overflowing_literals)]
 #![deny(safe_packed_borrows)]
 #![deny(unused_must_use)]
-// Features
-#![feature(reverse_bits)]
 
 use std::collections::HashMap;
 use std::env;
@@ -201,7 +199,6 @@ fn main() {
         .map(|p| compress(book.clone(), p))
         .collect();
 
-
     let (bittree, frq_table) = tree.to_bits();
     assert_eq!(bittree.len(), 511);
 
@@ -297,9 +294,6 @@ fn main() {
 
     // Program parts
     for pp in program_parts {
-        // let qq: Vec<u8> = pp.iter().map(|p| p.reverse_bits()).collect();
-        // let qq: Vec<u8> = pp.iter().map(|p| !p).collect();
-        // outf.write_all(&qq.as_slice()).unwrap();
         outf.write_all(&pp.as_slice()).unwrap();
     }
 

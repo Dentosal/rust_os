@@ -3,7 +3,7 @@
 ; to break
 
 ; These constants MUST match the ones in Plan.md
-; If a constant defined here doesn't exists in that file, then it shpuld be fine too
+; If a constant defined here doesn't exists in that file, then it should be fine too
 
 ; Kernel elf executable initial load point
 %define loadpoint 0x10000
@@ -22,7 +22,7 @@
 ; Temporary memory map
 %define boot_tmp_mmap_buffer 0x2000
 
-; Page tables
+; Boot stage page tables
 %define page_table_section_start    0x00060000
 %define page_table_p4               page_table_section_start
 %define page_table_p3               page_table_section_start + 0x1000

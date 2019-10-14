@@ -11,7 +11,6 @@ pub mod dma_allocator;
 mod frame_allocator;
 mod map;
 mod my_paging;
-pub mod paging;
 pub mod prelude;
 mod stack_allocator;
 mod utils;
@@ -83,12 +82,11 @@ pub fn init() {
         my_paging::enable_write_protection();
     }
 
-    let mut frame_allocator = unsafe { self::frame_allocator::Allocator::new(memory_map) };
-
-    bochs_magic_bp!();
-
     // Remap kernel and get page table
-    let mut active_table = unsafe { my_paging::init(&mut frame_allocator, elf_metadata) };
+    let mut active_table = unsafe { my_paging::init(elf_metadata) };
+
+    // Initialize frame allocator
+    let mut frame_allocator = unsafe { self::frame_allocator::Allocator::new(memory_map) };
 
     // Identity map heap
     let heap_start_page = pg::Page::containing_address(VirtAddr::new(HEAP_START));
@@ -97,12 +95,7 @@ pub fn init() {
         let frame = frame_allocator.allocate_frame().expect("Out of memory");
         unsafe {
             active_table
-                .map_to(
-                    page,
-                    frame,
-                    Flags::WRITABLE | Flags::NO_EXECUTE,
-                    &mut frame_allocator,
-                )
+                .map_to(page, frame, Flags::WRITABLE | Flags::NO_EXECUTE)
                 .flush();
         }
     }

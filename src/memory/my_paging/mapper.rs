@@ -1,11 +1,13 @@
+//! https://os.phil-opp.com/paging-implementation/#map-the-complete-physical-memory
 //! https://wiki.osdev.org/Page_Tables
+//!
+//! Uses only 2MiB huge pages.
 
 use core::mem;
 use core::ptr;
 use x86_64::registers::control::{Cr3, Cr3Flags};
 use x86_64::structures::paging as pg;
 use x86_64::structures::paging::page_table::{PageTable, PageTableEntry, PageTableFlags as Flags};
-use x86_64::structures::paging::PhysFrame;
 use x86_64::PhysAddr;
 
 use super::super::prelude::*;
@@ -18,34 +20,68 @@ macro_rules! try_bool {
     }};
 }
 
-/// Numeric value of `PAGE_TABLE_AREA` for static assertions
-const PT_ADDR_INT: u64 = 0x10000000;
+/// Numeric value of `PT_PADDR` for static assertions
+const PT_PADDR_INT: u64 = 0x10_000_000;
+
+/// Physical address of the page table area
+/// This pointer itself points to P4 table.
+const PT_PADDR: PhysAddr = unsafe { PhysAddr::new_unchecked(PT_PADDR_INT) };
+
+// Require P2 alignment
+static_assertions::const_assert!(PT_PADDR_INT % 0x1_000_000 == 0);
+
+/// Numeric value of `PT_VADDR` for static assertions
+const PT_VADDR_INT: u64 = 0x10_000_000;
 
 /// Page tables are mapped starting from this virtual address.
 /// This pointer itself points to P4 table.
-const PAGE_TABLE_AREA: VirtAddr = unsafe { VirtAddr::new_unchecked_raw(PT_ADDR_INT) };
+const PT_VADDR: VirtAddr = unsafe { VirtAddr::new_unchecked_raw(PT_VADDR_INT) };
 
-// Require P2 alignment for PAGE_TABLE_AREA.
-static_assertions::const_assert!(PT_ADDR_INT % 0x1_000_000 == 0);
+// Require P2 alignment
+static_assertions::const_assert!(PT_VADDR_INT % 0x1_000_000 == 0);
 
-/// Page entry count
-const PAGE_ENTRIES: u32 = 0x200;
+/// Size of 2MiB huge page, in bytes
+const HUGE_PAGE_SIZE: u64 = 0x200_000;
+
+/// Maximum number of page tables
+const MAX_PAGE_TABLES: u64 = HUGE_PAGE_SIZE / 0x1000;
+
+macro_rules! get_page {
+    ($index:literal) => {{
+        Page::from_start_address(PT_VADDR + 0x1000u64 * $index).unwrap()
+    }};
+}
+
+macro_rules! frame_addr {
+    ($index:expr) => {{
+        PT_PADDR + 0x1000u64 * $index
+    }};
+}
+
+macro_rules! frame {
+    ($index:expr) => {{
+        PhysFrame::from_start_address(frame_addr!($index)).unwrap()
+    }};
+}
+
+macro_rules! pt_flags {
+    (4) => {{
+        Flags::PRESENT | Flags::WRITABLE
+    }};
+    (3) => {{
+        Flags::PRESENT | Flags::WRITABLE
+    }};
+    (2) => {{
+        Flags::PRESENT | Flags::WRITABLE | Flags::HUGE_PAGE
+    }};
+}
 
 /// # Paging manager
-/// The idea is following:
-/// We keep three empty memory frames mapped (one for each intermediate level).
-/// Any time we need to use more frames to map an area, those frames
-/// are used to store the new tables. Then new frames are mapped for
-/// the next time.
-///
-/// Currently just leaks virtual memory forever. This will not be an issue soon.
-/// TODO: ^ Implement bookkeeping of freed sections of virtual address space,
-///         and reuse the freed blocks.
+/// Uses one huge page for page tables themselves, allowing 0x200 tables,
+/// totalling to 0x1fe * 0x200 * 0x200_000 = 0x7_f80_000_000 = 510 GiB of ram
 pub struct PageMap {
     /// Physical address of the page table
     p4_addr: PhysAddr,
-    /// Next frame for each table level [P1,P2,P3]. NOT ZEROED YET
-    next_frame_for_level: [PhysFrame; 3],
     /// Next table will be placed to `PAGE_TABLE_AREA + PAGE_SIZE * page_count`,
     /// where `PAGE_SIZE` is `0x1000`.
     page_count: u64,
@@ -55,85 +91,35 @@ impl PageMap {
     /// Initializes page table structure. Requires that frame allocator
     /// provides properly mapped frames.
     ///
-    /// This function works under (tested) assumption that PAGE_TABLE_AREA is
+    /// This function works under a (tested) assumption that PAGE_TABLE_AREA is
     /// P2 aligned. This way, only one P2 is required to create all the entries.
     ///
     /// # Safety
     ///
     /// This function must only be called once
     #[must_use]
-    pub unsafe fn init<'a, A>(allocator: &mut A) -> Self
-    where
-        A: FrameAllocator<PageSizeType>,
-    {
-        let pt_flags = Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE;
-
-        macro_rules! get_page {
-            ($index:literal) => {{
-                Page::from_start_address(PAGE_TABLE_AREA + 0x1000u64 * $index)
-                    .expect("Start address invalid")
-            }};
-        }
-
+    pub unsafe fn init() -> Self {
         // We need to create and map one table for each level
-        let p4_frame = allocator.allocate_frame().expect("Alloc failed");
-        let p4_addr = p4_frame.start_address();
-        let mut p4_table: &mut PageTable = unsafe { &mut *p4_frame.start_address().as_mut_ptr() };
+        let mut p4_table: &mut PageTable = unsafe { &mut *frame_addr!(0).as_mut_ptr() };
+        let mut p3_table: &mut PageTable = unsafe { &mut *frame_addr!(1).as_mut_ptr() };
+        let mut p2_table: &mut PageTable = unsafe { &mut *frame_addr!(2).as_mut_ptr() };
+
+        // Zero the tables
         p4_table.zero();
-
-        let p3_frame = allocator.allocate_frame().expect("Alloc failed");
-        let p3_addr = p3_frame.start_address();
-        let mut p3_table: &mut PageTable = unsafe { &mut *p3_frame.start_address().as_mut_ptr() };
         p3_table.zero();
-
-        let p2_frame = allocator.allocate_frame().expect("Alloc failed");
-        let p2_addr = p2_frame.start_address();
-        let mut p2_table: &mut PageTable = unsafe { &mut *p2_frame.start_address().as_mut_ptr() };
         p2_table.zero();
 
-        let p1_frame = allocator.allocate_frame().expect("Alloc failed");
-        let p1_addr = p1_frame.start_address();
-        let mut p1_table: &mut PageTable = unsafe { &mut *p1_frame.start_address().as_mut_ptr() };
-        p1_table.zero();
-
-        // Map each frame to the lower one
+        // Map P4->P3 and P3->P2
         let page = get_page!(0);
-        p4_table[page.p4_index()].set_addr(p3_addr, pt_flags);
-        p3_table[page.p3_index()].set_addr(p2_addr, pt_flags);
-        p2_table[page.p2_index()].set_addr(p1_addr, pt_flags);
+        p4_table[page.p4_index()].set_addr(frame_addr!(1), pt_flags!(4));
+        p3_table[page.p3_index()].set_addr(frame_addr!(2), pt_flags!(3));
 
-        rprintln!("1T vr={:?}, ph={:?}", page.start_address(), p1_addr);
-        rprintln!("2T vr={:?}, ph={:?}", page.start_address(), p2_addr);
-        rprintln!("3T vr={:?}, ph={:?}", page.start_address(), p3_addr);
-        rprintln!("4T vr={:?}, ph={:?}", page.start_address(), p4_addr);
-
-        // Use P1 table to actually map the page table entries
-        p1_table[get_page!(3).p1_index()].set_addr(p1_addr, pt_flags);
-        p1_table[get_page!(2).p1_index()].set_addr(p2_addr, pt_flags);
-        p1_table[get_page!(1).p1_index()].set_addr(p3_addr, pt_flags);
-        p1_table[get_page!(0).p1_index()].set_addr(p4_addr, pt_flags);
-
-        // Allocate and map three more entries for mapper
-        let e0_frame = allocator.allocate_frame().expect("Alloc failed");
-        let e1_frame = allocator.allocate_frame().expect("Alloc failed");
-        let e2_frame = allocator.allocate_frame().expect("Alloc failed");
-
-        let e0_addr = e0_frame.start_address();
-        let e1_addr = e1_frame.start_address();
-        let e2_addr = e2_frame.start_address();
-
-        rprintln!("1E vr={:?}, ph={:?}", get_page!(4).start_address(), e0_addr);
-        rprintln!("2E vr={:?}, ph={:?}", get_page!(5).start_address(), e1_addr);
-        rprintln!("3E vr={:?}, ph={:?}", get_page!(6).start_address(), e2_addr);
-
-        p1_table[get_page!(4).p1_index()].set_addr(e0_addr, pt_flags);
-        p1_table[get_page!(5).p1_index()].set_addr(e1_addr, pt_flags);
-        p1_table[get_page!(6).p1_index()].set_addr(e2_addr, pt_flags);
+        // Use P2 to map page table area
+        p2_table[page.p2_index()].set_addr(frame_addr!(0), pt_flags!(2));
 
         Self {
-            p4_addr,
-            next_frame_for_level: [e0_frame, e1_frame, e2_frame],
-            page_count: 7,
+            p4_addr: frame_addr!(0),
+            page_count: 3,
         }
     }
 
@@ -142,213 +128,60 @@ impl PageMap {
     pub(super) unsafe fn activate(&self) {
         bochs_magic_bp!();
         Cr3::write(
-            PhysFrame::from_start_address(self.p4_addr).expect("Misaligned P4"),
+            pg::PhysFrame::<pg::Size4KiB>::from_start_address(self.p4_addr).expect("Misaligned P4"),
             Cr3Flags::empty(),
         );
         bochs_magic_bp!();
     }
 
-    /// Allocate a new frame for a table, mapping it as required.
-    /// This function does not flush TLB.
-    #[must_use]
-    pub unsafe fn allocate_table<'a, A>(&mut self, allocator: &mut A) -> PhysFrame
-    where
-        A: FrameAllocator<PageSizeType>,
-    {
-        let p0_addr = PAGE_TABLE_AREA + 0x1000 * self.page_count;
-        let p0_page = Page::from_start_address(p0_addr).unwrap();
-        let p0_frame = allocator.allocate_frame().expect("Alloc failed");
-        self.page_count += 1;
-        if !self.try_direct_map_to_0(p0_page, p0_frame) {
-            let p1_addr = PAGE_TABLE_AREA + 0x1000 * self.page_count;
-            let p1_page = Page::from_start_address(p1_addr).unwrap();
-            let p1_frame = allocator.allocate_frame().expect("Alloc failed");
-            self.page_count += 1;
-            if !self.try_direct_map_to_1(p1_page, p1_frame) {
-                panic!("Implement more levels");
-            } else {
-                assert!(self.try_direct_map_to_0(p0_page, p0_frame));
-            }
-        }
-
-        rprintln!("NT vr={:?}, ph={:?}", p0_addr, p0_frame.start_address());
-
-        p0_frame
-    }
-
-    /// # Sets P4->P3
-    /// Tries to map a new table frame without allocating or using up frames.
-    /// Returns true on success, and false if any entries were missing.
-    /// This function does not flush TLB.
-    /// Overwrites any existing mappings.
-    #[must_use]
-    unsafe fn try_direct_map_to_3(&self, page: Page, frame: PhysFrame) -> bool {
-        let i4 = page.p4_index();
-
-        // Resolve the P1 table
-        let p4: &mut PageTable = &mut *self.p4_addr.as_mut_ptr();
-        // Map the address
-        p4[i4].set_addr(
-            frame.start_address(),
-            Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE,
-        );
-        true
-    }
-
-    /// # Sets P3->P2
-    /// Tries to map a new table frame without allocating or using up frames.
-    /// Returns true on success, and false if any entries were missing.
-    /// This function does not flush TLB.
-    /// Overwrites any existing mappings.
-    #[must_use]
-    unsafe fn try_direct_map_to_2(&self, page: Page, frame: PhysFrame) -> bool {
-        let i3 = page.p3_index();
-        let i4 = page.p4_index();
-
-        // Resolve the P1 table
-        let p4: &mut PageTable = &mut *self.p4_addr.as_mut_ptr();
-        try_bool!(!p4[i4].is_unused());
-        let p3: &mut PageTable = &mut *p4[i4].addr().as_mut_ptr();
-        // Map the address
-        p3[i3].set_addr(
-            frame.start_address(),
-            Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE,
-        );
-        true
-    }
-
-    /// # Sets P2->P1
-    /// Tries to map a new table frame without allocating or using up frames.
-    /// Returns true on success, and false if any entries were missing.
-    /// This function does not flush TLB.
-    /// Overwrites any existing mappings.
-    #[must_use]
-    unsafe fn try_direct_map_to_1(&self, page: Page, frame: PhysFrame) -> bool {
-        let i2 = page.p2_index();
-        let i3 = page.p3_index();
-        let i4 = page.p4_index();
-
-        // Resolve the P1 table
-        let p4: &mut PageTable = &mut *self.p4_addr.as_mut_ptr();
-        try_bool!(!p4[i4].is_unused());
-        let p3: &mut PageTable = &mut *p4[i4].addr().as_mut_ptr();
-        try_bool!(!p3[i3].is_unused());
-        let p2: &mut PageTable = &mut *p3[i3].addr().as_mut_ptr();
-        // Map the address
-        p2[i2].set_addr(
-            frame.start_address(),
-            Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE,
-        );
-        true
-    }
-
-    /// # Sets P1->P0
-    /// Tries to map a new table frame without allocating or using up frames.
-    /// Returns true on success, and false if any entries were missing.
-    /// This function does not flush TLB.
-    /// Overwrites any existing mappings.
-    #[must_use]
-    unsafe fn try_direct_map_to_0(&self, page: Page, frame: PhysFrame) -> bool {
-        let i1 = page.p1_index();
-        let i2 = page.p2_index();
-        let i3 = page.p3_index();
-        let i4 = page.p4_index();
-
-        // Resolve the P1 table
-        let p4: &mut PageTable = &mut *self.p4_addr.as_mut_ptr();
-        try_bool!(!p4[i4].is_unused());
-        let p3: &mut PageTable = &mut *p4[i4].addr().as_mut_ptr();
-        try_bool!(!p3[i3].is_unused());
-        let p2: &mut PageTable = &mut *p3[i3].addr().as_mut_ptr();
-        try_bool!(!p2[i2].is_unused());
-        let p1: &mut PageTable = &mut *p2[i2].addr().as_mut_ptr();
-        // Map the address
-        p1[i1].set_addr(
-            frame.start_address(),
-            Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE,
-        );
-        true
-    }
-
-    pub unsafe fn map_to<A>(
+    pub unsafe fn map_to(
         &mut self,
         page: Page,
         frame: PhysFrame,
         flags: Flags,
-        allocator: &mut A,
-    ) -> MapperFlush<pg::Size4KiB>
-    where
-        A: FrameAllocator<pg::Size4KiB>,
-    {
-        let pt_flags = Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE;
-
-        let i1 = page.p1_index();
-        let i2 = page.p2_index();
-        let i3 = page.p3_index();
+    ) -> MapperFlush<pg::Size2MiB> {
         let i4 = page.p4_index();
+        let i3 = page.p3_index();
+        let i2 = page.p2_index();
 
-        // Resolve the P1 table, filling in possibly missing higher-level tables
-        let mut used_tables: usize = 0;
+        // Resolve the P2 table, filling in possibly missing higher-level tables,
+        // and then map the actual address
 
         let p4: &mut PageTable = &mut *self.p4_addr.as_mut_ptr();
 
         if p4[i4].is_unused() {
             // P3 table missing
             panic!("P3 MISSING"); // TODO: Over 512GiB virtual address required?
-            used_tables = used_tables.max(3);
         }
         let p3: &mut PageTable = &mut *p4[i4].addr().as_mut_ptr();
 
         let p2: &mut PageTable = if p3[i3].is_unused() {
             // P2 table missing
-            used_tables = used_tables.max(2);
-            let frame = self.next_frame_for_level[1];
-            p3[i3].set_addr(frame.start_address(), pt_flags);
-            let mut table: &mut PageTable = unsafe { &mut *frame.start_address().as_mut_ptr() };
+            let addr = frame_addr!(self.page_count);
+            self.page_count += 1;
+            p3[i3].set_addr(addr, pt_flags!(3));
+            let mut table: &mut PageTable = unsafe { &mut *addr.as_mut_ptr() };
             table.zero();
             table
         } else {
             &mut *p3[i3].addr().as_mut_ptr()
         };
 
-        let p1: &mut PageTable = if p2[i2].is_unused() {
-            // P1 table missing
-            used_tables = used_tables.max(1);
-            let frame = self.next_frame_for_level[0];
-            p2[i2].set_addr(frame.start_address(), pt_flags);
-            let mut table: &mut PageTable = unsafe { &mut *frame.start_address().as_mut_ptr() };
-            table.zero();
-            table
-        } else {
-            &mut *p2[i2].addr().as_mut_ptr()
-        };
-
         // Map the address
-        p1[i1].set_addr(frame.start_address(), flags);
-
-        // Allocate and map new `next_frame_for_level` frames as required
-        for i in 0..used_tables {
-            let frame = self.allocate_table(allocator);
-            self.next_frame_for_level[i] = frame;
-            // TODO: Flushing?
-        }
+        p2[i2].set_addr(frame.start_address(), flags | Flags::HUGE_PAGE);
 
         MapperFlush::new(page)
     }
 
-    pub unsafe fn identity_map<A>(
+    pub unsafe fn identity_map(
         &mut self,
         frame: PhysFrame,
         flags: Flags,
-        allocator: &mut A,
-    ) -> MapperFlush<pg::Size4KiB>
-    where
-        A: FrameAllocator<pg::Size4KiB>,
-    {
+    ) -> MapperFlush<pg::Size2MiB> {
         let page =
             Page::from_start_address(VirtAddr::new_unchecked(frame.start_address().as_u64()))
                 .expect("Invalid physical address: no corresponding virtual address");
-        self.map_to(page, frame, flags, allocator)
+        self.map_to(page, frame, flags)
     }
 }
 

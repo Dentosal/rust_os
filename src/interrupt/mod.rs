@@ -234,20 +234,13 @@ pub fn init() {
         [idt::Descriptor::new(false, 0, PrivilegeLevel::Ring0, 0); idt::ENTRY_COUNT];
 
     // Bind exception handlers
-    handlers[0x00] = last_resort_exception_handler!();
-    handlers[0x03] = last_resort_exception_handler!();
-    handlers[0x06] = last_resort_exception_handler!();
-    handlers[0x08] = last_resort_exception_handler!();
-    handlers[0x0b] = last_resort_exception_handler!();
-    handlers[0x0d] = last_resort_exception_handler!();
-    handlers[0x0e] = last_resort_exception_handler!();
-    // handlers[0x00] = simple_exception_handler!("Divide-by-zero Error");
-    // handlers[0x03] = exception_handler!(exception_bp);
-    // handlers[0x06] = exception_handler!(exception_ud);
-    // handlers[0x08] = exception_handler_with_error_code!(exception_df, PrivilegeLevel::Ring0, 5);
-    // handlers[0x0b] = exception_handler_with_error_code!(exception_snp);
-    // handlers[0x0d] = exception_handler_with_error_code!(exception_gpf);
-    // handlers[0x0e] = exception_handler_with_error_code!(exception_pf);
+    handlers[0x00] = simple_exception_handler!("Divide-by-zero Error");
+    handlers[0x03] = exception_handler!(exception_bp);
+    handlers[0x06] = exception_handler!(exception_ud);
+    handlers[0x08] = exception_handler_with_error_code!(exception_df, PrivilegeLevel::Ring0, 5);
+    handlers[0x0b] = exception_handler_with_error_code!(exception_snp);
+    handlers[0x0d] = exception_handler_with_error_code!(exception_gpf);
+    handlers[0x0e] = exception_handler_with_error_code!(exception_pf);
     handlers[0x20] = irq_handler!(exception_irq0);
     handlers[0x21] = irq_handler!(exception_irq1);
     handlers[0x2e] = irq_handler!(exception_irq14);

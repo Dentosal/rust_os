@@ -5,7 +5,7 @@ pub use x86_64::structures::paging::PageSize;
 pub use x86_64::{PhysAddr, VirtAddr};
 
 // Page size
-pub type PageSizeType = pg::Size4KiB;
+pub type PageSizeType = pg::Size2MiB;
 
 pub type Page = pg::Page<PageSizeType>;
 pub type PageRange = pg::page::PageRange<PageSizeType>;

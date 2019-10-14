@@ -1,6 +1,6 @@
 // Represents useful attributes from 64-bit elf file
 
-const KERNEL_ELF_IMAGE_POSITION: usize = 0x10000; // must match with plan.md
+const KERNEL_ELF_IMAGE_POSITION: usize = 0x10_000; // must match with plan.md
 const MAX_PH_ENTRY_COUNT: usize = 20;
 // const MAX_SH_ENTRY_COUNT: usize = 50;
 

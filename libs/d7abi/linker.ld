@@ -5,22 +5,23 @@ SECTIONS {
     . = 0;
 
     /*
-    All sections are 0x1000 = 4096 = 4KiB aligned, because that is the correct page boundary alignment.
+    All sections are 0x200000 = 0x200_000 = 2MiB aligned,
+    as that is the correct huge-page boundary alignment.
     */
 
-    .text : ALIGN(0x8) {
+    .text : ALIGN(0x200000) {
         *(.text .text.*)
     }
 
-    .rodata : ALIGN(0x8) {
+    .rodata : ALIGN(0x200000) {
         KEEP(*(.rodata .rodata.*))
     }
 
-    .data : ALIGN(0x8) {
+    .data : ALIGN(0x200000) {
         *(.data .data.*)
     }
 
-    .bss : ALIGN(0x8) {
+    .bss : ALIGN(0x200000) {
         *(.bss .bss.*)
     }
 }

@@ -51,10 +51,10 @@ stage2:
 
     ; Now lets trust it's actually real and valid elf file
 
-    ; kernel entry position must be 0x_00000000_00100000, 1MiB
+    ; kernel entry position must be 0x_00000000_01000000, 10MiB
     ; (error code : "EP")
     mov ah, 'P'
-    cmp qword [loadpoint + 24], 0x100000
+    cmp qword [loadpoint + 24], 0x1000000
     jne error
 
     ; load point is correct, great. print green OK

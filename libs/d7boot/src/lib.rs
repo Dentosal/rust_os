@@ -185,7 +185,6 @@ unsafe fn load_decompression_table(sym_tree: &mut SymTree, start: *const u8) {
         }
 
         sym_tree.set(i, length - 1, r);
-        // sym_tree.set(i, length - 1, value >> 1);
 
         // Remove trailing ones
         while value & 1 == 1 {
@@ -335,7 +334,7 @@ pub unsafe extern "C" fn d7boot(a: u8) {
     }
 
     progress_indicator('K' as u8);
-    asm!("push 0x100000; ret" :::: "volatile", "intel");
+    asm!(concat!("push ", 0x1_000_000, "; ret") :::: "volatile", "intel");
     core::hint::unreachable_unchecked();
 }
 

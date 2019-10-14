@@ -117,10 +117,10 @@ boot:
     push ecx
         ; Load from disk
         mov dword [da_packet.lba_low],  ecx
-        ; mov dword [da_packet.lba_high], 0 ; TODO: COMMENT OUT
+        ; mov dword [da_packet.lba_high], 0 ; These are already true
         mov  word [da_packet.count],    sectors_per_operation
         mov  word [da_packet.address],  disk_load_buffer
-        ; mov  word [da_packet.segment],  0 ; TODO: COMMENT OUT
+        ; mov  word [da_packet.segment],  0 ; These are already true
 
         mov ah, 0x42
         mov si, da_packet

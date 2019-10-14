@@ -70,22 +70,22 @@ mod acpi;
 mod pic;
 // mod apic;
 mod cpuid;
-// mod disk_io;
+mod disk_io;
 mod interrupt;
 mod keyboard;
 mod memory;
 mod pci;
 mod pit;
-// mod staticfs;
-// mod virtio;
+mod staticfs;
+mod virtio;
 // mod ide;
 
 // Software:
 mod elf_parser;
-// mod filesystem;
-// mod kernel_shell;
+mod filesystem;
+mod kernel_shell;
 mod multitasking;
-// mod process_loader;
+mod process_loader;
 mod syscall;
 mod time;
 
@@ -104,11 +104,11 @@ pub extern "C" fn rust_main() -> ! {
     // Interrupt system
     interrupt::init();
 
-    // Memory allocation
+    // Memory allocation and paging
     no_interrupts!(memory::init());
 
-    rprintln!("OK");
-    loop {}
+    // More interrupts controls
+    interrupt::init_after_memory();
 
     // PIT
     pit::init();
@@ -117,7 +117,7 @@ pub extern "C" fn rust_main() -> ! {
     cpuid::init();
 
     // Filesystem
-    // filesystem::init();
+    filesystem::init();
 
     // Keyboard
     keyboard::init();
@@ -126,57 +126,57 @@ pub extern "C" fn rust_main() -> ! {
     pci::init();
 
     // Disk IO (ATA, IDE, VirtIO)
-    // disk_io::init();
+    disk_io::init();
 
     // NIC
     // nic::init();
 
-    // rreset!();
+    rreset!();
     rprintln!("Kernel initialized.\n");
 
     // Load modules
-    // if let Some(bytes) = staticfs::read_file("README.md") {
-    //     let mut lines = 3;
-    //     for b in bytes {
-    //         if b == 0x0a {
-    //             lines -= 1;
-    //             if lines == 0 {
-    //                 break;
-    //             }
-    //         }
-    //         if (0x20 <= b && b <= 0x7f) || b == 0x0a {
-    //             rprint!("{}", b as char);
-    //         }
-    //     }
-    // } else {
-    //     rprintln!("File not found");
-    // }
+    if let Some(bytes) = staticfs::read_file("README.md") {
+        let mut lines = 3;
+        for b in bytes {
+            if b == 0x0a {
+                lines -= 1;
+                if lines == 0 {
+                    break;
+                }
+            }
+            if (0x20 <= b && b <= 0x7f) || b == 0x0a {
+                rprint!("{}", b as char);
+            }
+        }
+    } else {
+        rprintln!("File not found");
+    }
 
-    // process_loader::load_module("mod_test");
+    process_loader::load_module("mod_test");
 
-    // use multitasking::PROCMAN;
+    use multitasking::PROCMAN;
 
-    // {
-    //     let pid = PROCMAN.update(|pm| pm.spawn());
-    //     rprintln!("PID: {}", pid);
-    // }
+    {
+        let pid = PROCMAN.update(|pm| pm.spawn());
+        rprintln!("PID: {}", pid);
+    }
 
-    // kernel_shell::run();
+    kernel_shell::run();
 
     loop {
-        let success: u64;
-        let result: u64;
-        unsafe {
-            asm!("
-                mov rax, 0x1
-                mov rdi, 0x2
-                mov rsi, 0x3
-                int 0xd7
-            " : "={rax}"(success), "={rdx}"(result) :: "eax", "rdx", "rdi", "rsi" : "intel");
-        }
-        // let _ = success;
-        // let _ = result;
-        rprintln!("{:?} {:?}", success, result);
+        // let success: u64;
+        // let result: u64;
+        // unsafe {
+        //     asm!("
+        //         mov rax, 0x1
+        //         mov rdi, 0x2
+        //         mov rsi, 0x3
+        //         int 0xd7
+        //     " : "={rax}"(success), "={rdx}"(result) :: "eax", "rdx", "rdi", "rsi" : "intel");
+        // }
+        // // let _ = success;
+        // // let _ = result;
+        // rprintln!("{:?} {:?}", success, result);
 
         use time::sleep_ms;
         sleep_ms(1000);

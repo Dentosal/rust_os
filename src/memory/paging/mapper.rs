@@ -169,6 +169,12 @@ impl PageMap {
 
         // Map the address
         p2[i2].set_addr(frame.start_address(), flags | Flags::HUGE_PAGE);
+        rprintln!(
+            "mapped {:?} to {:?} with {:?}",
+            frame,
+            page,
+            flags | Flags::HUGE_PAGE
+        );
 
         MapperFlush::new(page)
     }
@@ -198,7 +204,8 @@ impl<S: PageSize> MapperFlush<S> {
 
     /// Flush the page from the TLB
     pub fn flush(self) {
-        x86_64::instructions::tlb::flush(self.0.start_address());
+        // x86_64::instructions::tlb::flush(self.0.start_address());
+        x86_64::instructions::tlb::flush_all();
     }
 
     /// Explicitly skip flushing the change

@@ -10,7 +10,7 @@ mod constants;
 pub mod dma_allocator;
 mod frame_allocator;
 mod map;
-mod my_paging;
+mod paging;
 pub mod prelude;
 mod stack_allocator;
 mod utils;
@@ -20,7 +20,7 @@ pub use self::prelude::*;
 pub use self::stack_allocator::Stack;
 pub use self::utils::*;
 
-use self::my_paging::PageMap;
+use self::paging::PageMap;
 
 use d7alloc::{HEAP_SIZE, HEAP_START};
 
@@ -78,12 +78,12 @@ pub fn init() {
 
     // initalize paging system
     unsafe {
-        my_paging::enable_nxe();
-        my_paging::enable_write_protection();
+        paging::enable_nxe();
+        paging::enable_write_protection();
     }
 
     // Remap kernel and get page table
-    let mut active_table = unsafe { my_paging::init(elf_metadata) };
+    let mut active_table = unsafe { paging::init(elf_metadata) };
 
     // Initialize frame allocator
     let mut frame_allocator = unsafe { self::frame_allocator::Allocator::new(memory_map) };
@@ -95,7 +95,11 @@ pub fn init() {
         let frame = frame_allocator.allocate_frame().expect("Out of memory");
         unsafe {
             active_table
-                .map_to(page, frame, Flags::WRITABLE | Flags::NO_EXECUTE)
+                .map_to(
+                    page,
+                    frame,
+                    Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE,
+                )
                 .flush();
         }
     }
@@ -128,6 +132,6 @@ where
     if let Some(ref mut mem_ctrl) = *guard {
         f(mem_ctrl)
     } else {
-        unreachable!();
+        unreachable!("Memory controller missing");
     }
 }

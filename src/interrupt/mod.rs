@@ -197,39 +197,6 @@ static TSS: Once<TaskStateSegment> = Once::new();
 static GDT: Once<gdt::Gdt> = Once::new();
 
 pub fn init() {
-    // Initialize TSS
-    // let double_fault_stack = memory::configure(|mem_ctrl: &mut MemoryController| {
-    //     mem_ctrl
-    //         .alloc_stack(1)
-    //         .expect("could not allocate double fault stack")
-    // });
-
-    let mut code_selector = SegmentSelector::new(0, PrivilegeLevel::Ring0);
-    // let mut tss_selector = SegmentSelector::new(1, PrivilegeLevel::Ring0);
-
-    // let tss = TSS.call_once(|| {
-    //     let mut tss = TaskStateSegment::new();
-    //     tss.interrupt_stack_table[gdt::DOUBLE_FAULT_IST_INDEX] =
-    //         VirtAddr::new(double_fault_stack.top.as_u64());
-    //     tss
-    // });
-
-    let gdt = GDT.call_once(|| {
-        let mut gdt = gdt::Gdt::new();
-        code_selector = gdt.add_entry(gdt::Descriptor::kernel_code_segment());
-        // tss_selector = gdt.add_entry(gdt::Descriptor::tss_segment(&tss));
-        gdt
-    });
-
-    unsafe {
-        // load GDT
-        gdt.load();
-        // reload code segment register
-        set_cs(code_selector);
-        // load TSS
-        // load_tss(tss_selector);
-    }
-
     let mut handlers: [idt::Descriptor; idt::ENTRY_COUNT] =
         [idt::Descriptor::new(false, 0, PrivilegeLevel::Ring0, 0); idt::ENTRY_COUNT];
 
@@ -244,7 +211,7 @@ pub fn init() {
     handlers[0x20] = irq_handler!(exception_irq0);
     handlers[0x21] = irq_handler!(exception_irq1);
     handlers[0x2e] = irq_handler!(exception_irq14);
-    // handlers[0xd7] = syscall_handler!(syscall, on_process_over);
+    handlers[0xd7] = syscall_handler!(syscall, on_process_over);
 
     for index in 0..=(idt::ENTRY_COUNT - 1) {
         unsafe {
@@ -267,4 +234,42 @@ pub fn init() {
     }
 
     rprintln!("Enabled.");
+}
+
+pub fn init_after_memory() {
+    rprintln!("Swithcing to new GDT and TSS...");
+    // Initialize TSS
+    let double_fault_stack = memory::configure(|mem_ctrl: &mut MemoryController| {
+        mem_ctrl
+            .alloc_stack(1)
+            .expect("could not allocate double fault stack")
+    });
+
+    let mut code_selector = SegmentSelector::new(0, PrivilegeLevel::Ring0);
+    let mut tss_selector = SegmentSelector::new(1, PrivilegeLevel::Ring0);
+
+    let tss = TSS.call_once(|| {
+        let mut tss = TaskStateSegment::new();
+        tss.interrupt_stack_table[gdt::DOUBLE_FAULT_IST_INDEX] =
+            VirtAddr::new(double_fault_stack.top.as_u64());
+        tss
+    });
+
+    let gdt = GDT.call_once(|| {
+        let mut gdt = gdt::Gdt::new();
+        code_selector = gdt.add_entry(gdt::Descriptor::kernel_code_segment());
+        tss_selector = gdt.add_entry(gdt::Descriptor::tss_segment(&tss));
+        gdt
+    });
+
+    unsafe {
+        // load GDT
+        gdt.load();
+        // reload code segment register
+        set_cs(code_selector);
+        // load TSS
+        load_tss(tss_selector);
+    }
+
+    rprintln!("Done.");
 }

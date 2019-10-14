@@ -54,7 +54,7 @@ for d in modules/*/ ; do
     (
         cd "$d" &&
         cargo xbuild --target ../../libs/d7abi/d7abi.json --release &&
-        ld -z max-page-size=0x200000 --gc-sections -T ../../libs/d7abi/linker.ld -o  "../../build/modules/$(basename $(pwd)).elf" target/d7abi/release/*.a &&
+        ld -z max-page-size=0x1000 --gc-sections -T ../../libs/d7abi/linker.ld -o  "../../build/modules/$(basename $(pwd)).elf" target/d7abi/release/*.a &&
         strip "../../build/modules/$(basename $(pwd)).elf"
     )
 done
@@ -95,7 +95,8 @@ then
 fi
 
 echo "Creating disk image..."
-DISK_SIZE_BYTES=$(python3 -c 'print(0x200*0x800)') # a disk of 0x800=2048 0x200-byte sectors, 2**20 bytes, one mebibyte
+# a disk of 0x2000 0x200-byte sectors, 4 * 2**20 bytes, four mebibytes
+DISK_SIZE_BYTES=$(python3 -c 'print(0x200*0x2000)')
 DISK_SIZE_SECTORS=$(python3 -c "print($DISK_SIZE_BYTES // 0x200)")
 
 # Create disk
@@ -111,7 +112,7 @@ echo "* copy kernel"
 dd "if=build/kernel.elf" "of=build/disk.img" "bs=512" "seek=6" "conv=notrunc"
 
 echo "* write filesystem"
-# ./libs/d7staticfs/target/release/mkimg build/disk.img $(($imgsize/0x200+8)) $(< build_config/staticfs_files.txt)
+./libs/d7staticfs/target/release/mkimg build/disk.img $(($imgsize/0x200+8)) $(< build_config/staticfs_files.txt)
 
 # TODO? Clean?
 

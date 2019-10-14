@@ -3,8 +3,8 @@
 pub const SECTOR_SIZE: u64 = 0x200;
 
 pub const MBR_POSITION: u16 = 0x01fa;
-pub const HEADER_MAGIC: u32 = 0xd7cafed7;
-pub const ONLY_VERSION: u32 = 0x00000001;
+pub const HEADER_MAGIC: u32 = 0xd7_ca_fe_d7;
+pub const ONLY_VERSION: u32 = 0x00_00_00_01;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(C)]
@@ -44,16 +44,11 @@ impl FileEntry {
     }
 
     pub fn from_bytes(b: [u8; 16]) -> Self {
-        let mut name = [0; 12];
-        let mut size = [0; 4];
+        let mut name = [0u8; 12];
+        let mut size = [0u8; 4];
 
-        for i in 0..12 {
-            name[i] = b[i];
-        }
-
-        for i in 0..4 {
-            size[i] = b[12 + i];
-        }
+        name.copy_from_slice(&b[0..12]);
+        size.copy_from_slice(&b[12..16]);
 
         Self {
             name,
@@ -85,8 +80,8 @@ impl FileEntry {
 
     pub fn name_matches(&self, name: &str) -> bool {
         let mut trimmed: &[u8] = &self.name;
-        while trimmed.len() > 0 && trimmed[trimmed.len()-1] == 0 {
-            trimmed = &trimmed[..trimmed.len()-1];
+        while trimmed.len() > 0 && trimmed[trimmed.len() - 1] == 0 {
+            trimmed = &trimmed[..trimmed.len() - 1];
         }
         trimmed == name.as_bytes()
     }
@@ -100,7 +95,6 @@ mod test {
 
         let name = "Test_File";
         let size = 0x1234u32;
-
 
         let mut byte_buffer: [u8; 16] = [0; 16];
         for (i, c) in name.bytes().enumerate() {

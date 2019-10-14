@@ -44,6 +44,9 @@ fn load_header(file_list_sector: u32) -> u32 {
 /// Returns file entries and their sector positions
 fn load_file_entries() -> Vec<(FileEntry, u32)> {
     let base_sector = find_file_list();
+    if base_sector == 0xd7cafed7 {
+        panic!("StaticFS missing");
+    }
     let entry_count = load_header(base_sector);
     let sector_count = round_up_sector(16 + sizeof!(FileEntry) as u64 * entry_count as u64);
     let mut dc = DISK_IO.lock();

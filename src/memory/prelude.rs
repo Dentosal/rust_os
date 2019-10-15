@@ -6,6 +6,7 @@ pub use x86_64::{PhysAddr, VirtAddr};
 
 // Page size
 pub type PageSizeType = pg::Size2MiB;
+pub const PAGE_SIZE_BYTES: u64 = 0x200_000;
 
 pub type Page = pg::Page<PageSizeType>;
 pub type PageRange = pg::page::PageRange<PageSizeType>;

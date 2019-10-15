@@ -2,7 +2,6 @@
 
 const KERNEL_ELF_IMAGE_POSITION: usize = 0x10_000; // must match with plan.md
 const MAX_PH_ENTRY_COUNT: usize = 20;
-// const MAX_SH_ENTRY_COUNT: usize = 50;
 
 const ELF_MAGIC: u32 = 0x464c457F;
 const ELF_BITNESS_64: u8 = 2;
@@ -11,10 +10,10 @@ const CURRENT_ELF_VERSION: u8 = 1;
 const ELF_ARCH_X86_64: u16 = 0x3E;
 const ELF_PH_TABLE_ENTRY_SIZE: u16 = 56;
 
+#[derive(Debug)]
 pub struct ELFData {
     pub header: ELFHeader,
     pub ph_table: [Option<ELFProgramHeader>; MAX_PH_ENTRY_COUNT],
-    // pub sh_table: [Option<ELFSectionHeader>; MAX_SH_ENTRY_COUNT]
 }
 
 bitflags! {
@@ -25,7 +24,7 @@ bitflags! {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 #[repr(C, packed)]
 pub struct ELFHeader {
     magic: u32,
@@ -49,7 +48,7 @@ pub struct ELFHeader {
     sh_table_names: u16,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 #[repr(C, packed)]
 pub struct ELFProgramHeader {
     pub header_type: u32,
@@ -70,21 +69,6 @@ impl ELFProgramHeader {
         flags.contains(flag)
     }
 }
-
-// #[derive(Clone,Copy)]
-// #[repr(C,packed)]
-// pub struct ELFSectionHeader {
-//     pub name_index: u32,
-//     pub section_type: u32,
-//     pub flags: u64,
-//     pub address: u64,
-//     pub offset: u64,
-//     pub size: u64,
-//     pub link: u32,
-//     pub info: u32,
-//     pub align: u64,
-//     pub entry_size: u64
-// }
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -122,7 +106,6 @@ pub unsafe fn parse_elf(ptr: usize) -> Result<ELFData, ELFParsingError> {
         let mut elf_data = ELFData {
             header: elf_header,
             ph_table: [None; MAX_PH_ENTRY_COUNT],
-            // sh_table: [None; MAX_SH_ENTRY_COUNT]
         };
 
         // get program headers
@@ -146,26 +129,6 @@ pub unsafe fn parse_elf(ptr: usize) -> Result<ELFData, ELFParsingError> {
                 _ => {}          // unknown, not supported
             }
         }
-        // // get section headers
-        // // no checking is done here, this is just for future use
-        // let mut sh_table = 0;
-        // for index in 0..elf_data.header.sh_table_entry_count {
-        //     let sh_ptr = ptr + (elf_data.header.sh_table_position as usize) + (elf_data.header.sh_table_entry_size as usize) * (index as usize);
-        //     let sh: ELFSectionHeader = *(sh_ptr as *const _);
-        //
-        //     match sh.section_type as usize {
-        //         0 => {},    // null, ignore
-        //         1 => {      // PROGBITS
-        //             elf_data.sh_table[sh_table] = Some(sh);
-        //             sh_table += 1;
-        //         },
-        //         8 => {      // NOBITS (.bss)
-        //             elf_data.sh_table[sh_table] = Some(sh);
-        //             sh_table += 1;
-        //         }
-        //         _ => {}     // unknown
-        //     }
-        // }
 
         Ok(elf_data)
     }

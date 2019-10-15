@@ -14,6 +14,7 @@ mod paging;
 pub mod prelude;
 mod stack_allocator;
 mod utils;
+pub mod virtual_allocator;
 
 pub use self::constants::*;
 pub use self::prelude::*;
@@ -28,6 +29,7 @@ pub struct MemoryController {
     active_table: PageMap,
     pub frame_allocator: frame_allocator::Allocator,
     stack_allocator: stack_allocator::StackAllocator,
+    virtual_allocator: virtual_allocator::VirtualAllocator,
 }
 
 impl MemoryController {
@@ -39,34 +41,45 @@ impl MemoryController {
         )
     }
 
-    // pub fn alloc_executable(&mut self, size_in_pages: usize) -> MemoryArea {
-    //     use alloc::prelude::v1::Vec;
+    /// Allocate a contiguous virtual address block,
+    /// and page-map it with PRESENT and WRITABLE flags
+    pub fn alloc_pages(&mut self, size_in_pages: usize) -> virtual_allocator::Area {
+        use alloc::vec::Vec;
 
-    //     let &mut MemoryController {
-    //         ref mut active_table,
-    //         ref mut frame_allocator,
-    //         ref mut virtual_allocator,
-    //         ..
-    //     } = self;
+        let &mut MemoryController {
+            ref mut active_table,
+            ref mut frame_allocator,
+            ref mut stack_allocator,
+            ref mut virtual_allocator,
+            ..
+        } = self;
 
-    //     let mut frames: Vec<Frame> = (0..size_in_pages)
-    //         .map(|_| {
-    //             frame_allocator
-    //                 .allocate_frame()
-    //                 .expect("Could not allocate frame")
-    //         })
-    //         .collect();
+        let mut frames: Vec<PhysFrame> = (0..size_in_pages)
+            .map(|_| {
+                frame_allocator
+                    .allocate_frame()
+                    .expect("Could not allocate frame")
+            })
+            .collect();
 
-    //     // Allocate contiguous virtual address block
-    //     // TODO: After proper context switching, map to constant address
-    //     // TODO: After above and higher half kernel, map to zero
+        let start = virtual_allocator.allocate(size_in_pages as u64);
+        let mut page_index = 0;
 
-    //     // for frame in frames {
-    //     //     active_table.map_to(frame, PageTableFlags::zero(), &mut frame_allocator);
-    //     // }
+        for frame in frames {
+            unsafe {
+                active_table
+                    .map_to(
+                        Page::from_start_address(start + page_index * PAGE_SIZE_BYTES).unwrap(),
+                        frame,
+                        Flags::PRESENT | Flags::WRITABLE,
+                    )
+                    .flush();
+            }
+            page_index += 1;
+        }
 
-    //     unimplemented!();
-    // }
+        virtual_allocator::Area::new_pages(start, page_index)
+    }
 }
 
 pub fn init() {
@@ -115,6 +128,7 @@ pub fn init() {
         active_table,
         frame_allocator,
         stack_allocator,
+        virtual_allocator: virtual_allocator::VirtualAllocator::new(),
     };
 
     let mut guard = MEM_CTRL_CONTAINER.lock();

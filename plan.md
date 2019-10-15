@@ -57,9 +57,10 @@ Virtual address space
 TODO: Higher half kernel
 TODO: Proper virtual memory map
 
-Begin     | Size    | Content
-----------|---------|---------
-10_000_000| 200_000 | Page tables, identity mapped
+Begin       | Size    | Content
+------------|---------|---------
+  10_000_000| 200_000 | Page tables, identity mapped
+ 100_000_000|       ? | Allocated virtual memory for processes
 
 
 # Interrupts

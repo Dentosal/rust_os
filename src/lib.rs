@@ -152,14 +152,14 @@ pub extern "C" fn rust_main() -> ! {
         rprintln!("File not found");
     }
 
-    process_loader::load_module("mod_test");
+    // process_loader::load_module("mod_test");
 
-    use multitasking::PROCMAN;
+    // use multitasking::PROCMAN;
 
-    {
-        let pid = PROCMAN.update(|pm| pm.spawn());
-        rprintln!("PID: {}", pid);
-    }
+    // {
+    //     let pid = PROCMAN.update(|pm| pm.spawn());
+    //     rprintln!("PID: {}", pid);
+    // }
 
     kernel_shell::run();
 

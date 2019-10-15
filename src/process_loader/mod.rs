@@ -1,6 +1,7 @@
 use core::ptr;
 use x86_64::structures::paging::FrameAllocator;
 
+use crate::elf_parser::*;
 use crate::memory::prelude::*;
 use crate::memory::{self, MemoryController, Page, PhysFrame};
 use crate::staticfs;
@@ -14,40 +15,27 @@ pub fn load_module(path: &str) -> Option<()> {
         memory::page_align(PhysAddr::new(bytes.len() as u64), true).as_u64() / Page::SIZE;
 
     // Allocate load buffer
-    let mut frames: Vec<PhysFrame> = memory::configure(|mem_ctrl| {
-        (0..size_pages)
-            .map(|_| {
-                mem_ctrl
-                    .frame_allocator
-                    .allocate_frame()
-                    .expect("Could not allocate frame")
-            })
-            .collect()
-    });
+    let area = memory::configure(|mem_ctrl| mem_ctrl.alloc_pages(size_pages as usize));
 
     // Store the file to buffer
-    // TODO: Load directly to the buffer, and not through a Vec
-    for (frame, data) in frames.iter().zip(bytes.chunks(Page::SIZE as usize)) {
-        let base = frame.start_address().as_u64() as *mut u8;
-
-        for (i, &byte) in data.iter().enumerate() {
+    let base: *mut u8 = area.start.as_mut_ptr();
+    let mut it = bytes.into_iter();
+    for page_offset in 0..size_pages {
+        for byte_offset in 0..PAGE_SIZE_BYTES {
+            let i = page_offset * PAGE_SIZE_BYTES + byte_offset;
             unsafe {
-                ptr::write(base.offset(i as isize), byte);
+                ptr::write(base.offset(i as isize), it.next().unwrap_or(0));
             }
         }
     }
 
-    // Set up page tables for the new process
+    let elf = unsafe { parse_elf(base as usize) };
 
+    // Set up page tables for the new process
     // Prepare virtual address space for the process
 
-    memory::configure(|ctrl| {
-        // ctrl.alloc_executable(size_pages);
-    });
+    rprintln!("?? {:?}", elf);
+    unimplemented!(); // TODO
 
     Some(())
-
-    // for byte in bytes {
-
-    // }
 }

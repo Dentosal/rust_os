@@ -68,32 +68,13 @@ pub fn identity_map_elf(table: &mut PageMap, elf_metadata: ELFData, flush: bool)
     }
 }
 
-/// Returns a mutable reference to the active level 4 table.
-///
-/// # Unsafety
-/// The caller must guarantee that the complete physical memory is mapped to
-/// virtual memory at the passed `physical_memory_offset`.
-///
-/// Must be only called once to avoid aliasing `&mut` references (UB)
-unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static mut PageTable {
-    use x86_64::registers::control::Cr3;
-
-    let (level_4_table_frame, _) = Cr3::read();
-
-    let phys = level_4_table_frame.start_address();
-    let virt = physical_memory_offset + phys.as_u64();
-    let page_table_ptr: *mut PageTable = virt.as_mut_ptr();
-
-    &mut *page_table_ptr
-}
-
 /// Remap kernel and other necessary memory areas
 #[must_use]
 pub unsafe fn init(elf_metadata: ELFData) -> PageMap {
     rprintln!("Remapping kernel...");
 
     // Create new page table
-    let mut new_table = unsafe { PageMap::init() };
+    let mut new_table = unsafe { PageMap::init(PT_PADDR, PT_VADDR) };
 
     // Kernel code and data segments
     identity_map_elf(&mut new_table, elf_metadata, false);

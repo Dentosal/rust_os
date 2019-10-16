@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use spin::Mutex;
 use x86_64::structures::paging as pg;
 use x86_64::structures::paging::PageTableFlags as Flags;
@@ -26,7 +27,7 @@ use self::paging::PageMap;
 use d7alloc::{HEAP_SIZE, HEAP_START};
 
 pub struct MemoryController {
-    active_table: PageMap,
+    pub active_table: PageMap,
     pub frame_allocator: frame_allocator::Allocator,
     stack_allocator: stack_allocator::StackAllocator,
     virtual_allocator: virtual_allocator::VirtualAllocator,
@@ -41,37 +42,39 @@ impl MemoryController {
         )
     }
 
-    /// Allocate a contiguous virtual address block,
-    /// and page-map it with PRESENT and WRITABLE flags
-    pub fn alloc_pages(&mut self, size_in_pages: usize) -> virtual_allocator::Area {
-        use alloc::vec::Vec;
-
-        let &mut MemoryController {
-            ref mut active_table,
-            ref mut frame_allocator,
-            ref mut stack_allocator,
-            ref mut virtual_allocator,
-            ..
-        } = self;
-
-        let mut frames: Vec<PhysFrame> = (0..size_in_pages)
+    /// Allocates a set of physical memory frames
+    pub fn alloc_frames(&mut self, size_in_pages: usize) -> Vec<PhysFrame> {
+        (0..size_in_pages)
             .map(|_| {
-                frame_allocator
+                self.frame_allocator
                     .allocate_frame()
                     .expect("Could not allocate frame")
             })
-            .collect();
+            .collect()
+    }
 
-        let start = virtual_allocator.allocate(size_in_pages as u64);
+    /// Allocates a contiguous virtual memory area
+    pub fn alloc_virtual_area(&mut self, size_in_pages: u64) -> virtual_allocator::Area {
+        let start = self.virtual_allocator.allocate(size_in_pages);
+        virtual_allocator::Area::new_pages(start, size_in_pages)
+    }
+
+    /// Allocate a contiguous virtual address block,
+    /// and page-map it with the given flags
+    pub fn alloc_pages(&mut self, size_in_pages: usize, flags: Flags) -> virtual_allocator::Area {
+        let mut frames: Vec<PhysFrame> = self.alloc_frames(size_in_pages);
+
+        let start = self.virtual_allocator.allocate(size_in_pages as u64);
         let mut page_index = 0;
 
         for frame in frames {
             unsafe {
-                active_table
+                self.active_table
                     .map_to(
-                        Page::from_start_address(start + page_index * PAGE_SIZE_BYTES).unwrap(),
+                        Page::from_start_address(start + (page_index as u64) * PAGE_SIZE_BYTES)
+                            .unwrap(),
                         frame,
-                        Flags::PRESENT | Flags::WRITABLE,
+                        flags,
                     )
                     .flush();
             }

@@ -5,8 +5,8 @@
 // Register names, etc.: https://github.com/matijaspanic/NE2000/blob/master/NE2000.c
 
 use alloc::boxed::Box;
-use alloc::vec::Vec;
 use alloc::string::String;
+use alloc::vec::Vec;
 use cpuio::UnsafePort;
 
 use super::NIC;
@@ -29,10 +29,10 @@ impl Ne2000 {
         })
     }
 
-    pub fn try_new() -> Option<Box<NIC>> {
+    pub fn try_new() -> Option<Box<dyn NIC>> {
         let pci_device = Ne2000::find_pci_device()?;
 
-        let io_base = (unsafe {pci_device.get_bar(0)} & !0x3) as u16;
+        let io_base = (unsafe { pci_device.get_bar(0) } & !0x3) as u16;
 
         Some(box Ne2000 {
             pci_device,
@@ -47,7 +47,7 @@ impl Ne2000 {
         let mut reset_register = UnsafePort::<u8>::new(self.io_base + 0x1f);
         let value = reset_register.read();
         reset_register.write(value);
-        while (status_register.read() & 0x80) == 0 {};
+        while (status_register.read() & 0x80) == 0 {}
     }
 
     pub unsafe fn init_device(&mut self) {
@@ -58,18 +58,18 @@ impl Ne2000 {
         status_register.write(0xff); // mask interrupts
 
         UnsafePort::<u8>::new(self.io_base + 0x00).write((1 << 5) | 1); // page 0, no DMA, stop
-        UnsafePort::<u8>::new(self.io_base + 0x0E).write(0x49);         // set 16bit word access
-        UnsafePort::<u8>::new(self.io_base + 0x0A).write(0);            // clear count register 1
-        UnsafePort::<u8>::new(self.io_base + 0x0B).write(0);            // clear count register 2
-        UnsafePort::<u8>::new(self.io_base + 0x0F).write(0);            // mask completion IRQ
-        UnsafePort::<u8>::new(self.io_base + 0x07).write(0xFF);         // mask completion IRQ
-        UnsafePort::<u8>::new(self.io_base + 0x0C).write(0x20);         // set monitor mode
-        UnsafePort::<u8>::new(self.io_base + 0x0D).write(0x02);         // set loopback mode
-        UnsafePort::<u8>::new(self.io_base + 0x0A).write(32);           // reading 32 bytes
-        UnsafePort::<u8>::new(self.io_base + 0x0B).write(0);            // count high
-        UnsafePort::<u8>::new(self.io_base + 0x08).write(0);            // start DMA at 0
-        UnsafePort::<u8>::new(self.io_base + 0x09).write(0);            // start DMA high
-        UnsafePort::<u8>::new(self.io_base + 0x00).write(0x0A);         // start read
+        UnsafePort::<u8>::new(self.io_base + 0x0E).write(0x49); // set 16bit word access
+        UnsafePort::<u8>::new(self.io_base + 0x0A).write(0); // clear count register 1
+        UnsafePort::<u8>::new(self.io_base + 0x0B).write(0); // clear count register 2
+        UnsafePort::<u8>::new(self.io_base + 0x0F).write(0); // mask completion IRQ
+        UnsafePort::<u8>::new(self.io_base + 0x07).write(0xFF); // mask completion IRQ
+        UnsafePort::<u8>::new(self.io_base + 0x0C).write(0x20); // set monitor mode
+        UnsafePort::<u8>::new(self.io_base + 0x0D).write(0x02); // set loopback mode
+        UnsafePort::<u8>::new(self.io_base + 0x0A).write(32); // reading 32 bytes
+        UnsafePort::<u8>::new(self.io_base + 0x0B).write(0); // count high
+        UnsafePort::<u8>::new(self.io_base + 0x08).write(0); // start DMA at 0
+        UnsafePort::<u8>::new(self.io_base + 0x09).write(0); // start DMA high
+        UnsafePort::<u8>::new(self.io_base + 0x00).write(0x0A); // start read
 
         let mut p_rom_port = UnsafePort::<u8>::new(self.io_base + 0x10);
         let mut p_rom: [u8; 32] = [0; 32];
@@ -77,7 +77,7 @@ impl Ne2000 {
             p_rom[i] = p_rom_port.read();
         }
 
-        for i in 0..6  {
+        for i in 0..6 {
             self.mac_address[i] = p_rom[i];
         }
 
@@ -104,7 +104,7 @@ impl Ne2000 {
     /// Trigger a transmit start
     unsafe fn trigger_send(&mut self, packet: Vec<u8>, start_page: u8) {
         let mut ctrl_reg = UnsafePort::<u8>::new(self.io_base);
-        ctrl_reg.write(0x20);   //nodma, page0
+        ctrl_reg.write(0x20); //nodma, page0
 
         let data = ctrl_reg.read();
 
@@ -112,7 +112,6 @@ impl Ne2000 {
         UnsafePort::<u8>::new(self.io_base + 0x06).write(packet.len() as u8);
 
         ctrl_reg.write(0x26); // No DMA, start transmit
-
     }
 
     pub unsafe fn send_packet(&mut self, packet: Vec<u8>) {
@@ -129,7 +128,6 @@ impl Ne2000 {
         // [self _blockOutput: pkt_len buffer: nb_map(pkt) start: tx_start_page];
 
         self.trigger_send(packet, 0x60);
-
 
         // Transmit timeout
         use time::sleep_ms;

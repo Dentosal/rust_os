@@ -1,13 +1,13 @@
 // VirtIO network driver
 // https://wiki.osdev.org/Virtio
 
+use alloc::boxed::Box;
+use alloc::string::String;
+use alloc::vec::Vec;
 use core::mem;
 use core::ptr;
-use alloc::boxed::Box;
-use alloc::vec::Vec;
-use alloc::string::String;
 
-use memory::Page::SIZE;
+use memory::prelude::PAGE_SIZE_BYTES;
 
 use super::NIC;
 use virtio;
@@ -46,7 +46,7 @@ pub struct VirtioNet {
     mac_address: [u8; 6],
 }
 impl VirtioNet {
-    pub fn try_new() -> Option<Box<NIC>> {
+    pub fn try_new() -> Option<Box<dyn NIC>> {
         if let Some(mut device) = virtio::VirtioDevice::try_new(virtio::DeviceType::NetworkCard) {
             // Update device state
             device.write::<u8>(0x12, virtio::DeviceStatus::ACKNOWLEDGE.bits());
@@ -56,8 +56,7 @@ impl VirtioNet {
                 queues: Vec::new(),
                 mac_address: [0; 6],
             })
-        }
-        else {
+        } else {
             None
         }
     }
@@ -65,7 +64,8 @@ impl VirtioNet {
 impl NIC for VirtioNet {
     fn init(&mut self) -> bool {
         // Tell the device that it's supported by this driver
-        self.device.write::<u8>(0x12, virtio::DeviceStatus::STATE_LOADED.bits());
+        self.device
+            .write::<u8>(0x12, virtio::DeviceStatus::STATE_LOADED.bits());
 
         // Read MAC address
         for i in 0..6u16 {
@@ -93,7 +93,8 @@ impl NIC for VirtioNet {
         self.queues = self.device.init_queues();
 
         // Update device state
-        self.device.write::<u8>(0x12, virtio::DeviceStatus::STATE_READY.bits());
+        self.device
+            .write::<u8>(0x12, virtio::DeviceStatus::STATE_READY.bits());
 
         rprintln!("VirtIO-net: Device ready");
 
@@ -104,7 +105,6 @@ impl NIC for VirtioNet {
     fn send(&mut self, packet: Vec<u8>) {
         assert!(packet.len() <= 0xffff);
 
-
         self.device.select_queue(QUEUE_TX);
         let mut tx_queue = &mut self.queues[QUEUE_TX as usize];
 
@@ -114,8 +114,9 @@ impl NIC for VirtioNet {
         let length = packet.len() + mem::size_of::<NetHeader>();
         let layout = Layout::from_size_align(
             length,
-            Page::SIZE // page aligned
-        ).unwrap();
+            PAGE_SIZE_BYTES, // page aligned
+        )
+        .unwrap();
 
         let buffer: *mut u8 = unsafe { HEAP_ALLOCATOR.alloc(layout) } as *mut u8;
 
@@ -126,33 +127,39 @@ impl NIC for VirtioNet {
             for i in 0..packet.len() {
                 ptr::write_volatile(
                     buffer.offset(mem::size_of::<NetHeader>() as isize + i as isize),
-                    packet[i]
+                    packet[i],
                 );
             }
         }
 
-
         unsafe {
             for i in 0..(mem::size_of::<NetHeader>()) {
-                rprint!("{:02x} ", ptr::read_volatile(
-                    buffer.offset(i as isize)
-                ));
+                rprint!("{:02x} ", ptr::read_volatile(buffer.offset(i as isize)));
             }
-        rprintln!("\nHeader over");
+            rprintln!("\nHeader over");
             for i in 0..packet.len() {
-                rprint!("{:02x} ", ptr::read_volatile(
-                    buffer.offset(mem::size_of::<NetHeader>() as isize + i as isize)
-                ));
+                rprint!(
+                    "{:02x} ",
+                    ptr::read_volatile(
+                        buffer.offset(mem::size_of::<NetHeader>() as isize + i as isize)
+                    )
+                );
             }
         }
         rprintln!("\nPacket over");
 
         unsafe {
             assert!(ptr::read_volatile(buffer) == 0);
-            assert!(ptr::read_volatile(buffer.offset(mem::size_of::<NetHeader>() as isize)) == packet[0]);
-            assert!(ptr::read_volatile(buffer.offset((mem::size_of::<NetHeader>() + packet.len() - 1) as isize)) == packet[packet.len()-1]);
+            assert!(
+                ptr::read_volatile(buffer.offset(mem::size_of::<NetHeader>() as isize))
+                    == packet[0]
+            );
+            assert!(
+                ptr::read_volatile(
+                    buffer.offset((mem::size_of::<NetHeader>() + packet.len() - 1) as isize)
+                ) == packet[packet.len() - 1]
+            );
         }
-
 
         let buf_index = tx_queue.find_free().expect("No tx queue slots free");
 
@@ -169,7 +176,6 @@ impl NIC for VirtioNet {
 
         use time::sleep_ms;
         sleep_ms(10);
-
 
         // Notify the device about the change
         self.device.queue_notify(QUEUE_TX);

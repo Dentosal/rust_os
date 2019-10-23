@@ -10,6 +10,9 @@ use x86_64::structures::paging as pg;
 use x86_64::structures::paging::page_table::{PageTable, PageTableEntry, PageTableFlags as Flags};
 use x86_64::PhysAddr;
 
+use crate::elf_parser::{self, ELFData};
+use crate::multitasking::ElfImage;
+
 use super::super::prelude::*;
 
 macro_rules! try_bool {
@@ -26,6 +29,10 @@ const MAX_PAGE_TABLES: u64 = HUGE_PAGE_SIZE / 0x1000;
 macro_rules! get_page {
     ($base:expr, $index:literal) => {{
         Page::from_start_address($base + 0x1000u64 * $index).unwrap()
+    }};
+
+    ($base:expr) => {{
+        Page::from_start_address($base).unwrap()
     }};
 }
 
@@ -56,6 +63,9 @@ macro_rules! pt_flags {
 /// # Paging manager
 /// Uses one huge page for page tables themselves, allowing 0x200 tables,
 /// totalling to 0x1fe * 0x200 * 0x200_000 = 0x7_f80_000_000 = 510 GiB of ram
+///
+/// NOTE: When/if expanding page map to have multiple pages, the current
+/// implmentation requires adjacent pages in memory.
 pub struct PageMap {
     /// Physical address of the page table, and by extension, the P4 table
     phys_addr: PhysAddr,
@@ -67,21 +77,26 @@ pub struct PageMap {
 }
 
 impl PageMap {
-    /// Initializes page table structure. Requires that frame allocator
-    /// provides properly mapped frames.
+    /// Initializes a new page table structure.
     ///
-    /// This function works under a (tested) assumption that PAGE_TABLE_AREA is
-    /// P2 aligned. This way, only one P2 is required to create all the entries.
+    /// Given addesses must be P2 aligned (2MiB huge page).
+    /// This way, only one P2 is required to create all the entries.
+    ///
+    /// # Arguments
+    ///
+    /// * `curr_addr`: Virtual address of this table accessible with the current page tables
+    /// * `phys_addr`: Physical address of this table
+    /// * `virt_addr`: Virtual address of this table when it's in use
     ///
     /// # Safety
     ///
-    /// This function must only be called once
+    /// This function must only be called once per page table
     #[must_use]
-    pub unsafe fn init(phys_addr: PhysAddr, virt_addr: VirtAddr) -> Self {
+    pub unsafe fn init(curr_addr: VirtAddr, phys_addr: PhysAddr, virt_addr: VirtAddr) -> Self {
         // We need to create and map one table for each level
-        let mut p4_table: &mut PageTable = unsafe { &mut *frame_addr!(phys_addr, 0).as_mut_ptr() };
-        let mut p3_table: &mut PageTable = unsafe { &mut *frame_addr!(phys_addr, 1).as_mut_ptr() };
-        let mut p2_table: &mut PageTable = unsafe { &mut *frame_addr!(phys_addr, 2).as_mut_ptr() };
+        let mut p4_table: &mut PageTable = unsafe { &mut *frame_addr!(curr_addr, 0).as_mut_ptr() };
+        let mut p3_table: &mut PageTable = unsafe { &mut *frame_addr!(curr_addr, 1).as_mut_ptr() };
+        let mut p2_table: &mut PageTable = unsafe { &mut *frame_addr!(curr_addr, 2).as_mut_ptr() };
 
         // Zero the tables
         p4_table.zero();
@@ -97,10 +112,20 @@ impl PageMap {
         p2_table[page.p2_index()].set_addr(frame_addr!(phys_addr, 0), pt_flags!(2));
 
         Self {
-            phys_addr: frame_addr!(phys_addr, 0),
+            phys_addr,
             virt_addr,
             page_count: 3,
         }
+    }
+
+    pub unsafe fn translate(&self, curr_addr: VirtAddr, addr: VirtAddr) -> PhysAddr {
+        panic!("TODO: Offsets");
+        let page = get_page!(addr);
+        let p4: &PageTable = &*get_page!(curr_addr).start_address().as_ptr();
+        let p3: &PageTable = &*p4[page.p4_index()].addr().as_ptr();
+        let p2: &PageTable = &*p3[page.p3_index()].addr().as_ptr();
+        assert!(p2[page.p2_index()].flags().contains(Flags::HUGE_PAGE));
+        p2[page.p2_index()].addr()
     }
 
     #[inline(always)]
@@ -118,8 +143,36 @@ impl PageMap {
         );
     }
 
+    /// Removes a mapping
+    pub unsafe fn unmap(&mut self, curr_addr: VirtAddr, page: Page) -> MapperFlush<pg::Size2MiB> {
+        let i4 = page.p4_index();
+        let i3 = page.p3_index();
+        let i2 = page.p2_index();
+
+        let p4: &mut PageTable = &mut *curr_addr.as_mut_ptr();
+
+        if p4[i4].is_unused() {
+            panic!("Unmap nonexistent: P3 missing");
+        }
+        let p3: &mut PageTable = &mut *p4[i4].addr().as_mut_ptr();
+
+        if p3[i3].is_unused() {
+            panic!("Unmap nonexistent: P2 missing");
+        }
+        let p2: &mut PageTable = &mut *p3[i3].addr().as_mut_ptr();
+
+        // Unmap the address
+        p2[i2].set_unused();
+
+        MapperFlush::new(page)
+    }
+
+    /// Maps a frame to a page using given flags
+    ///
+    /// `curr_addr` is the virtual address of this table in the current page tables
     pub unsafe fn map_to(
         &mut self,
+        curr_addr: VirtAddr,
         page: Page,
         frame: PhysFrame,
         flags: Flags,
@@ -128,27 +181,33 @@ impl PageMap {
         let i3 = page.p3_index();
         let i2 = page.p2_index();
 
+        // Tables under P4 need a translation when walking
+        let offset: isize = (curr_addr.as_u64() as isize) - (self.p4_addr().as_u64() as isize);
+
         // Resolve the P2 table, filling in possibly missing higher-level tables,
         // and then map the actual address
 
-        let p4: &mut PageTable = &mut *self.p4_addr().as_mut_ptr();
+        let p4: &mut PageTable = &mut *curr_addr.as_mut_ptr();
 
         if p4[i4].is_unused() {
             // P3 table missing
             panic!("P3 MISSING"); // TODO: Over 512GiB virtual address required?
         }
-        let p3: &mut PageTable = &mut *p4[i4].addr().as_mut_ptr();
+        let p3: &mut PageTable =
+            &mut *((p4[i4].addr().as_u64() as isize + offset) as *mut PageTable);
 
+        rprintln!("P3: UNUSED CHECK");
         let p2: &mut PageTable = if p3[i3].is_unused() {
             // P2 table missing
             let addr = frame_addr!(self.phys_addr, self.page_count);
             self.page_count += 1;
             p3[i3].set_addr(addr, pt_flags!(3));
-            let mut table: &mut PageTable = unsafe { &mut *addr.as_mut_ptr() };
+            let mut table: &mut PageTable =
+                unsafe { &mut *((addr.as_u64() as isize + offset) as *mut PageTable) };
             table.zero();
             table
         } else {
-            &mut *p3[i3].addr().as_mut_ptr()
+            &mut *((p3[i3].addr().as_u64() as isize + offset) as *mut PageTable)
         };
 
         // Map the address
@@ -165,17 +224,52 @@ impl PageMap {
 
     pub unsafe fn identity_map(
         &mut self,
+        curr_addr: VirtAddr,
         frame: PhysFrame,
         flags: Flags,
     ) -> MapperFlush<pg::Size2MiB> {
         let page =
             Page::from_start_address(VirtAddr::new_unchecked(frame.start_address().as_u64()))
                 .expect("Invalid physical address: no corresponding virtual address");
-        self.map_to(page, frame, flags)
+        self.map_to(curr_addr, page, frame, flags)
+    }
+
+    /// Maps elf executable based om program headers
+    /// This function does not flush the TLB
+    /// NOTE: This is only suitable for mapping the kernel itself
+    pub unsafe fn identity_map_elf(&mut self, curr_addr: VirtAddr, elf_metadata: ELFData) {
+        for ph in elf_metadata.ph_table.iter().filter_map(|x| *x) {
+            if ph.loadable() {
+                let start = PhysAddr::new(ph.virtual_address);
+                let size = ph.size_in_memory;
+                let mut flags = Flags::PRESENT;
+
+                assert!(start.as_u64() % Page::SIZE == 0);
+                assert!(size > 0);
+
+                if !ph.has_flag(elf_parser::ELFPermissionFlags::EXECUTABLE) {
+                    flags |= Flags::NO_EXECUTE;
+                }
+                if !ph.has_flag(elf_parser::ELFPermissionFlags::READABLE) {
+                    panic!("Non-readable pages are not supported (yet)");
+                }
+                if ph.has_flag(elf_parser::ELFPermissionFlags::WRITABLE) {
+                    flags |= Flags::WRITABLE;
+                }
+
+                rprintln!("{:#x} :+ {:#x} [{:?}]", start, size, flags);
+
+                let start_frame = PhysFrame::containing_address(start);
+                let end_frame = PhysFrame::containing_address(start + (size - 1));
+                for frame in PhysFrame::range_inclusive(start_frame, end_frame) {
+                    self.identity_map(curr_addr, frame, flags).ignore();
+                }
+            }
+        }
     }
 }
 
-/// TLB flush infoirmation for a page
+/// TLB flush information for a page
 #[derive(Debug)]
 #[must_use = "Page Table changes must be flushed or ignored."]
 pub struct MapperFlush<S: PageSize>(pg::Page<S>);

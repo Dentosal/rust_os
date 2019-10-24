@@ -1,8 +1,9 @@
 #![feature(allocator_api)]
 #![feature(const_fn)]
 #![feature(integer_atomics)]
-
-#![deny(warnings)]
+#![forbid(private_in_public)]
+#![forbid(bare_trait_objects)]
+#![deny(unused_assignments)]
 
 #![no_std]
 
@@ -12,7 +13,7 @@ use core::ptr::NonNull;
 use core::alloc::{GlobalAlloc, Alloc, AllocErr, Layout};
 
 pub const HEAP_START: u64 = 0x40_000_000; // At 1 GiB
-pub const HEAP_SIZE: u64 = 100 * 0x400;
+pub const HEAP_SIZE: u64 = 0x1_000_000;
 
 use spin::Mutex;
 

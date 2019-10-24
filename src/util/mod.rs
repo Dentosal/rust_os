@@ -1,3 +1,5 @@
+pub mod elf_parser;
+
 use cpuio::Port;
 
 macro_rules! raw_ptr {

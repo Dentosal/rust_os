@@ -6,10 +6,10 @@ use spin::Mutex;
 use x86_64::structures::paging::PageTableFlags as Flags;
 use x86_64::VirtAddr;
 
-use crate::elf_parser::{self, ELFData};
 use crate::memory;
 use crate::memory::paging::PageMap;
 use crate::memory::prelude::*;
+use crate::util::elf_parser::{self, ELFData};
 
 use super::loader::ElfImage;
 use super::process::Process;
@@ -114,14 +114,19 @@ impl State {
             let mut pm =
                 unsafe { PageMap::init(pt_area.start, pt_frame.start_address(), pt_area.start) };
 
-            // TODO: Map the required kernel structures into the process
-            // unsafe {
-            //     pm.identity_map(PhysFrame::from_start_address(0x0), Flags::PRESENT).ignore()
-            // }
+            // Map the required kernel structures into the process tables
+            unsafe {
+                pm.identity_map(
+                    pt_area.start,
+                    PhysFrame::from_start_address(PhysAddr::new_unchecked(0x0)).unwrap(),
+                    Flags::PRESENT,
+                )
+                .ignore();
+            }
+
+            // TODO: Rest of the structures, maybe even a "jump platform"
 
             // Map the executable image to its own page table
-
-            rprintln!("MAP PROC ELF");
 
             let elf_frames = unsafe { mm.load_elf(elf) };
             for (ph, frames) in elf_frames {
@@ -195,11 +200,9 @@ impl ProcessManager {
     where
         F: FnOnce(&State) -> T,
     {
-        use crate::vga_buffer::Color;
         if let Some(ref state) = unsafe { (*self.0.get()).try_lock() } {
             Some(f(state))
         } else {
-            rprintlnc!(Color::Red; "PM NOT AVAILABLE (f)");
             None
         }
     }
@@ -211,8 +214,6 @@ impl ProcessManager {
         if let Some(ref mut state) = unsafe { (*self.0.get()).try_lock() } {
             Some(f(state))
         } else {
-            use crate::vga_buffer::Color;
-            rprintlnc!(Color::Red; "PM NOT AVAILABLE (u)");
             None
         }
     }

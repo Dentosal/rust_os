@@ -54,7 +54,6 @@ extern crate static_assertions;
 extern crate d7alloc;
 extern crate d7ramfs;
 extern crate d7staticfs;
-
 extern crate d7time;
 
 #[macro_use]
@@ -64,28 +63,16 @@ extern crate alloc;
 #[macro_use]
 mod util;
 
-// Hardware:
+// Hardware drivers
 #[macro_use]
-mod vga_buffer;
-mod acpi;
-mod pic;
-// mod apic;
-mod cpuid;
-mod disk_io;
-mod interrupt;
-mod keyboard;
-mod memory;
-// mod nic;
-mod pci;
-mod pit;
-mod staticfs;
-mod virtio;
-// mod ide;
+mod driver;
 
-// Software:
-mod elf_parser;
+// Everything else
+mod cpuid;
 mod filesystem;
+mod interrupt;
 mod kernel_shell;
+mod memory;
 mod multitasking;
 mod syscall;
 mod time;
@@ -99,7 +86,7 @@ pub extern "C" fn rust_main() -> ! {
     // Finish system setup
 
     // Interrupt controller
-    pic::init();
+    driver::pic::init();
     // apic::init();
 
     // Interrupt system
@@ -112,7 +99,7 @@ pub extern "C" fn rust_main() -> ! {
     interrupt::init_after_memory();
 
     // PIT
-    pit::init();
+    driver::pit::init();
 
     // CPU data
     cpuid::init();
@@ -121,24 +108,21 @@ pub extern "C" fn rust_main() -> ! {
     filesystem::init();
 
     // Keyboard
-    keyboard::init();
+    driver::keyboard::init();
 
     // PCI
-    pci::init();
+    driver::pci::init();
 
     // Disk IO (ATA, IDE, VirtIO)
     interrupt::enable_external_interrupts();
-    disk_io::init();
+    driver::disk_io::init();
     interrupt::disable_external_interrupts();
-
-    // NIC
-    // nic::init();
 
     rreset!();
     rprintln!("Kernel initialized.\n");
 
     // Load modules
-    if let Some(bytes) = staticfs::read_file("README.md") {
+    if let Some(bytes) = filesystem::staticfs::read_file("README.md") {
         let mut lines = 3;
         for b in bytes {
             if b == 0x0a {

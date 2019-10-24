@@ -1,6 +1,6 @@
 // TODO: Some kind of version problem
 
-use acpi::rsdt;
+use super::rsdt;
 
 #[repr(C, packed)]
 struct ACPISDTHeader {

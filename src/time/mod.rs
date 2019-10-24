@@ -6,7 +6,7 @@ use multitasking::{Process, SCHEDULER};
 
 use d7time::{Duration, Instant, TimeSpec};
 
-use pit::TIME_BETWEEN_E_12;
+use crate::driver::pit::TIME_BETWEEN_E_12;
 
 pub struct SystemClock {
     lock: UnsafeCell<AtomicBool>,

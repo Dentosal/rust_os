@@ -50,6 +50,7 @@ impl State {
                 self.current_index = (self.current_index + 1) % pc;
                 let mut process = pm.get_at(self.current_index)?;
                 self.current_process_metadata = Some(process.metadata());
+                rprintln!("-> {:?}", process);
                 Some(process.clone())
             })
             .expect("PreSwitch: Couldn't lock process manager")

@@ -10,10 +10,9 @@ use core::fmt;
 use core::mem;
 use core::ptr;
 
-use crate::keyboard;
-use crate::memory::paging::set_active_table;
+use crate::driver::keyboard;
+use crate::driver::pic;
 use crate::multitasking::on_process_over;
-use crate::pic;
 use crate::time;
 
 #[macro_use]
@@ -146,8 +145,7 @@ unsafe fn exception_irq0() {
     let next_process = time::SYSCLOCK.tick();
     pic::PICS.lock().notify_eoi(0x20);
     if let Some(process) = next_process {
-        bochs_magic_bp!();
-        set_active_table(process.page_table);
+        unimplemented!("TODO")
     }
 }
 

@@ -12,9 +12,9 @@ use x86_64::{PhysAddr, VirtAddr};
 
 use d7alloc;
 
-use crate::elf_parser::ELFData;
+use crate::driver::vga_buffer::VGA_BUFFER_PHYSADDR;
 use crate::interrupt::idt;
-use crate::vga_buffer::VGA_BUFFER_PHYSADDR;
+use crate::util::elf_parser::ELFData;
 
 use super::constants::BOOT_TMP_PAGE_TABLE_P4;
 use super::prelude::*;

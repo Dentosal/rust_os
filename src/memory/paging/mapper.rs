@@ -9,8 +9,8 @@ use x86_64::structures::paging as pg;
 use x86_64::structures::paging::page_table::{PageTable, PageTableEntry, PageTableFlags as Flags};
 use x86_64::PhysAddr;
 
-use crate::elf_parser::{self, ELFData};
 use crate::multitasking::ElfImage;
+use crate::util::elf_parser::{self, ELFData};
 
 use super::super::prelude::*;
 use super::set_active_table;
@@ -207,12 +207,12 @@ impl PageMap {
 
         // Map the address
         p2[i2].set_addr(frame.start_address(), flags | Flags::HUGE_PAGE);
-        rprintln!(
-            "mapped {:?} to {:?} with {:?}",
-            frame,
-            page,
-            flags | Flags::HUGE_PAGE
-        );
+        // rprintln!(
+        //     "mapped {:?} to {:?} with {:?}",
+        //     frame,
+        //     page,
+        //     flags | Flags::HUGE_PAGE
+        // );
 
         MapperFlush::new(page)
     }
@@ -252,7 +252,7 @@ impl PageMap {
                     flags |= Flags::WRITABLE;
                 }
 
-                rprintln!("{:#x} :+ {:#x} [{:?}]", start, size, flags);
+                // rprintln!("{:#x} :+ {:#x} [{:?}]", start, size, flags);
 
                 let start_frame = PhysFrame::containing_address(start);
                 let end_frame = PhysFrame::containing_address(start + (size - 1));

@@ -1,3 +1,5 @@
+pub mod staticfs;
+
 use alloc::borrow::ToOwned;
 use alloc::string::String;
 use alloc::vec::Vec;

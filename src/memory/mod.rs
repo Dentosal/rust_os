@@ -5,8 +5,6 @@ use x86_64::structures::paging as pg;
 use x86_64::structures::paging::PageTableFlags as Flags;
 use x86_64::structures::paging::{Mapper, PageTable};
 
-use crate::elf_parser;
-
 mod area;
 mod constants;
 pub mod dma_allocator;
@@ -18,8 +16,8 @@ mod stack_allocator;
 mod utils;
 pub mod virtual_allocator;
 
-use crate::elf_parser::{ELFData, ELFProgramHeader};
 use crate::multitasking::ElfImage;
+use crate::util::elf_parser::{self, ELFData, ELFProgramHeader};
 
 pub use self::constants::*;
 pub use self::prelude::*;

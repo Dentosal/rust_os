@@ -266,7 +266,7 @@ pub static TERMINAL: Mutex<Terminal> = Mutex::new(Terminal {
 /// "Raw" output macros
 macro_rules! rprint {
     ($($arg:tt)*) => ({
-        $crate::vga_buffer::print(format_args!($($arg)*));
+        $crate::driver::vga_buffer::print(format_args!($($arg)*));
     });
 }
 macro_rules! rprintln {
@@ -275,8 +275,8 @@ macro_rules! rprintln {
 }
 macro_rules! rprintc {
     ($fg:expr, $bg:expr ; $($arg:tt)*) => ({
-        use $crate::vga_buffer::CellColor;
-        $crate::vga_buffer::printc(
+        use $crate::driver::vga_buffer::CellColor;
+        $crate::driver::vga_buffer::printc(
             format_args!($($arg)*),
             CellColor::new($fg, $bg)
         );
@@ -291,12 +291,12 @@ macro_rules! rprintlnc {
 }
 macro_rules! rreset {
     () => {{
-        $crate::vga_buffer::TERMINAL.lock().reset();
+        $crate::driver::vga_buffer::TERMINAL.lock().reset();
     }};
 }
 macro_rules! rforce_unlock {
     () => {{
-        $crate::vga_buffer::TERMINAL.force_unlock();
+        $crate::driver::vga_buffer::TERMINAL.force_unlock();
     }};
 }
 macro_rules! panic_indicator {

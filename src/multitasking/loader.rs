@@ -1,11 +1,11 @@
 use core::ptr;
 use x86_64::structures::paging::{FrameAllocator, PageTableFlags as Flags};
 
-use crate::elf_parser::*;
+use crate::filesystem::staticfs;
 use crate::memory::prelude::*;
 use crate::memory::Area;
 use crate::memory::{self, MemoryController, Page, PhysFrame};
-use crate::staticfs;
+use crate::util::elf_parser::*;
 
 use alloc::prelude::v1::Vec;
 

@@ -23,7 +23,7 @@ nasm src/boot/stage1.asm -f bin -o build/stage1.bin
     cd libs/d7boot/ &&
     nasm -f elf64 src/entry.asm -o entry.o &&
     RUSTFLAGS="-g -C opt-level=z" RUST_TARGET_PATH=$(pwd)  cargo xbuild --target ../../d7os.json --release &&
-    ld -z max-page-size=0x1000 --gc-sections --print-gc-sections -T linker.ld -o ../../build/stage2.bin entry.o target/d7os/release/libd7boot.a &&
+    ld -z max-page-size=0x1000 --gc-sections -T linker.ld -o ../../build/stage2.bin entry.o target/d7os/release/libd7boot.a &&
     python3 ../../tools/zeropad.py ../../build/stage2.bin 0x800
 )
 

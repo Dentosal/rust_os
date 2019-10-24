@@ -5,10 +5,7 @@ authors = ["Hannes Karppila <hannes.karppila@gmail.com>"]
 publish = false
 
 [lib]
-# Two binaries:
-# staticlib: static + standalone, for deployment
-# rlib:      linkable, for linking drivers etc
-crate-type = ["staticlib", "rlib"]
+crate-type = ["staticlib"]
 
 [profile.dev]
 panic = "abort"

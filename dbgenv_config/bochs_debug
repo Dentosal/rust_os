@@ -34,6 +34,7 @@ clock: sync=none, time0=local, rtc_sync=0
 log: -
 logprefix: %t%e%d
 debug: action=ignore, harddrv=report, pci=report
+# debug: action=report, harddrv=ignore, pci=ignore, xgui=ignore, pit=ignore, pic=ignore, pit82c54=ignore, ioapic=ignore
 info: action=report
 error: action=report
 panic: action=ask

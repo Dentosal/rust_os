@@ -47,7 +47,7 @@ Begin      | Size     |rwx| Content
   1_000_000|         ?|+++| Kernel (Extended memory) (Size around 0x1_000_000, as each section is page_aligned)
  10_000_000| 1_000_000|rw-| Page tables, (0x200_000 used and after that reserved)
           ?|         ?|   | Free memory (must be allocated using the frame allocator)
- 40_000_000|         ?|rw?| Allocator-managed memory (This is 1GiB)
+ 40_000_000|         ?|rw?| Heap allocator managed memory (This is 1GiB)
 
 TODO: Bump allocator
 
@@ -59,7 +59,7 @@ TODO: Proper virtual memory map
 
 Begin       | Size    | Content
 ------------|---------|---------
-  10_000_000| 200_000 | Page tables, identity mapped
+  10_000_000| 200_000 | Kernel page tables, identity mapped
  100_000_000|       ? | Allocated virtual memory for processes
 
 
@@ -70,3 +70,17 @@ Numbers     | Description
 0x00..=0x1f | Standard intel interrupts
 0x20..=0x2f | PIC interrupts
 0xd7        | System call
+
+# Scheduler tick and process switch procedure
+
+## When PIT ticks
+
+1. Save current process registers to the current stack
+  * `x86-interrupt` cc saves all registers and return pointer
+2. Switch to kernel page tables
+  * TODO: might need some kind of jump area
+3. Advance system clock
+4. Run scheduler, and change the current process if required
+5. Switch back to process page tables
+6. Restore process registers and jump back into the process
+  * `x86-interrupt` cc restores all registers and the return address

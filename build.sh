@@ -87,8 +87,8 @@ echo "Cheking boundries..."
 # Image size check
 imgsize=$(wc -c build/kernel.elf | xargs -n 1 | tail -n +1 | head -n 1) # https://superuser.com/a/642932/328647
 echo "imgsize: $imgsize"
-maxsize=400 # size in blocks
-if [ $[ imgsize / 0x200 > 400] -eq 1 ]
+maxsize=500 # size in blocks
+if [ $[ imgsize / 0x200 > 500] -eq 1 ]
 then
     echo "Kernel image seems to be too large."
     exit 1

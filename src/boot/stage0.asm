@@ -12,8 +12,8 @@
 ; locate stage1 at 0x7e00->
 %define stage1_loadpoint 0x7e00
 
-; kernel size in sectorrs
-%define kernel_size_sectors 400
+; kernel size in sectors
+%define kernel_size_sectors 500
 
 ; 0x7f is max for most platforms, including Qemu
 %define sectors_per_operation 0x20

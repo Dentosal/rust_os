@@ -1,10 +1,13 @@
 use core::fmt;
 use spin::Mutex;
 
+mod loader;
 mod process;
 mod process_manager;
 mod scheduler;
 
+pub use self::loader::{load_module, ElfImage};
+pub use self::process::Process;
 use self::process_manager::ProcessManager;
 use self::scheduler::Scheduler;
 

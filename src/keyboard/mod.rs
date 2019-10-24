@@ -210,11 +210,10 @@ impl Keyboard {
 
 pub static KEYBOARD: Mutex<Keyboard> = Mutex::new(unsafe { Keyboard::new() });
 
+// Interrupts must be disabled during initialization,
+// so this wont deadlock on not-terribly-slow computers, including Qemu
 pub fn init() {
     unsafe {
-        // disable interrupts during initialization, so this wont deadlock on not-terribly-slow computers, including Qemu
-        asm!("cli"::::"intel","volatile");
         KEYBOARD.lock().init();
-        asm!("sti"::::"intel","volatile");
     }
 }

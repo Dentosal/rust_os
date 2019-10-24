@@ -4,13 +4,16 @@ use super::prelude::*;
 
 /// Align up or down to page size
 pub fn page_align(address: PhysAddr, upwards: bool) -> PhysAddr {
-    let address = address.as_u64();
+    PhysAddr::new(page_align_u64(address.as_u64(), upwards))
+}
 
+/// Align up or down to page size
+pub fn page_align_u64(address: u64, upwards: bool) -> u64 {
     if address % Page::SIZE == 0 {
-        PhysAddr::new(address)
+        address
     } else if upwards {
-        PhysAddr::new(address + Page::SIZE - address % Page::SIZE)
+        address + Page::SIZE - address % Page::SIZE
     } else {
-        PhysAddr::new(address - address % Page::SIZE)
+        address - address % Page::SIZE
     }
 }

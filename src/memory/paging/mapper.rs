@@ -5,7 +5,6 @@
 
 use core::mem;
 use core::ptr;
-use x86_64::registers::control::{Cr3, Cr3Flags};
 use x86_64::structures::paging as pg;
 use x86_64::structures::paging::page_table::{PageTable, PageTableEntry, PageTableFlags as Flags};
 use x86_64::PhysAddr;
@@ -14,6 +13,7 @@ use crate::elf_parser::{self, ELFData};
 use crate::multitasking::ElfImage;
 
 use super::super::prelude::*;
+use super::set_active_table;
 
 macro_rules! try_bool {
     ($expr:expr) => {{
@@ -136,11 +136,7 @@ impl PageMap {
     /// Sets the current table as the active page table
     #[inline(always)]
     pub(super) unsafe fn activate(&self) {
-        Cr3::write(
-            pg::PhysFrame::<pg::Size4KiB>::from_start_address(self.p4_addr())
-                .expect("Misaligned P4"),
-            Cr3Flags::empty(),
-        );
+        set_active_table(self.p4_addr());
     }
 
     /// Removes a mapping
@@ -196,7 +192,6 @@ impl PageMap {
         let p3: &mut PageTable =
             &mut *((p4[i4].addr().as_u64() as isize + offset) as *mut PageTable);
 
-        rprintln!("P3: UNUSED CHECK");
         let p2: &mut PageTable = if p3[i3].is_unused() {
             // P2 table missing
             let addr = frame_addr!(self.phys_addr, self.page_count);

@@ -2,7 +2,7 @@ use core::cell::UnsafeCell;
 use core::intrinsics::likely;
 use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering::SeqCst};
 
-use multitasking::SCHEDULER;
+use multitasking::{Process, SCHEDULER};
 
 use d7time::{Duration, Instant, TimeSpec};
 
@@ -25,10 +25,14 @@ impl SystemClock {
 
     /// Only to be used by the IRQ handler for PIT clock ticks
     ///
+    /// Returns Some(Process) if the tick should be followed by a process switch.
+    ///
     /// # Time constraints
     /// This function must be complete before PIT fires next interrupt,
-    /// otherwise it can deadlock
-    pub unsafe fn tick(&self) {
+    /// otherwise it can deadlock.
+    ///
+    /// ^^^ That shouldn't be possible, as PIT needs EOI before firing again.
+    pub unsafe fn tick(&self) -> Option<Process> {
         let inc: u32 = (TIME_BETWEEN_E_12 / 1_000) as u32;
 
         // The lock is only held for clock updates
@@ -61,7 +65,7 @@ impl SystemClock {
         (*uc_lock).store(false, SeqCst);
 
         // Update multitasking scheduler
-        SCHEDULER.tick(self.now());
+        SCHEDULER.tick(self.now())
     }
 
     /// Gets current time

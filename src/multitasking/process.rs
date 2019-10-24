@@ -1,53 +1,35 @@
+use x86_64::{PhysAddr, VirtAddr};
+
 use super::ProcessId;
 
-/// TODO: use XSave instead of the current
-
-// #[repr(C, packed, align="8")]
-// struct XSaveData([u8; 1024]);
-
-struct SavedRegisters {
-    rax: u64,
-    rcx: u64,
-    rdx: u64,
-    rsi: u64,
-    rdi: u64,
-    r8: u64,
-    r9: u64,
-    r10: u64,
-    r11: u64,
-}
-impl SavedRegisters {
-    pub const fn zero() -> SavedRegisters {
-        SavedRegisters {
-            rax: 0,
-            rcx: 0,
-            rdx: 0,
-            rsi: 0,
-            rdi: 0,
-            r8: 0,
-            r9: 0,
-            r10: 0,
-            r11: 0,
-        }
-    }
-}
-
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct ProcessMetadata {
     pub id: ProcessId,
     pub parent: Option<ProcessId>,
 }
 
+/// # A suspeneded process
+/// Most details of a process are stored on the stack of the process,
+/// so they are not included here
+#[derive(Debug, Clone)]
 pub struct Process {
-    // xsave: XSaveData,
-    registers: SavedRegisters,
-    // memory_map: Vec<memory::Block>,
+    /// Physical address of page tables for this process
+    pub page_table: PhysAddr,
+    /// Stack pointer for this process
+    stack_pointer: VirtAddr,
+    /// Metadata used for scheduling etc.
     metadata: ProcessMetadata,
 }
 impl Process {
-    pub const fn new(id: ProcessId, parent: Option<ProcessId>) -> Process {
-        Process {
-            registers: SavedRegisters::zero(),
+    pub const fn new(
+        id: ProcessId,
+        parent: Option<ProcessId>,
+        page_table: PhysAddr,
+        stack_pointer: VirtAddr,
+    ) -> Self {
+        Self {
+            page_table,
+            stack_pointer,
             metadata: ProcessMetadata { id, parent },
         }
     }
@@ -58,5 +40,22 @@ impl Process {
 
     pub fn id(&self) -> ProcessId {
         self.metadata.id
+    }
+
+    /// Push a byte to the stack of this process.
+    /// Requires that the stack of this process is correctly page-mapped.
+    #[inline]
+    pub unsafe fn push_byte(&mut self, value: u8) {
+        self.stack_pointer = VirtAddr::new_unchecked(self.stack_pointer.as_u64() - 1);
+        *self.stack_pointer.as_mut_ptr() = value;
+    }
+
+    /// Push a u64 to the stack of this process.
+    /// Requires that the stack of this process is correctly page-mapped.
+    #[inline]
+    pub unsafe fn push_u64(&mut self, value: u64) {
+        for byte in value.to_le_bytes().into_iter().rev() {
+            self.push_byte(*byte);
+        }
     }
 }

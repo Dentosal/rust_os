@@ -10,7 +10,7 @@ const CURRENT_ELF_VERSION: u8 = 1;
 const ELF_ARCH_X86_64: u16 = 0x3E;
 const ELF_PH_TABLE_ENTRY_SIZE: u16 = 56;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct ELFData {
     pub header: ELFHeader,
     pub ph_table: [Option<ELFProgramHeader>; MAX_PH_ENTRY_COUNT],
@@ -48,7 +48,7 @@ pub struct ELFHeader {
     sh_table_names: u16,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug, Clone, Copy)]
 #[repr(C, packed)]
 pub struct ELFProgramHeader {
     pub header_type: u32,

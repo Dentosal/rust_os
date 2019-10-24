@@ -31,6 +31,7 @@
 #![feature(lang_items)]
 #![feature(naked_functions)]
 #![feature(no_more_cas)]
+#![feature(maybe_uninit_extra)]
 #![feature(panic_info_message)]
 #![feature(ptr_internals)]
 #![feature(stmt_expr_attributes)]
@@ -74,6 +75,7 @@ mod disk_io;
 mod interrupt;
 mod keyboard;
 mod memory;
+// mod nic;
 mod pci;
 mod pit;
 mod staticfs;
@@ -85,7 +87,6 @@ mod elf_parser;
 mod filesystem;
 mod kernel_shell;
 mod multitasking;
-mod process_loader;
 mod syscall;
 mod time;
 
@@ -105,7 +106,7 @@ pub extern "C" fn rust_main() -> ! {
     interrupt::init();
 
     // Memory allocation and paging
-    no_interrupts!(memory::init());
+    memory::init();
 
     // More interrupts controls
     interrupt::init_after_memory();
@@ -126,7 +127,9 @@ pub extern "C" fn rust_main() -> ! {
     pci::init();
 
     // Disk IO (ATA, IDE, VirtIO)
+    interrupt::enable_external_interrupts();
     disk_io::init();
+    interrupt::disable_external_interrupts();
 
     // NIC
     // nic::init();
@@ -152,17 +155,18 @@ pub extern "C" fn rust_main() -> ! {
         rprintln!("File not found");
     }
 
-    // process_loader::load_module("mod_test");
+    let mod_test = multitasking::load_module("mod_test").expect("Module not found");
 
-    // use multitasking::PROCMAN;
+    use multitasking::PROCMAN;
 
-    // {
-    //     let pid = PROCMAN.update(|pm| pm.spawn());
-    //     rprintln!("PID: {}", pid);
-    // }
+    {
+        let pid = PROCMAN.update(|pm| pm.spawn(mod_test));
+        rprintln!("PID: {}", pid);
+    }
 
-    kernel_shell::run();
+    // kernel_shell::run();
 
+    interrupt::enable_external_interrupts();
     loop {
         // let success: u64;
         // let result: u64;
@@ -179,6 +183,7 @@ pub extern "C" fn rust_main() -> ! {
         // rprintln!("{:?} {:?}", success, result);
 
         use time::sleep_ms;
+        rprintln!("SLEEP(1000)");
         sleep_ms(1000);
     }
 }

@@ -29,9 +29,10 @@ impl StackAllocator {
         Self { range }
     }
 
+    /// Requires that the kernel page table is active
     pub fn alloc_stack<A: pg::FrameAllocator<pg::Size2MiB>>(
         &mut self,
-        active_table: &mut PageMap,
+        page_map: &mut PageMap,
         frame_allocator: &mut A,
         size_in_pages: usize,
     ) -> Option<Stack> {
@@ -64,8 +65,9 @@ impl StackAllocator {
                     .expect("Could not allocate stack frame");
 
                 unsafe {
-                    active_table
+                    page_map
                         .map_to(
+                            PT_VADDR,
                             page,
                             frame,
                             Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE,

@@ -12,7 +12,6 @@ use x86_64::{PhysAddr, VirtAddr};
 
 use d7alloc;
 
-use crate::elf_parser;
 use crate::elf_parser::ELFData;
 use crate::interrupt::idt;
 use crate::vga_buffer::VGA_BUFFER_PHYSADDR;
@@ -31,41 +30,12 @@ pub unsafe fn enable_write_protection() {
     })
 }
 
-/// Maps elf executable based om program headers
-pub fn identity_map_elf(table: &mut PageMap, elf_metadata: ELFData, flush: bool) {
-    for ph in elf_metadata.ph_table.iter().filter_map(|x| *x) {
-        if ph.loadable() {
-            let start = PhysAddr::new(ph.virtual_address);
-            let size = ph.size_in_memory;
-            let mut flags = Flags::PRESENT;
-
-            assert!(start.as_u64() % Page::SIZE == 0);
-            assert!(size > 0);
-
-            if !ph.has_flag(elf_parser::ELFPermissionFlags::EXECUTABLE) {
-                flags |= Flags::NO_EXECUTE;
-            }
-            if !ph.has_flag(elf_parser::ELFPermissionFlags::READABLE) {
-                panic!("Non-readable pages are not (yet) handled");
-            }
-            if ph.has_flag(elf_parser::ELFPermissionFlags::WRITABLE) {
-                flags |= Flags::WRITABLE;
-            }
-
-            rprintln!("{:#x} :+ {:#x} [{:?}]", start, size, flags);
-
-            let start_frame = PhysFrame::containing_address(start);
-            let end_frame = PhysFrame::containing_address(start + (size - 1));
-            for frame in PhysFrame::range_inclusive(start_frame, end_frame) {
-                let mflush = unsafe { table.identity_map(frame, flags) };
-                if flush {
-                    mflush.flush();
-                } else {
-                    mflush.ignore();
-                }
-            }
-        }
-    }
+pub unsafe fn set_active_table(p4_addr: PhysAddr) {
+    use x86_64::registers::control::{Cr3, Cr3Flags};
+    Cr3::write(
+        pg::PhysFrame::<pg::Size4KiB>::from_start_address(p4_addr).expect("Misaligned P4"),
+        Cr3Flags::empty(),
+    );
 }
 
 /// Remap kernel and other necessary memory areas
@@ -74,39 +44,28 @@ pub unsafe fn init(elf_metadata: ELFData) -> PageMap {
     rprintln!("Remapping kernel...");
 
     // Create new page table
-    let mut new_table = unsafe { PageMap::init(PT_PADDR, PT_VADDR) };
+    let mut new_table = unsafe { PageMap::init(PT_VADDR, PT_PADDR, PT_VADDR) };
 
     // Kernel code and data segments
-    identity_map_elf(&mut new_table, elf_metadata, false);
+    new_table.identity_map_elf(PT_VADDR, elf_metadata);
 
     // Identity map IDT & IDTr
     let idt_frame = PhysFrame::containing_address(PhysAddr::new(idt::ADDRESS as u64));
-    unsafe {
-        new_table
-            .identity_map(
-                idt_frame,
-                Flags::PRESENT | Flags::WRITABLE, // | Flags::NO_EXECUTE,
-            )
-            .ignore();
-    }
-
     let idtr_frame = PhysFrame::containing_address(PhysAddr::new(idt::R_ADDRESS as u64));
-    unsafe {
-        new_table
-            .identity_map(
-                idtr_frame,
-                Flags::PRESENT | Flags::WRITABLE, // | Flags::NO_EXECUTE,
-            )
-            .ignore();
-    }
+    let vga_buffer_frame = PhysFrame::containing_address(VGA_BUFFER_PHYSADDR);
+
+    assert_eq!(idt_frame, idt_frame);
+    assert_eq!(idt_frame, vga_buffer_frame);
+
+    let lowmem_frame = idt_frame;
 
     // Identity map the VGA text buffer
-    let vga_buffer_frame = PhysFrame::containing_address(VGA_BUFFER_PHYSADDR);
     unsafe {
         new_table
             .identity_map(
-                vga_buffer_frame,
-                Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE,
+                PT_VADDR,
+                lowmem_frame,
+                Flags::PRESENT | Flags::WRITABLE, // | Flags::NO_EXECUTE,
             )
             .ignore();
     }
@@ -117,7 +76,11 @@ pub unsafe fn init(elf_metadata: ELFData) -> PageMap {
     for frame in PhysFrame::range_inclusive(start_frame, end_frame) {
         unsafe {
             new_table
-                .identity_map(frame, Flags::WRITABLE | Flags::PRESENT | Flags::NO_EXECUTE)
+                .identity_map(
+                    PT_VADDR,
+                    frame,
+                    Flags::WRITABLE | Flags::PRESENT | Flags::NO_EXECUTE,
+                )
                 .ignore();
         }
     }

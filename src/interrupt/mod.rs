@@ -11,6 +11,7 @@ use core::mem;
 use core::ptr;
 
 use crate::keyboard;
+use crate::memory::paging::set_active_table;
 use crate::multitasking::on_process_over;
 use crate::pic;
 use crate::time;
@@ -134,7 +135,7 @@ unsafe fn exception_snp(stack_frame: &ExceptionStackFrame, error_code: u64) {
                 unreachable!();
             }
         },
-        (error_code & 0xFFFF) >> 4, // FIXME: 3 ?
+        (error_code & 0xFFFF) >> 3, // FIXME: 4 ?
         *stack_frame
     );
     loop {}
@@ -142,8 +143,12 @@ unsafe fn exception_snp(stack_frame: &ExceptionStackFrame, error_code: u64) {
 
 /// PIT timer ticked
 unsafe fn exception_irq0() {
-    time::SYSCLOCK.tick();
+    let next_process = time::SYSCLOCK.tick();
     pic::PICS.lock().notify_eoi(0x20);
+    if let Some(process) = next_process {
+        bochs_magic_bp!();
+        set_active_table(process.page_table);
+    }
 }
 
 /// First ps/2 device, keyboard, sent data
@@ -211,6 +216,7 @@ pub fn init() {
     handlers[0x20] = irq_handler!(exception_irq0);
     handlers[0x21] = irq_handler!(exception_irq1);
     handlers[0x2e] = irq_handler!(exception_irq14);
+    handlers[0x2f] = simple_exception_handler!("Exception 0x2f ?");
     handlers[0xd7] = syscall_handler!(syscall, on_process_over);
 
     for index in 0..=(idt::ENTRY_COUNT - 1) {
@@ -226,11 +232,10 @@ pub fn init() {
         idt::Reference::new().write();
     }
 
-    rprintln!("Enabling interrupt handler...");
+    rprintln!("Loading new IDT...");
 
     unsafe {
         asm!("lidt [$0]" :: "r"(idt::R_ADDRESS) : "memory" : "volatile", "intel");
-        asm!("sti" :::: "volatile", "intel");
     }
 
     rprintln!("Enabled.");
@@ -269,6 +274,24 @@ pub fn init_after_memory() {
         set_cs(code_selector);
         // load TSS
         load_tss(tss_selector);
+    }
+}
+
+pub fn enable_external_interrupts() {
+    rprintln!("Enabling external interrupts");
+
+    unsafe {
+        asm!("sti" :::: "volatile", "intel");
+    }
+
+    rprintln!("Done.");
+}
+
+pub fn disable_external_interrupts() {
+    rprintln!("Enabling external interrupts");
+
+    unsafe {
+        asm!("cli" :::: "volatile", "intel");
     }
 
     rprintln!("Done.");

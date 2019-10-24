@@ -3,12 +3,12 @@ use spin::Mutex;
 
 use d7time::{Duration, Instant};
 
-use super::process::ProcessMetadata;
+use super::process::{Process, ProcessMetadata};
 use super::ProcessId;
 use super::PROCMAN;
 
 // const TIME_SLICE: Duration = Duration::from_millis(1); // run task 1 millisecond and switch
-const TIME_SLICE: Duration = Duration::from_millis(1_000); // XXX: tesiting with 1 sec slices
+const TIME_SLICE: Duration = Duration::from_millis(1_000); // XXX: testing with 1 sec slices
 
 struct State {
     /// Time of the next switch if set, otherwise immediately
@@ -35,40 +35,40 @@ impl State {
         self.current_process_metadata.clone().map(|p_md| p_md.id)
     }
 
-    /// Switches to next process
-    /// Return process id of next process if switch was succesfuld
-    unsafe fn switch(&mut self) -> Option<ProcessId> {
-        PROCMAN.update(|pm| {
-            let pc = pm.process_count();
+    /// Prepare switch to the next process
+    /// Returns the data for the process to switch to, if any
+    unsafe fn prepare_switch(&mut self) -> Option<Process> {
+        PROCMAN
+            .try_update(|pm| {
+                let pc = pm.process_count();
 
-            if pc == 0 {
-                return None;
-            }
+                if pc == 0 {
+                    return None;
+                }
 
-            // Will not overflow, since there will never be usize::MAX processes running
-            self.current_index = (self.current_index + 1) % pc;
-
-            let mut process = pm.get_at(self.current_index)?;
-
-            self.current_process_metadata = Some(process.metadata());
-            unimplemented!();
-            Some(self.get_running_pid().unwrap())
-        })
+                // Will not overflow, since there will never be usize::MAX processes running
+                self.current_index = (self.current_index + 1) % pc;
+                let mut process = pm.get_at(self.current_index)?;
+                self.current_process_metadata = Some(process.metadata());
+                Some(process.clone())
+            })
+            .expect("PreSwitch: Couldn't lock process manager")
     }
 
-    pub fn tick(&mut self, now: Instant) {
+    pub fn tick(&mut self, now: Instant) -> Option<Process> {
         match self.next_switch {
             Some(s) => {
                 if now >= s {
                     self.next_switch = Some(now + TIME_SLICE);
-                    unsafe {
-                        self.switch();
-                    }
+                    unsafe { self.prepare_switch() }
+                } else {
+                    None
                 }
             }
             None => {
                 // start switching
                 self.next_switch = Some(now + TIME_SLICE);
+                None
             }
         }
     }
@@ -82,9 +82,9 @@ impl Scheduler {
         Self(UnsafeCell::new(Mutex::new(State::new())))
     }
 
-    pub unsafe fn tick(&self, now: Instant) {
+    pub unsafe fn tick(&self, now: Instant) -> Option<Process> {
         if let Some(ref mut state) = (*self.0.get()).try_lock() {
-            state.tick(now);
+            state.tick(now)
         } else {
             // TODO: Just skip this, or maybe just log this?
             panic!("Unable to lock scheduler");

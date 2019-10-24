@@ -45,12 +45,32 @@ impl VirtualAllocator {
     }
 
     pub fn free(&mut self, start: VirtAddr, size_pages: u64) {
-        unimplemented!("TODO: Free virtual memory")
+        let index = match self
+            .free_blocks
+            .binary_search_by(|block| block.start.cmp(&start))
+        {
+            Ok(_) => {
+                panic!("VirtAlloc: Double free: {:?} ({} pages)", start, size_pages);
+            }
+            Err(i) => i,
+        };
+
+        // TODO: check for overlapping regions and report errors
+
+        let end: VirtAddr = start + size_pages * PAGE_SIZE_BYTES;
+
+        if index > 0 && self.free_blocks[index - 1].end == start {
+            self.free_blocks[index - 1].end += size_pages * PAGE_SIZE_BYTES;
+        } else if index < self.free_blocks.len() && self.free_blocks[index].start == end {
+            self.free_blocks[index].start = start;
+        } else {
+            self.free_blocks.insert(index, Area { start, end });
+        }
     }
 }
 
 /// Range start..end
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Area {
     pub start: VirtAddr,
     pub end: VirtAddr,
@@ -63,7 +83,13 @@ impl Area {
         }
     }
 
+    #[inline]
+    pub fn size_bytes(&self) -> u64 {
+        self.end.as_u64() - self.start.as_u64()
+    }
+
+    #[inline]
     pub fn size_pages(&self) -> u64 {
-        self.end.as_u64() / self.start.as_u64()
+        self.size_bytes() / PAGE_SIZE_BYTES
     }
 }

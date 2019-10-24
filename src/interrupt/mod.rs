@@ -135,7 +135,7 @@ unsafe fn exception_snp(stack_frame: &ExceptionStackFrame, error_code: u64) {
                 unreachable!();
             }
         },
-        (error_code & 0xFFFF) >> 3, // FIXME: 4 ?
+        (error_code & 0xFFFF) >> 3,
         *stack_frame
     );
     loop {}
@@ -166,6 +166,32 @@ unsafe fn exception_irq1() {
 pub unsafe fn exception_irq14() {
     // Since we are polling the drive, just ignore the IRQ
     pic::PICS.lock().notify_eoi(0x2e);
+}
+
+/// (Possibly) spurious interrupt for the primary PIC
+/// https://wiki.osdev.org/8259_PIC#Handling_Spurious_IRQs
+pub unsafe fn exception_irq7() {
+    let mut pics = pic::PICS.lock();
+    // Check if this is a real IRQ
+    let is_real = pics.read_isr() & (1 << 7) != 0;
+    if is_real {
+        pic::PICS.lock().notify_eoi(0x27);
+    }
+    // Ignore spurious interrupts
+}
+
+/// (Possibly) spurious interrupt for the secondary PIC
+/// https://wiki.osdev.org/8259_PIC#Handling_Spurious_IRQs
+pub unsafe fn exception_irq15() {
+    let mut pics = pic::PICS.lock();
+    // Check if this is a real IRQ
+    let is_real = pics.read_isr() & (1 << 15) != 0;
+    if is_real {
+        pic::PICS.lock().notify_eoi(0x2f);
+    } else {
+        // Inform primary PIC about spurious interrupt
+        pic::PICS.lock().notify_eoi_primary();
+    }
 }
 
 /// System calls
@@ -215,8 +241,9 @@ pub fn init() {
     handlers[0x0e] = exception_handler_with_error_code!(exception_pf);
     handlers[0x20] = irq_handler!(exception_irq0);
     handlers[0x21] = irq_handler!(exception_irq1);
+    handlers[0x21] = irq_handler!(exception_irq7);
     handlers[0x2e] = irq_handler!(exception_irq14);
-    handlers[0x2f] = simple_exception_handler!("Exception 0x2f ?");
+    handlers[0x2e] = irq_handler!(exception_irq15);
     handlers[0xd7] = syscall_handler!(syscall, on_process_over);
 
     for index in 0..=(idt::ENTRY_COUNT - 1) {

@@ -1,7 +1,8 @@
-// Mostly taken from, with MIT license
+// Some taken from, with MIT license
 // https://github.com/emk/toyos-rs/blob/master/crates/pic8259_simple/src/lib.rs
 // and from, public domain:
 // http://wiki.osdev.org/PIC#Programming_the_PIC_chips
+// adn rest written by me
 
 use cpuio::{Port, UnsafePort};
 use spin::Mutex;
@@ -15,6 +16,7 @@ const PIC2_DATA: u16 = 0xA1;
 // PIC commands
 const PIC_CMD_EOI: u8 = 0x20;
 const PIC_CMD_INIT: u8 = 0x11;
+const PIC_CMD_READ_ISR: u8 = 0x0b;
 
 struct Pic {
     offset: u8,
@@ -23,9 +25,17 @@ struct Pic {
 }
 
 impl Pic {
+    /// Test if an interrupt id is operated by this pic
     fn handles_interrupt(&self, interupt_id: u8) -> bool {
         self.offset <= interupt_id && interupt_id < self.offset + 8
     }
+
+    /// Read ISR: https://wiki.osdev.org/8259_PIC#ISR_and_IRR
+    unsafe fn read_isr(&mut self) -> u8 {
+        self.command_port.write(PIC_CMD_READ_ISR);
+        self.command_port.read()
+    }
+
     /// Send end of interrupt signal to pic
     unsafe fn send_eoi(&mut self) {
         self.command_port.write(PIC_CMD_EOI);
@@ -53,15 +63,17 @@ impl ChainedPics {
             ],
         }
     }
-    /// Init - remap irqs (http://wiki.osdev.org/PIC#Initialisation, https://pdos.csail.mit.edu/6.828/2005/readings/hardware/8259A.pdf)
+    /// Init - remap irqs
+    /// http://wiki.osdev.org/PIC#Initialisation
+    /// https://pdos.csail.mit.edu/6.828/2005/readings/hardware/8259A.pdf
     pub unsafe fn init(&mut self) {
         // Create local IO wait function
         let mut io_wait_port: Port<u8> = Port::new(0x80);
         let mut io_wait = || io_wait_port.write(0);
 
         // Save masks
-        let mut mask1: u8 = self.pics[0].data_port.read();
-        let mut mask2: u8 = self.pics[1].data_port.read();
+        let mut _mask1: u8 = self.pics[0].data_port.read();
+        let mut _mask2: u8 = self.pics[1].data_port.read();
 
         // Initialization sequence
         self.pics[0].command_port.write(PIC_CMD_INIT);
@@ -90,16 +102,33 @@ impl ChainedPics {
         // Modify masks
         // http://wiki.osdev.org/IRQ#Standard_ISA_IRQs
         // http://wiki.osdev.org/8259_PIC#Masking
-        mask1 &= 0b11111100; // Enable PIT and Keyboard
-        mask2 &= 0b11111111; // Do nothing
+        // Enable PIT, Keyboard, Cascade, Primary ATA
+        // Disable everything else
+        let mask1 = 0b11111000;
+        let mask2 = 0b10111111;
+
+        // rprintln!("old {:08b} {:08b}", _mask1, _mask2);
+        // rprintln!("new {:08b} {:08b}", mask1, mask2);
+        // loop {}
 
         // Restore / Set masks
         self.pics[0].data_port.write(mask1);
         self.pics[1].data_port.write(mask2);
     }
+
+    /// Verify that an interrupt is produced by pics
     pub fn handles_interrupt(&self, interrupt_id: u8) -> bool {
         self.pics.iter().any(|p| p.handles_interrupt(interrupt_id))
     }
+
+    /// Read ISR values from pics as a u16 bitmap
+    pub unsafe fn read_isr(&mut self) -> u16 {
+        let isr0 = self.pics[0].read_isr() as u16;
+        let isr1 = self.pics[1].read_isr() as u16;
+        (isr1 << 8) | isr0
+    }
+
+    /// Send end of interrupt notification
     pub unsafe fn notify_eoi(&mut self, interrupt_id: u8) {
         if self.handles_interrupt(interrupt_id) {
             // chain
@@ -108,6 +137,12 @@ impl ChainedPics {
             }
             self.pics[0].send_eoi();
         }
+    }
+
+    /// Send end of interrupt notification to primary PIC only
+    /// Used for spurious interrupt handling
+    pub unsafe fn notify_eoi_primary(&mut self) {
+        self.pics[0].send_eoi();
     }
 }
 

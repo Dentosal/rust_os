@@ -159,7 +159,11 @@ fn main() {
             }
 
             // Zero-pad to sector boundary
-            f.write_all(&vec![0; (SECTOR_SIZE - (counter % SECTOR_SIZE)) as usize].as_slice())
+            let mut pad_count = SECTOR_SIZE - (counter % SECTOR_SIZE);
+            if pad_count == SECTOR_SIZE {
+                pad_count = 0;
+            }
+            f.write_all(&vec![0; pad_count as usize].as_slice())
                 .unwrap();
 
             assert_eq!(round_up_sector(counter), entry.size as u64);

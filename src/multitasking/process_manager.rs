@@ -2,6 +2,7 @@ use alloc::vec::Vec;
 use core::cell::UnsafeCell;
 use core::mem::MaybeUninit;
 use core::ops::{Deref, DerefMut};
+use core::ptr;
 use spin::Mutex;
 use x86_64::structures::paging::PageTableFlags as Flags;
 use x86_64::VirtAddr;
@@ -9,13 +10,15 @@ use x86_64::VirtAddr;
 use crate::memory;
 use crate::memory::paging::PageMap;
 use crate::memory::prelude::*;
+use crate::memory::process_common_code as pcc;
+use crate::memory::{PROCESS_COMMON_CODE, PROCESS_STACK};
 use crate::util::elf_parser::{self, ELFData};
 
 use super::loader::ElfImage;
 use super::process::Process;
 use super::ProcessId;
 
-const PROCESS_STACK_SIZE_PAGES: u64 = 1;
+const PROCESS_STACK_SIZE_PAGES: u64 = 2;
 
 pub struct State {
     process_list: Vec<Process>,
@@ -61,36 +64,49 @@ impl State {
             self.id_counter = self.id_counter.next();
         }
 
-        let mut rsp: VirtAddr = VirtAddr::new_unchecked(0);
+        let mut rsp: VirtAddr = VirtAddr::new_unchecked(0x12345678);
         let mut page_map: MaybeUninit<PageMap> = MaybeUninit::uninit();
 
         memory::configure(|mm| {
             // Allocate a stack for the process
             let stack_frames = mm.alloc_frames(PROCESS_STACK_SIZE_PAGES as usize);
-            let stack_area = mm.alloc_virtual_area(PROCESS_STACK_SIZE_PAGES + 1); // + 1: guard page
-            rsp = stack_area.end;
+            let stack_area = mm.alloc_virtual_area(PROCESS_STACK_SIZE_PAGES);
 
-            // Map the actual stack frames to the kernel page tables
-            let mut page_index = 0;
-            for frame in stack_frames {
+            // Populate the process stack
+            for (page_index, frame) in stack_frames.iter().enumerate() {
+                let vaddr = stack_area.start + (page_index as u64) * PAGE_SIZE_BYTES;
                 unsafe {
+                    // Map the actual stack frames to the kernel page tables
                     mm.page_map
                         .map_to(
                             PT_VADDR,
-                            Page::from_start_address(
-                                stack_area.start + page_index * PAGE_SIZE_BYTES,
-                            )
-                            .unwrap(),
-                            frame,
+                            Page::from_start_address(vaddr).unwrap(),
+                            frame.clone(),
                             Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE,
                         )
                         .flush();
-                }
-                page_index += 1;
-            }
-            // Leave the guard page unmapped
 
-            rprintln!("STACK FRAMES OK");
+                    // Zero the stack
+                    ptr::write_bytes(vaddr.as_mut_ptr::<u8>(), 0, frame.size() as usize);
+
+                    // Set start address to the right position, on the last page
+                    if page_index == (PROCESS_STACK_SIZE_PAGES as usize) - 1 {
+                        // Offset to leave registers zero when they are popped,
+                        // plus space for the return address itself
+                        ptr::write(
+                            vaddr
+                                .as_mut_ptr::<u64>()
+                                .offset((PAGE_SIZE_BYTES / 8 - 1) as isize),
+                            0x1_000_000u64,
+                        );
+                    }
+
+                    // Unmap from kernel table
+                    mm.page_map
+                        .unmap(PT_VADDR, Page::from_start_address(vaddr).unwrap())
+                        .flush();
+                }
+            }
 
             // Allocate own page table for the process
             let pt_frame = mm.alloc_frames(1)[0];
@@ -116,20 +132,52 @@ impl State {
 
             // Map the required kernel structures into the process tables
             unsafe {
-                pm.identity_map(
+                // Descriptor tables
+                pm.map_to(
                     pt_area.start,
-                    PhysFrame::from_start_address(PhysAddr::new_unchecked(0x0)).unwrap(),
+                    Page::from_start_address(VirtAddr::new_unchecked(0x0)).unwrap(),
+                    PhysFrame::from_start_address(PhysAddr::new(pcc::PROCESS_IDT_PHYS_ADDR)).unwrap(),
+                    // Flags::PRESENT | Flags::NO_EXECUTE,
+                    // CPU likes to write to GDT(?) for some reason?
+                    Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE,
+                )
+                .ignore();
+
+                // Common section for process switches
+                pm.map_to(
+                    pt_area.start,
+                    Page::from_start_address(PROCESS_COMMON_CODE).unwrap(),
+                    PhysFrame::from_start_address(PhysAddr::new(pcc::COMMON_ADDRESS_PHYS)).unwrap(),
                     Flags::PRESENT,
                 )
                 .ignore();
+
+                // TODO: Rest of the structures? Are there any?
             }
 
-            // TODO: Rest of the structures, maybe even a "jump platform"
+            // Map process stack its own page table
+            // No guard page is needed, as the page below the stack is read-only
+            for (page_index, frame) in stack_frames.into_iter().enumerate() {
+                let vaddr = PROCESS_STACK + (page_index as u64) * PAGE_SIZE_BYTES;
+                unsafe {
+                    pm.map_to(
+                        pt_area.start,
+                        Page::from_start_address(vaddr).unwrap(),
+                        frame,
+                        Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE,
+                    )
+                    .ignore();
+                }
+            }
+
+            // Set rsp
+            rsp = PROCESS_STACK + (PROCESS_STACK_SIZE_PAGES * PAGE_SIZE_BYTES - 8 * (16 + 1));
 
             // Map the executable image to its own page table
 
             let elf_frames = unsafe { mm.load_elf(elf) };
             for (ph, frames) in elf_frames {
+                assert!(ph.virtual_address >= 0x400_000);
                 let start = VirtAddr::new(ph.virtual_address);
 
                 let mut flags = Flags::PRESENT;
@@ -151,6 +199,9 @@ impl State {
                     }
                 }
             }
+
+            // TODO: Unmap process structures from kernel page map
+            // ^ at least the process page table is not unmapped yet
 
             page_map.write(pm);
         });

@@ -5,9 +5,9 @@
 use x86_64::structures::paging as pg;
 use x86_64::PhysAddr;
 
-use super::area::PhysMemoryRange;
-use super::map::MAX_OK_ENTRIES;
-use super::prelude::*;
+use super::super::area::PhysMemoryRange;
+use super::super::map::MAX_OK_ENTRIES;
+use super::super::prelude::*;
 
 pub struct Allocator {
     /// Physical memory map, i.e. usable ram regions

@@ -1,2 +1,3 @@
 README.md=README.md
+p_commoncode=build/process_common.bin
 mod_test=build/modules/test_driver.elf

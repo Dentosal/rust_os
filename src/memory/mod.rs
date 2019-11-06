@@ -5,25 +5,21 @@ use x86_64::structures::paging as pg;
 use x86_64::structures::paging::PageTableFlags as Flags;
 use x86_64::structures::paging::{Mapper, PageTable};
 
+mod allocators;
 mod area;
 mod constants;
-pub mod dma_allocator;
-mod frame_allocator;
 mod map;
 pub mod paging;
 pub mod prelude;
-mod stack_allocator;
 mod utils;
-pub mod virtual_allocator;
 
 use crate::multitasking::ElfImage;
 use crate::util::elf_parser::{self, ELFData, ELFProgramHeader};
 
+pub use self::allocators::*;
 pub use self::constants::*;
 pub use self::prelude::*;
-pub use self::stack_allocator::Stack;
 pub use self::utils::*;
-pub use self::virtual_allocator::Area;
 
 use self::paging::PageMap;
 
@@ -73,27 +69,42 @@ impl MemoryController {
     ///
     /// Requires that the kernel page tables are active.
     pub fn alloc_pages(&mut self, size_in_pages: usize, flags: Flags) -> virtual_allocator::Area {
+        self.alloc_both(size_in_pages, flags).1
+    }
+
+    /// Allocate and page-map memory, and
+    /// return both the physical frame and the virtual address block
+    ///
+    /// This function alwrays flushes the TLB.
+    ///
+    /// Requires that the kernel page tables are active.
+    pub fn alloc_both(
+        &mut self,
+        size_in_pages: usize,
+        flags: Flags,
+    ) -> (Vec<PhysFrame>, virtual_allocator::Area) {
         let mut frames: Vec<PhysFrame> = self.alloc_frames(size_in_pages);
 
         let start = self.virtual_allocator.allocate(size_in_pages as u64);
-        let mut page_index = 0;
 
-        for frame in frames {
+        for (page_index, frame) in frames.iter().enumerate() {
             unsafe {
                 self.page_map
                     .map_to(
                         PT_VADDR,
                         Page::from_start_address(start + (page_index as u64) * PAGE_SIZE_BYTES)
                             .unwrap(),
-                        frame,
+                        frame.clone(),
                         flags,
                     )
                     .flush();
             }
-            page_index += 1;
         }
 
-        virtual_allocator::Area::new_pages(start, page_index)
+        (
+            frames,
+            virtual_allocator::Area::new_pages(start, size_in_pages as u64),
+        )
     }
 
     /// Loads a program from ELF ímage to physical memory.
@@ -108,7 +119,7 @@ impl MemoryController {
 
         let mut frames = Vec::new();
         for ph in elf.ph_table.iter().filter_map(|x| *x) {
-            if ph.loadable() {
+            if ph.loadable() && ph.size_in_memory != 0 {
                 // Reserve p_memsz memory and map them for writing
                 let size_in_pages = page_align_u64(ph.size_in_memory, true) / PAGE_SIZE_BYTES;
                 let page_frames = self.alloc_frames(size_in_pages as usize);
@@ -223,6 +234,15 @@ pub fn init() {
 
     let mut guard = MEM_CTRL_CONTAINER.lock();
     *guard = Some(mem_ctrl);
+}
+
+/// Late initialization, executed when disk drivers are available
+pub fn init_late() {
+    // Prepare a kernel stack for syscalls
+    syscall_stack::init();
+
+    // Load process switching code
+    process_common_code::init();
 }
 
 /// Static memory controller

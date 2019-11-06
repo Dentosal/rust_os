@@ -1,8 +1,7 @@
 Dimension 7 Internals "Documentation"/"Plan"
 ============================================
 
-Bootable Disk Layout
-====================
+# Bootable Disk Layout
 
 Begin | Size  | Content
 ------|-------|--------
@@ -13,11 +12,9 @@ Begin | Size  | Content
     ? |     ? | Filesystem
 
 
-Kernel Memory Layout
-====================
+# Kernel Memory Layout
 
-Boot / Intermediate
--------------------
+## Boot / Intermediate
 
 Begin    | Size  | Content
 ---------|-------|--------
@@ -32,8 +29,7 @@ Begin    | Size  | Content
     60000|   3000| Page tables (Boot stage only)
 1_000_000|      ?| Relocated and expanded kernel from ELF image (will be huge)
 
-Final layout
-------------
+## Final layout
 
 Using 2MiB pages here.
 
@@ -51,16 +47,18 @@ Begin      | Size     |rwx| Content
 
 TODO: Bump allocator
 
-Virtual address space
-----------------------
+## Virtual address space
 
 TODO: Higher half kernel
 TODO: Proper virtual memory map
 
-Begin       | Size    | Content
-------------|---------|---------
-  10_000_000| 200_000 | Kernel page tables, identity mapped
- 100_000_000|       ? | Allocated virtual memory for processes
+Begin       | Size    |rwx| Content
+------------|---------|---|---------
+           0| 200_000 |r--| IDT, IDTR, GDT, Global pointers
+     200_000| 200_000 |r-x| Common code for process switching
+  10_000_000| 200_000 |rw-| Kernel page tables, identity mapped
+  11_000_000| 200_000 |rw-| System call kernel stack
+ 100_000_000|       ? |???| Allocated virtual memory for processes
 
 
 # Interrupts
@@ -70,6 +68,18 @@ Numbers     | Description
 0x00..=0x1f | Standard intel interrupts
 0x20..=0x2f | PIC interrupts
 0xd7        | System call
+
+# Process Memory Layout
+
+Begin       | Size    |rwx| Content
+------------|---------|---|---------
+           0| 200_000 |r--| IDT, GDT
+     200_000| 200_000 |r-x| Common code for process switching
+     400_000| 400_000 |rw-| Process stack
+   1_000_000|       ? |+++| Process elf image
+           ?|       ? |rw-| Process heap
+
+
 
 # Scheduler tick and process switch procedure
 

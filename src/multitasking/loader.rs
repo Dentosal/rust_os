@@ -20,7 +20,7 @@ impl ElfImage {
     pub fn parse_elf(&self) -> ELFData {
         unsafe {
             parse_elf(self.as_ptr() as usize)
-                .expect("ELF image was modified to invlaid state after creation")
+                .expect("ELF image was modified to invalid state after creation")
         }
     }
 

@@ -2,7 +2,8 @@ OUTPUT_FORMAT(elf64-x86-64)
 ENTRY(main)
 
 SECTIONS {
-    . = 0;
+    /* Load point for programs is 0x1_000_000 */
+    . = 0x1000000;
 
     /*
     All sections are 0x200000 = 0x200_000 = 2MiB aligned,

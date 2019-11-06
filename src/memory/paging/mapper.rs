@@ -118,14 +118,15 @@ impl PageMap {
         }
     }
 
-    pub unsafe fn translate(&self, curr_addr: VirtAddr, addr: VirtAddr) -> PhysAddr {
+    /// Return physical address for given virtual address, if any available
+    pub unsafe fn translate(&self, curr_addr: VirtAddr, addr: VirtAddr) -> Option<PhysAddr> {
         panic!("TODO: Offsets");
-        let page = get_page!(addr);
-        let p4: &PageTable = &*get_page!(curr_addr).start_address().as_ptr();
-        let p3: &PageTable = &*p4[page.p4_index()].addr().as_ptr();
-        let p2: &PageTable = &*p3[page.p3_index()].addr().as_ptr();
-        assert!(p2[page.p2_index()].flags().contains(Flags::HUGE_PAGE));
-        p2[page.p2_index()].addr()
+        // let page = get_page!(addr);
+        // let p4: &PageTable = &*get_page!(curr_addr).start_address().as_ptr();
+        // let p3: &PageTable = &*p4[page.p4_index()].addr().as_ptr();
+        // let p2: &PageTable = &*p3[page.p3_index()].addr().as_ptr();
+        // assert!(p2[page.p2_index()].flags().contains(Flags::HUGE_PAGE));
+        // p2[page.p2_index()].addr()
     }
 
     #[inline(always)]
@@ -207,12 +208,12 @@ impl PageMap {
 
         // Map the address
         p2[i2].set_addr(frame.start_address(), flags | Flags::HUGE_PAGE);
-        // rprintln!(
-        //     "mapped {:?} to {:?} with {:?}",
-        //     frame,
-        //     page,
-        //     flags | Flags::HUGE_PAGE
-        // );
+        rprintln!(
+            "mapped {:?} to {:?} with {:?}",
+            frame,
+            page,
+            flags | Flags::HUGE_PAGE
+        );
 
         MapperFlush::new(page)
     }

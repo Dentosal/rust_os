@@ -6,7 +6,7 @@ set -euo pipefail
 TARGET="d7os"
 
 # some constants
-PATH=$PATH:$HOME/.cargo/bin
+PATH=$PATH:$HOME/.cargo/bin:$HOME/.bin
 # export RUST_BACKTRACE=1
 
 # Prepare for build
@@ -44,6 +44,9 @@ do
     base="${filename%.*}"           # get basename
     nasm -f elf64 "$fpath" -o "build/asm_routines/$base.o"
 done
+
+echo "* Kernel misc assembly"
+nasm -f bin src/asm_misc/process_common.asm -o build/process_common.bin
 
 echo "* Rust cli tools"
 ( cd libs/d7staticfs/ && cargo build --release )

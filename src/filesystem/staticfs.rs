@@ -92,7 +92,7 @@ pub fn file_size_sectors(name: &str) -> Option<u64> {
     Some(find_file(name)?.1 as u64)
 }
 
-/// Returns (sector, size)
+/// Reads file to buffer, if possible
 pub fn read_file(name: &str) -> Option<Vec<u8>> {
     let (p, s) = find_file(name)?;
     let mut dc = DISK_IO.lock();

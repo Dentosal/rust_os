@@ -1,6 +1,7 @@
 // Code style
 #![forbid(private_in_public)]
 #![forbid(bare_trait_objects)]
+#![forbid(tyvar_behind_raw_pointer)]
 #![deny(unused_assignments)]
 // Code style (development time)
 #![allow(unused_macros)]
@@ -118,6 +119,9 @@ pub extern "C" fn rust_main() -> ! {
     driver::disk_io::init();
     interrupt::disable_external_interrupts();
 
+    // Memory init late phase
+    memory::init_late();
+
     rreset!();
     rprintln!("Kernel initialized.\n");
 
@@ -233,3 +237,6 @@ extern "C" fn panic(info: &PanicInfo) -> ! {
     }
     loop {}
 }
+
+// Static assert assumptions
+static_assertions::assert_eq_size!(u64, usize);

@@ -1,7 +1,7 @@
 //! Constants memory-related things
 //! These MUST be kept in sync with from src/asm_routines and plan.md
 
-use x86_64::PhysAddr;
+use x86_64::{PhysAddr, VirtAddr};
 
 // Boot stage mmap
 pub(super) const BOOT_TMP_MMAP_BUFFER: PhysAddr = unsafe { PhysAddr::new_unchecked(0x2000) };
@@ -24,3 +24,10 @@ pub const PAGE_TABLES_END: PhysAddr = unsafe {
 
 // Mark for allocators
 pub const MEMORY_RESERVED_BELOW: PhysAddr = PAGE_TABLES_END;
+
+// Kernel stack for system calls
+pub const SYSCALL_STACK: VirtAddr = unsafe { VirtAddr::new_unchecked_raw(0x11_000_000) };
+
+// Process virtual memory area
+pub const PROCESS_COMMON_CODE: VirtAddr = unsafe { VirtAddr::new_unchecked_raw(0x200_000) };
+pub const PROCESS_STACK: VirtAddr = unsafe { VirtAddr::new_unchecked_raw(0x400_000) };

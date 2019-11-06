@@ -1,8 +1,8 @@
 use x86_64::structures::paging as pg;
 use x86_64::structures::paging::page_table::PageTableFlags as Flags;
 
-use super::paging::PageMap;
-use super::prelude::*;
+use super::super::paging::PageMap;
+use super::super::prelude::*;
 
 #[derive(Debug)]
 pub struct Stack {

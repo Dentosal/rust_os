@@ -2,7 +2,7 @@ use x86_64::VirtAddr;
 
 use alloc::vec::Vec;
 
-use super::prelude::PAGE_SIZE_BYTES;
+use super::super::prelude::PAGE_SIZE_BYTES;
 
 const START_ADDR: VirtAddr = unsafe { VirtAddr::new_unchecked_raw(0x100_000_000) };
 const END_ADDR: VirtAddr = unsafe { VirtAddr::new_unchecked_raw(0x200_000_000) };

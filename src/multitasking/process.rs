@@ -16,7 +16,7 @@ pub struct Process {
     /// Physical address of page tables for this process
     pub page_table: PhysAddr,
     /// Stack pointer for this process
-    stack_pointer: VirtAddr,
+    pub stack_pointer: VirtAddr,
     /// Metadata used for scheduling etc.
     metadata: ProcessMetadata,
 }
@@ -40,22 +40,5 @@ impl Process {
 
     pub fn id(&self) -> ProcessId {
         self.metadata.id
-    }
-
-    /// Push a byte to the stack of this process.
-    /// Requires that the stack of this process is correctly page-mapped.
-    #[inline]
-    pub unsafe fn push_byte(&mut self, value: u8) {
-        self.stack_pointer = VirtAddr::new_unchecked(self.stack_pointer.as_u64() - 1);
-        *self.stack_pointer.as_mut_ptr() = value;
-    }
-
-    /// Push a u64 to the stack of this process.
-    /// Requires that the stack of this process is correctly page-mapped.
-    #[inline]
-    pub unsafe fn push_u64(&mut self, value: u64) {
-        for byte in value.to_le_bytes().into_iter().rev() {
-            self.push_byte(*byte);
-        }
     }
 }

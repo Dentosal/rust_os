@@ -1,13 +1,14 @@
 use spin::Once;
 use x86_64::instructions::segmentation::set_cs;
-use x86_64::instructions::tables::load_tss;
+use x86_64::instructions::tables::{lidt, load_tss};
 use x86_64::structures::gdt::SegmentSelector;
 use x86_64::structures::tss::TaskStateSegment;
+use x86_64::structures::DescriptorTablePointer;
 use x86_64::PrivilegeLevel;
 use x86_64::VirtAddr;
 
 use core::fmt;
-use core::mem;
+use core::mem::{self, MaybeUninit};
 use core::ptr;
 
 use crate::memory::{self, MemoryController};
@@ -68,9 +69,6 @@ pub unsafe fn write_process_dts(dst: VirtAddr, idt_table: VirtAddr) {
     ptr::write((dst + (idt_size_bytes + 8)).as_mut_ptr(), gdt_kernel_code);
 }
 
-static TSS: Once<TaskStateSegment> = Once::new();
-static GDT: Once<gdt::Gdt> = Once::new();
-
 pub fn init() {
     let mut handlers: [idt::Descriptor; idt::ENTRY_COUNT] =
         [idt::Descriptor::new(false, 0, PrivilegeLevel::Ring0, 0); idt::ENTRY_COUNT];
@@ -98,18 +96,20 @@ pub fn init() {
         }
     }
 
-    unsafe {
-        idt::Reference::new().write();
-    }
-
     rprintln!("Loading new IDT...");
 
     unsafe {
-        asm!("lidt [$0]" :: "r"(idt::R_ADDRESS) : "memory" : "volatile", "intel");
+        lidt(&DescriptorTablePointer {
+            limit: (idt::ENTRY_COUNT * mem::size_of::<idt::Descriptor>()) as u16 - 1,
+            base: idt::ADDRESS as u64,
+        });
     }
 
     rprintln!("Enabled.");
 }
+
+static GDT: Once<gdt::GdtBuilder> = Once::new();
+static TSS: Once<TaskStateSegment> = Once::new();
 
 pub fn init_after_memory() {
     rprintln!("Swithcing to new GDT and TSS...");
@@ -120,9 +120,6 @@ pub fn init_after_memory() {
             .expect("could not allocate double fault stack")
     });
 
-    let mut code_selector = SegmentSelector::new(0, PrivilegeLevel::Ring0);
-    let mut tss_selector = SegmentSelector::new(1, PrivilegeLevel::Ring0);
-
     let tss = TSS.call_once(|| {
         let mut tss = TaskStateSegment::new();
         tss.interrupt_stack_table[gdt::DOUBLE_FAULT_IST_INDEX] =
@@ -130,10 +127,13 @@ pub fn init_after_memory() {
         tss
     });
 
+    let mut code_selector: MaybeUninit<SegmentSelector> = MaybeUninit::uninit();
+    let mut tss_selector: MaybeUninit<SegmentSelector> = MaybeUninit::uninit();
+
     let gdt = GDT.call_once(|| {
-        let mut gdt = gdt::Gdt::new();
-        code_selector = gdt.add_entry(gdt::Descriptor::kernel_code_segment());
-        tss_selector = gdt.add_entry(gdt::Descriptor::tss_segment(&tss));
+        let mut gdt = unsafe { gdt::GdtBuilder::new(VirtAddr::new_unchecked(0x0)) };
+        code_selector.write(gdt.add_entry(gdt::Descriptor::kernel_code_segment()));
+        tss_selector.write(gdt.add_entry(gdt::Descriptor::tss_segment(&tss)));
         gdt
     });
 
@@ -141,11 +141,14 @@ pub fn init_after_memory() {
         // load GDT
         gdt.load();
         // reload code segment register
-        set_cs(code_selector);
+        set_cs(code_selector.assume_init());
         // load TSS
-        load_tss(tss_selector);
+        load_tss(tss_selector.assume_init());
         // Write syscall address
-        ptr::write((0x2000u64 as *mut u64), handler::process_interrupt as *const u64 as u64);
+        ptr::write(
+            (0x2000u64 as *mut u64),
+            handler::process_interrupt as *const u64 as u64,
+        );
     }
 }
 

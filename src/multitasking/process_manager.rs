@@ -136,7 +136,8 @@ impl State {
                 pm.map_to(
                     pt_area.start,
                     Page::from_start_address(VirtAddr::new_unchecked(0x0)).unwrap(),
-                    PhysFrame::from_start_address(PhysAddr::new(pcc::PROCESS_IDT_PHYS_ADDR)).unwrap(),
+                    PhysFrame::from_start_address(PhysAddr::new(pcc::PROCESS_IDT_PHYS_ADDR))
+                        .unwrap(),
                     // Flags::PRESENT | Flags::NO_EXECUTE,
                     // CPU likes to write to GDT(?) for some reason?
                     Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE,

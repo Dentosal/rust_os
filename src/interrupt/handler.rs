@@ -162,7 +162,34 @@ pub(super) unsafe fn exception_irq15() {
 }
 
 /// Interrupt from a process
+/// Called from `src/asm_misc/process_common.asm`, process_interrupt
+/// Input registers:
+/// * `rax` Interrupt vector number
+/// * `rbx` Process stack pointer
+///
+/// Process registers `rax`, `rbx` and `rcx` are already stored in its stack.
 #[naked]
 pub(super) unsafe fn process_interrupt() {
+    asm!("
+        // Save scratch registers, except rax and rcx
+        push rdx
+        push rsi
+        push rdi
+        push r8
+        push r9
+        push r10
+        push r11
+
+        // Call inner function
+        mov rdi, rax
+        mov rsi, rbx
+        call process_interrupt_inner
+    " :::: "volatile", "intel");
+}
+
+#[no_mangle]
+unsafe extern "C" fn process_interrupt_inner(interrupt: u64, process_stack: u64) {
+    rprintln!("Process interrupt {}", interrupt);
+
     asm!("jmp panic" :::: "volatile", "intel");
 }

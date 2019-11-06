@@ -91,6 +91,8 @@ switch_to:
 %define interrupt_handler_ptr_addr 0x2000
 %define page_table_physaddr 0x10_000_000
 %define kernel_syscall_stack 0x11_000_000
+%define kernel_syscall_stack_size 0x200_00
+%define kernel_syscall_stack_end (kernel_syscall_stack + kernel_syscall_stack_size)
 
 ;# Description
 ; Process an interrupt from the user code.
@@ -133,10 +135,23 @@ process_interrupt:
     mov cr3, rcx
 
     ; Switch to kernel stack
-    mov rsp, kernel_syscall_stack
+    mov rsp, kernel_syscall_stack_end
+
+    ; Switch to kernel interrupt handlers
+    push qword 0x0
+    push word 0x100 * 16 - 1
+    mov rcx, rsp
+    lidt [rcx]
+    add rsp, 10
+
+    ; Switch to kernel GDT
+    push qword 0x1000
+    push word 4 * 8 - 1
+    mov rcx, rsp
+    lgdt [rcx]
+    add rsp, 10
 
     ; Jump to kernel interrupt handler
-    xchg bx, bx
     jmp [interrupt_handler_ptr_addr]
 
 .return_syscall:

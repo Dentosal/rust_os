@@ -1,11 +1,13 @@
 // See http://os.phil-opp.com/double-faults.html#switching-stacks for more info
+
 use core::mem::size_of;
+use core::ptr;
 
 use x86_64::structures::gdt::SegmentSelector;
 use x86_64::structures::tss::TaskStateSegment;
-use x86_64::PrivilegeLevel;
+use x86_64::{PrivilegeLevel, VirtAddr};
 
-const GDT_TABLE_COUNT: usize = 8;
+const MAX_ENTRIES: usize = 8;
 pub const DOUBLE_FAULT_IST_INDEX: usize = 0;
 
 bitflags! {
@@ -51,45 +53,47 @@ impl Descriptor {
     }
 }
 
-pub struct Gdt {
-    table: [u64; GDT_TABLE_COUNT],
-    next_free: usize,
+pub struct GdtBuilder {
+    addr: VirtAddr,
+    entry_count: usize,
 }
-impl Gdt {
-    pub fn new() -> Gdt {
-        Gdt {
-            table: [0; GDT_TABLE_COUNT],
-            next_free: 1, // table[0] is the zero descriptor, so it is not free
+impl GdtBuilder {
+    pub unsafe fn new(addr: VirtAddr) -> GdtBuilder {
+        GdtBuilder {
+            addr,
+            entry_count: 1, // first entry is the zero descriptor, so it is not free
         }
     }
+
     pub fn add_entry(&mut self, entry: Descriptor) -> SegmentSelector {
-        let index = match entry {
-            Descriptor::UserSegment(value) => self.push(value),
-            Descriptor::SystemSegment(value_low, value_high) => {
-                let index = self.push(value_low);
-                self.push(value_high);
-                index
-            }
-        };
+        assert!(self.entry_count < MAX_ENTRIES, "GDT Full");
+
+        let base: *mut u64 = self.addr.as_mut_ptr();
+        let index = self.entry_count;
+        unsafe {
+            match entry {
+                Descriptor::UserSegment(value) => {
+                    ptr::write(base.add(self.entry_count), value);
+                    self.entry_count += 1;
+                }
+                Descriptor::SystemSegment(value_low, value_high) => {
+                    ptr::write(base.add(self.entry_count), value_low);
+                    self.entry_count += 1;
+                    ptr::write(base.add(self.entry_count), value_high);
+                    self.entry_count += 1;
+                }
+            };
+        }
         SegmentSelector::new(index as u16, PrivilegeLevel::Ring0)
     }
-    fn push(&mut self, value: u64) -> usize {
-        if self.next_free < self.table.len() {
-            let index = self.next_free;
-            self.table[index] = value;
-            self.next_free += 1;
-            index
-        } else {
-            panic!("GDT full");
-        }
-    }
+
     pub unsafe fn load(&'static self) {
         use core::mem::size_of;
         use x86_64::instructions::tables::{lgdt, DescriptorTablePointer};
 
         let ptr = DescriptorTablePointer {
-            base: (self.table.as_ptr() as *const _) as u64,
-            limit: (self.table.len() * size_of::<u64>() - 1) as u16,
+            base: self.addr.as_ptr() as *const u64 as u64,
+            limit: (self.entry_count * size_of::<u64>() - 1) as u16,
         };
 
         lgdt(&ptr);

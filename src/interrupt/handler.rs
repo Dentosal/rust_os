@@ -17,13 +17,11 @@ pub(super) unsafe fn exception_bp(stack_frame: &InterruptStackFrame) {
 
 /// Invalid Opcode handler (instruction undefined)
 pub(super) unsafe fn exception_ud(stack_frame: &InterruptStackFrame) {
-    rforce_unlock!();
-    rprintln!(
+    panic!(
         "Exception: invalid opcode at {:?}\n{:?}",
         (*stack_frame).instruction_pointer,
         *stack_frame
     );
-    loop {}
 }
 
 /// Double Fault handler
@@ -39,26 +37,21 @@ pub(super) unsafe fn exception_df(stack_frame: &InterruptStackFrame, error_code:
 
 /// General Protection Fault handler
 pub(super) unsafe fn exception_gpf(stack_frame: &InterruptStackFrame, error_code: u64) {
-    rforce_unlock!();
-    rprintln!(
+    panic!(
         "Exception: General Protection Fault with error code {:#x}\n{:?}",
-        error_code,
-        *stack_frame
+        error_code, *stack_frame
     );
-    loop {}
 }
 
 /// Page Fault handler
 pub(super) unsafe fn exception_pf(stack_frame: &InterruptStackFrame, error_code: u64) {
-    rforce_unlock!();
-    rprintln!(
+    panic!(
         "Exception: Page Fault with error code {:?} ({:?}) at {:#x}\n{:?}",
         error_code,
         PageFaultErrorCode::from_bits(error_code).unwrap(),
         x86_64::registers::control::Cr2::read().as_u64(),
         *stack_frame
     );
-    loop {}
 }
 
 #[derive(Debug)]
@@ -71,8 +64,7 @@ enum SegmentNotPresentTable {
 
 /// Segment Not Present handler
 pub(super) unsafe fn exception_snp(stack_frame: &InterruptStackFrame, error_code: u64) {
-    rforce_unlock!();
-    rprintln!(
+    panic!(
         "Exception: Segment Not Present with error code {:#x} (e={:b},t={:?},i={:#x})\n{:?}",
         error_code,
         error_code & 0b1,
@@ -88,7 +80,6 @@ pub(super) unsafe fn exception_snp(stack_frame: &InterruptStackFrame, error_code
         (error_code & 0xFFFF) >> 3,
         *stack_frame
     );
-    loop {}
 }
 
 /// PIT timer ticked
@@ -219,6 +210,11 @@ unsafe extern "C" fn process_interrupt_inner(
             ::core::hint::unreachable_unchecked();
         }};
     }
+
+    // TODO: Handle PIT ticks
+    // TODO: Handle keyboard input
+    // TODO: Handle (ignore) ata interrupts
+    // TODO: Handle spurious interrupts
 
     match interrupt {
         0xd7 => {

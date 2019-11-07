@@ -156,27 +156,13 @@ pub extern "C" fn rust_main() -> ! {
         rprintln!("PID: {}", pid);
     }
 
-    // kernel_shell::run();
-
-    interrupt::enable_external_interrupts();
-    loop {
-        // let success: u64;
-        // let result: u64;
-        // unsafe {
-        //     asm!("
-        //         mov rax, 0x1
-        //         mov rdi, 0x2
-        //         mov rsi, 0x3
-        //         int 0xd7
-        //     " : "={rax}"(success), "={rdx}"(result) :: "eax", "rdx", "rdi", "rsi" : "intel");
-        // }
-        // // let _ = success;
-        // // let _ = result;
-        // rprintln!("{:?} {:?}", success, result);
-
-        use time::sleep_ms;
-        rprintln!("SLEEP(1000)");
-        sleep_ms(1000);
+    // Wait until the next clock tick interrupt,
+    // after that the process scheduler takes over
+    unsafe {
+        interrupt::enable_external_interrupts();
+        loop {
+            asm!("hlt")
+        }
     }
 }
 

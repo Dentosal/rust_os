@@ -105,11 +105,7 @@ macro_rules! exception_handler_with_error_code {
 macro_rules! simple_exception_handler {
     ($text:expr) => {{
         unsafe extern "x86-interrupt" fn wrapper(stack_frame: &mut InterruptStackFrame) {
-            unsafe {
-                rforce_unlock!();
-                rprintln!(concat!("Exception: ", $text, "\n{:?}"), stack_frame);
-            };
-            loop {}
+            panic!(concat!("Exception: ", $text, "\n{:?}"), stack_frame);
         }
         idt::Descriptor::new(true, wrapper as u64, PrivilegeLevel::Ring0, 0)
     }};
@@ -118,10 +114,8 @@ macro_rules! simple_exception_handler {
 macro_rules! last_resort_exception_handler {
     () => {{
         unsafe extern "x86-interrupt" fn wrapper(_stack_frame: &mut InterruptStackFrame) {
-            unsafe {
-                asm!("jmp panic"::::"intel","volatile");
-                ::core::hint::unreachable_unchecked();
-            };
+            asm!("jmp panic"::::"intel","volatile");
+            ::core::hint::unreachable_unchecked();
         }
         idt::Descriptor::new(true, wrapper as u64, PrivilegeLevel::Ring0, 0)
     }};

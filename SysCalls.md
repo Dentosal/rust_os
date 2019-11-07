@@ -6,6 +6,7 @@ System call reference
 Number | Name           | Arguments (logical) | On success  |Can fail| Short description
 -------|----------------|---------------------|-------------|--------|-------------------
 0x00   | exit           | error_code          | !           | No     | Terminate the calling process
+0x01   | get_pid        |                     | pid         | No     | Get pid of the calling process
 0x10   | kill           | pid, method         | Status code | Yes    | Terminate a process
 0x11   | proc_exec      | path, args          | pid         | Yes    | Execute a program
 0x11   | proc_wait      | pid, state, first?  | state       | Yes    | Wait for specific process state

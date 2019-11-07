@@ -1,5 +1,8 @@
+use alloc::prelude::v1::Vec;
 use x86_64::structures::idt::{InterruptStackFrameValue, PageFaultErrorCode};
 use x86_64::{PhysAddr, VirtAddr};
+
+use crate::memory::prelude::*;
 
 use super::ProcessId;
 
@@ -14,6 +17,12 @@ pub struct ProcessMetadata {
 pub enum Status {
     /// The process is currently running
     Running,
+    /// The process was terminated
+    Terminated(ProcessResult),
+}
+
+#[derive(Debug, Clone)]
+pub enum ProcessResult {
     /// The process exited with a return code
     Completed(u64),
     /// The process was terminated because an error occurred
@@ -39,20 +48,25 @@ pub enum Error {
 /// so they are not included here
 #[derive(Debug, Clone)]
 pub struct Process {
-    /// Physical address of page tables for this process
+    /// Physical address of page tables
     pub page_table: PhysAddr,
-    /// Stack pointer for this process
+    /// Stack pointer in process address space
     pub stack_pointer: VirtAddr,
+    /// Stack frames
+    pub stack_frames: Vec<PhysFrame>,
     /// Metadata used for scheduling etc.
     metadata: ProcessMetadata,
 }
 impl Process {
     pub const fn new(
         id: ProcessId, parent: Option<ProcessId>, page_table: PhysAddr, stack_pointer: VirtAddr,
-    ) -> Self {
+        stack_frames: Vec<PhysFrame>,
+    ) -> Self
+    {
         Self {
             page_table,
             stack_pointer,
+            stack_frames,
             metadata: ProcessMetadata {
                 id,
                 parent,

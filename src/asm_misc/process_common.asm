@@ -4,40 +4,41 @@
 [ORG 0x200000]
 
 ; Push and pop macros. RFLAGS not pushed, as it is part of the IST
+; System calls rely on the order of registers in the stack.
 %define stack_stored_registers 15
 %macro push_all 0
-    push rax
-    push rbx
-    push rcx
-    push rdx
-    push rsi
-    push rdi
-    push r8
-    push r9
-    push r10
-    push r11
-    push r12
-    push r13
-    push r14
-    push r15
     push rbp
+    push r15
+    push r14
+    push r13
+    push r12
+    push r11
+    push r10
+    push r9
+    push r8
+    push rdi
+    push rsi
+    push rdx
+    push rcx
+    push rbx
+    push rax
 %endmacro
 %macro pop_all 0
-    pop rbp
-    pop r15
-    pop r14
-    pop r13
-    pop r12
-    pop r11
-    pop r10
-    pop r9
-    pop r8
-    pop rdi
-    pop rsi
-    pop rdx
-    pop rcx
-    pop rbx
     pop rax
+    pop rbx
+    pop rcx
+    pop rdx
+    pop rsi
+    pop rdi
+    pop r8
+    pop r9
+    pop r10
+    pop r11
+    pop r12
+    pop r13
+    pop r14
+    pop r15
+    pop rbp
 %endmacro
 
 header:
@@ -115,7 +116,7 @@ process_interrupt:
     ; * rcx: Used for misc operations
     ; * r10-r14: Stores the interrupt frame
     ; * r15: Stores the exception error code, if any
-    ; Other registers are still preserved for process switching
+    ; Other registers are also preserved for process switching
     push_all
 
     ; Get the process stack pointer (after the pushes here)
@@ -203,8 +204,7 @@ process_interrupt:
     ; TODO: Check if this should be a special return?
 
 .return_normal:
-    mov rax, rbp ; P4 page table physical address
-    mov rdx, rbx ; rsp for the process
+    ; rax and rdx correct from kernel interrupt handler
     jmp switch_to
 
 .return_syscall:

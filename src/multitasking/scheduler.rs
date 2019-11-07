@@ -38,7 +38,7 @@ impl State {
     /// Terminate the current process, and switch to the next one immediately.
     /// Returns the data for the process to switch to.
     /// If there are no processes left, panics as there is nothing to do.
-    unsafe fn terminate_current(&mut self, status: process::Status) -> Process {
+    unsafe fn terminate_current(&mut self, status: process::ProcessResult) -> Process {
         let pid = self.get_running_pid().expect("No process running?");
         self.next_switch = None;
         self.current_index = 0;
@@ -124,7 +124,7 @@ impl Scheduler {
         }
     }
 
-    pub fn terminate_current(&self, status: process::Status) -> Process {
+    pub fn terminate_current(&self, status: process::ProcessResult) -> Process {
         unsafe {
             if let Some(ref mut state) = (*self.0.get()).try_lock() {
                 state.terminate_current(status)

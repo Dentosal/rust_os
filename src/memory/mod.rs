@@ -62,6 +62,11 @@ impl MemoryController {
         virtual_allocator::Area::new_pages(start, size_in_pages)
     }
 
+    /// Frees a virtual memory area
+    pub fn free_virtual_area(&mut self, area: virtual_allocator::Area) {
+        self.virtual_allocator.free(area.start, area.size_pages());
+    }
+
     /// Allocate a contiguous virtual address block,
     /// and page-map it with the given flags.
     ///

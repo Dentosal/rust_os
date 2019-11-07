@@ -1,7 +1,9 @@
 use x86_64::structures::idt::{InterruptStackFrame, InterruptStackFrameValue, PageFaultErrorCode};
+use x86_64::{PhysAddr, VirtAddr};
 
 use crate::driver::keyboard;
 use crate::driver::pic;
+use crate::multitasking::{process, ProcessId, PROCMAN, SCHEDULER};
 use crate::time;
 
 /// Breakpoint handler
@@ -87,11 +89,6 @@ pub(super) unsafe extern "C" fn exception_irq0() -> u128 {
     let next_process = time::SYSCLOCK.tick();
     pic::PICS.lock().notify_eoi(0x20);
     if let Some(process) = next_process {
-        rprintln!(
-            "NEXT {:x} {:x}",
-            process.page_table.as_u64(),
-            process.stack_pointer.as_u64()
-        );
         ((process.stack_pointer.as_u64() as u128) << 64) | (process.page_table.as_u64() as u128)
     } else {
         0
@@ -159,14 +156,19 @@ pub(super) unsafe fn process_interrupt() {
         push r10
 
         // Call inner function
-        mov rdi, rax
-        mov rsi, rbx
-        mov rdx, rsp
-        mov rcx, r15
+        mov rdi, rax // interrupt
+        mov rsi, rbx // process_stack
+        mov rdx, rbp // page_table
+        mov rcx, rsp // stack_frame_ptr
+        mov r8 , r15 // error_code
         call process_interrupt_inner
 
         // Remove interrupt stack
         add rsp, 5 * 8
+
+        // Set values for returning to process
+        mov rbp, rax
+        mov rbx, rdx
 
         // Return to trampoline
         ret
@@ -175,59 +177,41 @@ pub(super) unsafe fn process_interrupt() {
 
 #[no_mangle]
 unsafe extern "C" fn process_interrupt_inner(
-    interrupt: u8, process_stack: u64, stack_frame_ptr: *const InterruptStackFrameValue,
-    error_code: u32,
-)
+    interrupt: u8, process_stack: u64, page_table: u64,
+    stack_frame_ptr: *const InterruptStackFrameValue, error_code: u32,
+) -> u128
 {
     use x86_64::registers::control::Cr2;
 
-    use crate::memory::process_common_code::COMMON_ADDRESS_VIRT;
-    use crate::multitasking::{process, ProcessId, PROCMAN, SCHEDULER};
-
     let pid = SCHEDULER.get_running_pid().expect("No process running?");
-    rprintln!("Process pid={} interrupt intvec={}", pid, interrupt);
+    // rprintln!("Process pid={} interrupt intvec={}", pid, interrupt);
+    rprint!("{:?};", pid);
 
     let stack_frame: InterruptStackFrameValue = (*stack_frame_ptr).clone();
-
-    macro_rules! fail {
-        ($error:expr) => {{
-            // Terminate current process
-            let process = SCHEDULER.terminate_current(process::Status::Failed($error));
-            // Jump to next process immediately
-            asm!("
-                mov rcx, [rcx]  // Get procedure offset
-                jmp rcx         // Jump into the procedure
-                "
-                :
-                :
-                    "{rcx}"(COMMON_ADDRESS_VIRT as *const u8 as u64), // switch_to
-                    "{rdx}"(process.stack_pointer.as_u64()),
-                    "{rax}"(process.page_table.as_u64())
-                :
-                : "intel"
-            );
-            ::core::hint::unreachable_unchecked();
-        }};
-    }
+    let page_table = PhysAddr::new_unchecked(page_table);
+    let process_stack = VirtAddr::new_unchecked(process_stack);
 
     match interrupt {
         0xd7 => {
-            rprintln!("syscall!");
-            // TODO:
-            // * Error code, if any, must be removed from the stack before returning
-            asm!("jmp panic" :::: "volatile", "intel");
+            use crate::syscall::{handle_syscall, SyscallResult};
+            if let Some(termination_status) =
+                handle_syscall(pid, page_table, process_stack, stack_frame)
+            {
+                terminate(termination_status);
+            }
         },
         0x20 => {
             // PIT timer ticked
             let next_process = time::SYSCLOCK.tick();
             pic::PICS.lock().notify_eoi(interrupt);
             if let Some(process) = next_process {
+                // Store old process details
+                PROCMAN.update(|pm| {
+                    pm.store_state(pid, page_table, process_stack);
+                });
                 // Switch to other process after returning
-                asm!(""
-                    ::
-                    "{rbx}"(process.stack_pointer.as_u64()),
-                    "{rbp}"(process.page_table.as_u64())
-                );
+                return ((process.stack_pointer.as_u64() as u128) << 64)
+                    | (process.page_table.as_u64() as u128);
             }
         },
         0x21..=0x2f => {
@@ -237,17 +221,51 @@ unsafe extern "C" fn process_interrupt_inner(
             // pic::PICS.lock().notify_eoi(interrupt);
             panic!("Unhandled interrupt: {}", interrupt);
         },
-        0x00 => fail!(process::Error::DivideByZero(stack_frame)),
-        0x0e => fail!(process::Error::PageFault(
-            stack_frame,
-            Cr2::read(),
-            PageFaultErrorCode::from_bits(error_code as u64).unwrap(),
-        )),
-        0x08 | 0x0a | 0x0b | 0x0c | 0x0d | 0x11 | 0x1e => fail!(process::Error::InterruptWithCode(
+        0x00 => fail(process::Error::DivideByZero(stack_frame)),
+        0x0e => {
+            // TODO:
+            // * Error code, if any, must be removed from the stack before returning
+            fail(process::Error::PageFault(
+                stack_frame,
+                Cr2::read(),
+                PageFaultErrorCode::from_bits(error_code as u64).unwrap(),
+            ))
+        },
+        0x08 | 0x0a | 0x0b | 0x0c | 0x0d | 0x11 | 0x1e => fail(process::Error::InterruptWithCode(
             interrupt,
             stack_frame,
-            error_code
+            error_code,
         )),
-        _ => fail!(process::Error::Interrupt(interrupt, stack_frame)),
+        _ => fail(process::Error::Interrupt(interrupt, stack_frame)),
+    }
+
+    // Continue current process
+    ((process_stack.as_u64() as u128) << 64) | (page_table.as_u64() as u128)
+}
+
+fn fail(error: process::Error) -> ! {
+    terminate(process::ProcessResult::Failed(error))
+}
+
+fn terminate(result: process::ProcessResult) -> ! {
+    use crate::memory::process_common_code::COMMON_ADDRESS_VIRT;
+
+    // Terminate current process
+    let next_process = SCHEDULER.terminate_current(result);
+    // Jump to next process immediately
+    unsafe {
+        asm!("
+            mov rcx, [rcx]  // Get procedure offset
+            jmp rcx         // Jump into the procedure
+            "
+            :
+            :
+                "{rcx}"(COMMON_ADDRESS_VIRT as *const u8 as u64), // switch_to
+                "{rdx}"(next_process.stack_pointer.as_u64()),
+                "{rax}"(next_process.page_table.as_u64())
+            :
+            : "intel"
+        );
+        ::core::hint::unreachable_unchecked();
     }
 }

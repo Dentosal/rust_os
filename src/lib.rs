@@ -149,11 +149,11 @@ pub extern "C" fn rust_main() -> ! {
 
     {
         let pid = PROCMAN.update(|pm| pm.spawn(mod_test));
-        rprintln!("PID: {}", pid);
+        rprintln!("Spawned process: pid = {}", pid);
     }
     {
         let pid = PROCMAN.update(|pm| pm.spawn(mod_test));
-        rprintln!("PID: {}", pid);
+        rprintln!("Spawned process: pid = {}", pid);
     }
 
     // Wait until the next clock tick interrupt,

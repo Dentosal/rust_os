@@ -3,6 +3,8 @@
 
 use x86_64::{PhysAddr, VirtAddr};
 
+use super::prelude::*;
+
 // Boot stage mmap
 pub(super) const BOOT_TMP_MMAP_BUFFER: PhysAddr = unsafe { PhysAddr::new_unchecked(0x2000) };
 
@@ -31,3 +33,7 @@ pub const SYSCALL_STACK: VirtAddr = unsafe { VirtAddr::new_unchecked_raw(0x11_00
 // Process virtual memory area
 pub const PROCESS_COMMON_CODE: VirtAddr = unsafe { VirtAddr::new_unchecked_raw(0x200_000) };
 pub const PROCESS_STACK: VirtAddr = unsafe { VirtAddr::new_unchecked_raw(0x400_000) };
+pub const PROCESS_STACK_SIZE_PAGES: u64 = 2;
+pub const PROCESS_STACK_SIZE_BYTES: u64 = PAGE_SIZE_BYTES * PROCESS_STACK_SIZE_PAGES;
+pub const PROCESS_STACK_END: VirtAddr =
+    unsafe { VirtAddr::new_unchecked_raw(PROCESS_STACK.as_u64() + PROCESS_STACK_SIZE_BYTES) };

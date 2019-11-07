@@ -1,6 +1,8 @@
 use x86_64::structures::paging as pg;
 pub use x86_64::structures::paging::PageSize;
 
+pub use super::constants::*;
+
 // Address types
 pub use x86_64::{PhysAddr, VirtAddr};
 

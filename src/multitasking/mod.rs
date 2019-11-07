@@ -2,7 +2,7 @@ use core::fmt;
 use spin::Mutex;
 
 mod loader;
-mod process;
+pub mod process;
 mod process_manager;
 mod scheduler;
 

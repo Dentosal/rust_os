@@ -11,7 +11,7 @@ pub extern "C" fn main() {
     let mut success: u64;
     let mut result: u64;
     unsafe {
-        asm!("mov rax, 0x01; mov rdi, 2; mov rsi, 3; int 0xd7"
+        asm!("xor rax, rax; div rax; mov rax, 0x01; mov rdi, 2; mov rsi, 3; int 0xd7"
         : "={rax}"(success), "={rdi}"(result)
         :
         : "rsi"

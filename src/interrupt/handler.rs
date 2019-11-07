@@ -1,14 +1,14 @@
+use x86_64::structures::idt::{InterruptStackFrame, InterruptStackFrameValue, PageFaultErrorCode};
+
 use crate::driver::keyboard;
 use crate::driver::pic;
 use crate::time;
 
-use super::ExceptionStackFrame;
-
 /// Breakpoint handler
-pub(super) unsafe fn exception_bp(stack_frame: &ExceptionStackFrame) {
+pub(super) unsafe fn exception_bp(stack_frame: &InterruptStackFrame) {
     rforce_unlock!();
     rprintln!(
-        "Breakpoint at {:#x}\n{}",
+        "Breakpoint at {:?}\n{:?}",
         (*stack_frame).instruction_pointer,
         *stack_frame
     );
@@ -16,10 +16,10 @@ pub(super) unsafe fn exception_bp(stack_frame: &ExceptionStackFrame) {
 }
 
 /// Invalid Opcode handler (instruction undefined)
-pub(super) unsafe fn exception_ud(stack_frame: &ExceptionStackFrame) {
+pub(super) unsafe fn exception_ud(stack_frame: &InterruptStackFrame) {
     rforce_unlock!();
     rprintln!(
-        "Exception: invalid opcode at {:#x}\n{}",
+        "Exception: invalid opcode at {:?}\n{:?}",
         (*stack_frame).instruction_pointer,
         *stack_frame
     );
@@ -28,42 +28,31 @@ pub(super) unsafe fn exception_ud(stack_frame: &ExceptionStackFrame) {
 
 /// Double Fault handler
 #[allow(unused_variables)]
-pub(super) unsafe fn exception_df(stack_frame: &ExceptionStackFrame, error_code: u64) {
+pub(super) unsafe fn exception_df(stack_frame: &InterruptStackFrame, error_code: u64) {
     // error code is always zero
     panic_indicator!(0x4f664f64); // "df"
     rforce_unlock!();
-    rprintln!("Exception: Double Fault\n{}", *stack_frame);
+    rprintln!("Exception: Double Fault\n{:?}", *stack_frame);
     rprintln!("exception stack frame at {:#p}", stack_frame);
     loop {}
 }
 
 /// General Protection Fault handler
-pub(super) unsafe fn exception_gpf(stack_frame: &ExceptionStackFrame, error_code: u64) {
+pub(super) unsafe fn exception_gpf(stack_frame: &InterruptStackFrame, error_code: u64) {
     rforce_unlock!();
     rprintln!(
-        "Exception: General Protection Fault with error code {:#x}\n{}",
+        "Exception: General Protection Fault with error code {:#x}\n{:?}",
         error_code,
         *stack_frame
     );
     loop {}
 }
 
-bitflags! {
-    /// Page Fault error codes
-    struct PageFaultErrorCode: u64 {
-        const PROTECTION_VIOLATION  = 1 << 0;
-        const CAUSED_BY_WRITE       = 1 << 1;
-        const USER_MODE             = 1 << 2;
-        const MALFORMED_TABLE       = 1 << 3;
-        const INSTRUCTION_FETCH     = 1 << 4;
-    }
-}
-
 /// Page Fault handler
-pub(super) unsafe fn exception_pf(stack_frame: &ExceptionStackFrame, error_code: u64) {
+pub(super) unsafe fn exception_pf(stack_frame: &InterruptStackFrame, error_code: u64) {
     rforce_unlock!();
     rprintln!(
-        "Exception: Page Fault with error code {:?} ({:?}) at {:#x}\n{}",
+        "Exception: Page Fault with error code {:?} ({:?}) at {:#x}\n{:?}",
         error_code,
         PageFaultErrorCode::from_bits(error_code).unwrap(),
         x86_64::registers::control::Cr2::read().as_u64(),
@@ -81,10 +70,10 @@ enum SegmentNotPresentTable {
 }
 
 /// Segment Not Present handler
-pub(super) unsafe fn exception_snp(stack_frame: &ExceptionStackFrame, error_code: u64) {
+pub(super) unsafe fn exception_snp(stack_frame: &InterruptStackFrame, error_code: u64) {
     rforce_unlock!();
     rprintln!(
-        "Exception: Segment Not Present with error code {:#x} (e={:b},t={:?},i={:#x})\n{}",
+        "Exception: Segment Not Present with error code {:#x} (e={:b},t={:?},i={:#x})\n{:?}",
         error_code,
         error_code & 0b1,
         match (error_code & 0b110) >> 1 {
@@ -171,25 +160,83 @@ pub(super) unsafe fn exception_irq15() {
 #[naked]
 pub(super) unsafe fn process_interrupt() {
     asm!("
-        // Save scratch registers, except rax and rcx
+        // Save scratch registers, except previously saved: rax, rbx, rcx, r10..=r15
+        // (Not all those are scratch registers)
         push rdx
         push rsi
         push rdi
         push r8
         push r9
-        push r10
+
+        // Recreate interrupt stack frame from r10..=r14
+        push r14
+        push r13
+        push r12
         push r11
+        push r10
 
         // Call inner function
         mov rdi, rax
         mov rsi, rbx
+        mov rdx, rsp
+        mov rcx, r15
         call process_interrupt_inner
     " :::: "volatile", "intel");
 }
 
 #[no_mangle]
-unsafe extern "C" fn process_interrupt_inner(interrupt: u64, process_stack: u64) {
-    rprintln!("Process interrupt {}", interrupt);
+unsafe extern "C" fn process_interrupt_inner(
+    interrupt: u16,
+    process_stack: u64,
+    stack_frame_ptr: *const InterruptStackFrameValue,
+    error_code: u32,
+) {
+    use x86_64::registers::control::Cr2;
+
+    use crate::memory::process_common_code::COMMON_ADDRESS_VIRT;
+    use crate::multitasking::{process, ProcessId, PROCMAN, SCHEDULER};
+
+    let pid = SCHEDULER.get_running_pid().expect("No process running?");
+    rprintln!("Process pid={} interrupt intvec={}", pid, interrupt);
+
+    let stack_frame: InterruptStackFrameValue = (*stack_frame_ptr).clone();
+
+    macro_rules! fail {
+        ($error:expr) => {{
+            let process = SCHEDULER.terminate_current(process::Status::Failed($error));
+            asm!("
+                mov rcx, [rcx]  // Get procedure offset
+                jmp rcx         // Jump into the procedure
+                "
+                :
+                :
+                    "{rcx}"(COMMON_ADDRESS_VIRT as *const u8 as u64),
+                    "{rdx}"(process.stack_pointer.as_u64()),
+                    "{rax}"(process.page_table.as_u64())
+                :
+                : "intel"
+            );
+            ::core::hint::unreachable_unchecked();
+        }};
+    }
+
+    match interrupt {
+        0xd7 => {
+            rprintln!("syscall!");
+        }
+        0x00 => fail!(process::Error::DivideByZero(stack_frame)),
+        0x0e => fail!(process::Error::PageFault(
+            stack_frame,
+            Cr2::read(),
+            PageFaultErrorCode::from_bits(error_code as u64).unwrap(),
+        )),
+        0x08 | 0x0a | 0x0b | 0x0c | 0x0d | 0x11 | 0x1e => fail!(process::Error::InterruptWithCode(
+            interrupt,
+            stack_frame,
+            error_code
+        )),
+        _ => fail!(process::Error::Interrupt(interrupt, stack_frame)),
+    }
 
     asm!("jmp panic" :::: "volatile", "intel");
 }

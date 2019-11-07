@@ -1,3 +1,4 @@
+use x86_64::structures::idt::{InterruptStackFrameValue, PageFaultErrorCode};
 use x86_64::{PhysAddr, VirtAddr};
 
 use super::ProcessId;
@@ -6,6 +7,31 @@ use super::ProcessId;
 pub struct ProcessMetadata {
     pub id: ProcessId,
     pub parent: Option<ProcessId>,
+    pub status: Status,
+}
+
+#[derive(Debug, Clone)]
+pub enum Status {
+    /// The process is currently running
+    Running,
+    /// The process exited with a return code
+    Completed(u64),
+    /// The process was terminated because an error occurred
+    Failed(Error),
+}
+
+#[derive(Debug, Clone)]
+pub enum Error {
+    /// Division by zero
+    DivideByZero(InterruptStackFrameValue),
+    /// Page fault
+    PageFault(InterruptStackFrameValue, VirtAddr, PageFaultErrorCode),
+    /// Unhandled interrupt without an error code
+    Interrupt(u16, InterruptStackFrameValue),
+    /// Unhandled interrupt with an error code
+    InterruptWithCode(u16, InterruptStackFrameValue, u32),
+    /// Invalid system call number
+    SyscallNumber(u64),
 }
 
 /// # A suspeneded process
@@ -30,7 +56,11 @@ impl Process {
         Self {
             page_table,
             stack_pointer,
-            metadata: ProcessMetadata { id, parent },
+            metadata: ProcessMetadata {
+                id,
+                parent,
+                status: Status::Running,
+            },
         }
     }
 

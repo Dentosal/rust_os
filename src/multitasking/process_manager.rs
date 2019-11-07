@@ -15,7 +15,7 @@ use crate::memory::{PROCESS_COMMON_CODE, PROCESS_STACK};
 use crate::util::elf_parser::{self, ELFData};
 
 use super::loader::ElfImage;
-use super::process::Process;
+use super::process::{Process, Status};
 use super::ProcessId;
 
 const PROCESS_STACK_SIZE_PAGES: u64 = 2;
@@ -227,11 +227,15 @@ impl State {
     //     self.create_process(Some(target))
     // }
 
-    /// Kills process, and returns whether the process existed at all
-    pub fn kill(&mut self, target: ProcessId, status_code: u64) -> bool {
+    /// Terminates process if it's alive.
+    /// Returns whether the process existed at all.
+    /// Note that the scheduler must be informed separately.
+    pub fn terminate(&mut self, target: ProcessId, status: Status) -> bool {
         match self.process_list.iter().position(|p| p.id() == target) {
             Some(index) => {
                 // TODO: Send return code to subscribed processes
+                rprintln!("Stopping pid {} with status {:?}", target, status);
+                // TODO: remove process data: free stack frames, etc.
                 self.process_list.swap_remove(index);
                 true
             }

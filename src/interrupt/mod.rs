@@ -2,6 +2,7 @@ use spin::Once;
 use x86_64::instructions::segmentation::set_cs;
 use x86_64::instructions::tables::{lidt, load_tss};
 use x86_64::structures::gdt::SegmentSelector;
+use x86_64::structures::idt::InterruptStackFrame;
 use x86_64::structures::tss::TaskStateSegment;
 use x86_64::structures::DescriptorTablePointer;
 use x86_64::PrivilegeLevel;
@@ -21,8 +22,9 @@ pub mod idt;
 
 use self::handler::*;
 
+#[derive(Clone, Copy)]
 #[repr(C, packed)]
-struct ExceptionStackFrame {
+pub struct ExceptionStackFrame {
     instruction_pointer: u64,
     code_segment: u64,
     cpu_flags: u64,
@@ -37,7 +39,24 @@ impl fmt::Display for ExceptionStackFrame {
         let sp = self.stack_pointer;
         let ss = self.stack_segment;
 
-        write!(f, "ExceptionStackFrame {{\n  rip: {:#x},\n  cs: {:#x},\n  flags: {:#x},\n  rsp: {:#x},\n  ss: {:#x}\n}}", ip, cs, fl, sp, ss)
+        write!(
+            f,
+            concat!(
+                "ExceptionStackFrame {{\n",
+                "  rip: {:#x},\n",
+                "  cs: {:#x},\n",
+                "  flags: {:#x},\n",
+                "  rsp: {:#x},\n",
+                "  ss: {:#x}\n",
+                "}}"
+            ),
+            ip, cs, fl, sp, ss
+        )
+    }
+}
+impl fmt::Debug for ExceptionStackFrame {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self)
     }
 }
 
@@ -131,7 +150,7 @@ pub fn init_after_memory() {
     let mut tss_selector: MaybeUninit<SegmentSelector> = MaybeUninit::uninit();
 
     let gdt = GDT.call_once(|| {
-        let mut gdt = unsafe { gdt::GdtBuilder::new(VirtAddr::new_unchecked(0x0)) };
+        let mut gdt = unsafe { gdt::GdtBuilder::new(VirtAddr::new_unchecked(0x1000)) };
         code_selector.write(gdt.add_entry(gdt::Descriptor::kernel_code_segment()));
         tss_selector.write(gdt.add_entry(gdt::Descriptor::tss_segment(&tss)));
         gdt

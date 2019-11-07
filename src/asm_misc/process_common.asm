@@ -102,7 +102,7 @@ switch_to:
 process_interrupt:
 .table_start:
     %rep 0x100
-    call .common    ; Each call is 10 bytes
+    call .common    ; Each call is 5 bytes
     %endrep
 .common:
     ; As the interrupt enters here by `call .common`,
@@ -114,21 +114,70 @@ process_interrupt:
     ; * rax: Stores interrupt vector number
     ; * rbx: Stores process stack pointer
     ; * rcx: Used for misc operations
+    ; * r10-r14: Stores the interrupt frame
+    ; * r15: Stores the exception error code, if any
+    push rax
+    push rbx
+    push rcx
+    push r10
+    push r11
+    push r12
+    push r13
+    push r14
+    push r15
 
-    push rax                ; Save original rax
-    push rbx                ; Save original rbx
-    push rcx                ; Save original rcx
-
-    mov rbx, rsp            ; Get the process stack pointer (after the pushes here)
+    ; Get the process stack pointer (after the pushes here)
+    mov rbx, rsp
 
     ; Retrieve procedure entry address
-    mov rax, [rsp + 8*3]
+    mov rax, [rsp + 9 * 8] ; 9 marks number of pushes above
     ; Remove base and instruction, so rax is just the offset, between 0 and 255 * 10
     sub rax, (.table_start + 5)
     ; Divide by 5, the size of a call instruction here
     ; Asm div5 trick: https://godbolt.org/z/JyOTEr
     imul eax, 52429
     shr eax, 18
+
+    ; Get error code, if any (See https://wiki.osdev.org/Exceptions for a list)
+    ; Required if vector number is any of 0x08, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x11, 0x1e
+    cmp rax, 0x08
+    jl .no_error_code
+    je .error_code
+    cmp rax, 0x0a
+    jl .no_error_code
+    je .error_code
+    cmp rax, 0x0e
+    jle .error_code
+    cmp rax, 0x11
+    je .error_code
+    cmp rax, 0x1e
+    je .error_code
+
+.no_error_code:
+    ; No error code to get
+    mov r15, 0
+
+    ; Get interrupt stack frame (10 for (pushes above + entry address))
+    mov r10, [rsp + (10 + 0) * 8]
+    mov r11, [rsp + (10 + 1) * 8]
+    mov r12, [rsp + (10 + 2) * 8]
+    mov r13, [rsp + (10 + 3) * 8]
+    mov r14, [rsp + (10 + 4) * 8]
+
+    jmp .after_error_code
+
+.error_code:
+    ; Get error code (10 for (pushes above + entry address))
+    mov r10, [rsp + 10 * 8]
+
+    ; Get interrupt stack frame (11 for (pushes above + entry address + error code))
+    mov r10, [rsp + (11 + 0) * 8]
+    mov r11, [rsp + (11 + 1) * 8]
+    mov r12, [rsp + (11 + 2) * 8]
+    mov r13, [rsp + (11 + 3) * 8]
+    mov r14, [rsp + (11 + 4) * 8]
+
+.after_error_code:
 
     ; Switch to kernel page table
     mov rcx, page_table_physaddr

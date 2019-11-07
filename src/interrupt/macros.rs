@@ -2,7 +2,7 @@ use x86_64::PrivilegeLevel;
 
 macro_rules! irq_handler {
     ($name:ident) => {{
-        unsafe extern "x86-interrupt" fn wrapper(_: &mut ExceptionStackFrame) {
+        unsafe extern "x86-interrupt" fn wrapper(_: &mut InterruptStackFrame) {
             ($name)();
         }
         idt::Descriptor::new(true, wrapper as u64, PrivilegeLevel::Ring0, 0)
@@ -48,7 +48,7 @@ macro_rules! restore_scratch_registers {
 macro_rules! irq_handler_switch {
     ($name:ident) => {{
         #[naked]
-        unsafe fn wrapper(_: &mut ExceptionStackFrame) -> ! {
+        unsafe fn wrapper(_: &mut InterruptStackFrame) -> ! {
             use crate::memory::process_common_code::COMMON_ADDRESS_VIRT;
             save_scratch_registers!();
             asm!("
@@ -80,7 +80,7 @@ macro_rules! irq_handler_switch {
 
 macro_rules! exception_handler {
     ($name:ident, $pl:expr, $tss_s:expr) => {{
-        unsafe extern "x86-interrupt" fn wrapper(sf: &mut ExceptionStackFrame) {
+        unsafe extern "x86-interrupt" fn wrapper(sf: &mut InterruptStackFrame) {
             ($name)(sf);
         }
         idt::Descriptor::new(true, wrapper as u64, $pl, $tss_s)
@@ -92,7 +92,7 @@ macro_rules! exception_handler {
 
 macro_rules! exception_handler_with_error_code {
     ($name:ident, $pl:expr, $tss_s:expr) => {{
-        unsafe extern "x86-interrupt" fn wrapper(sf: &mut ExceptionStackFrame, ec: u64) {
+        unsafe extern "x86-interrupt" fn wrapper(sf: &mut InterruptStackFrame, ec: u64) {
             ($name)(sf, ec);
         }
         idt::Descriptor::new(true, wrapper as u64, $pl, $tss_s)
@@ -104,10 +104,10 @@ macro_rules! exception_handler_with_error_code {
 
 macro_rules! simple_exception_handler {
     ($text:expr) => {{
-        unsafe extern "x86-interrupt" fn wrapper(stack_frame: &mut ExceptionStackFrame) {
+        unsafe extern "x86-interrupt" fn wrapper(stack_frame: &mut InterruptStackFrame) {
             unsafe {
                 rforce_unlock!();
-                rprintln!(concat!("Exception: ", $text, "\n{}"), stack_frame);
+                rprintln!(concat!("Exception: ", $text, "\n{:?}"), stack_frame);
             };
             loop {}
         }
@@ -117,7 +117,7 @@ macro_rules! simple_exception_handler {
 
 macro_rules! last_resort_exception_handler {
     () => {{
-        unsafe extern "x86-interrupt" fn wrapper(_stack_frame: &mut ExceptionStackFrame) {
+        unsafe extern "x86-interrupt" fn wrapper(_stack_frame: &mut InterruptStackFrame) {
             unsafe {
                 asm!("jmp panic"::::"intel","volatile");
                 ::core::hint::unreachable_unchecked();

@@ -208,12 +208,12 @@ impl PageMap {
 
         // Map the address
         p2[i2].set_addr(frame.start_address(), flags | Flags::HUGE_PAGE);
-        rprintln!(
-            "mapped {:?} to {:?} with {:?}",
-            frame,
-            page,
-            flags | Flags::HUGE_PAGE
-        );
+        // rprintln!(
+        //     "mapped {:?} to {:?} with {:?}",
+        //     frame,
+        //     page,
+        //     flags | Flags::HUGE_PAGE
+        // );
 
         MapperFlush::new(page)
     }

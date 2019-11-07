@@ -3,7 +3,7 @@ use spin::Mutex;
 
 use d7time::{Duration, Instant};
 
-use super::process::{Process, ProcessMetadata};
+use super::process::{self, Process, ProcessMetadata};
 use super::ProcessId;
 use super::PROCMAN;
 
@@ -35,6 +35,27 @@ impl State {
         self.current_process_metadata.clone().map(|p_md| p_md.id)
     }
 
+    /// Terminate the current process, and switch to the next one immediately.
+    /// Returns the data for the process to switch to.
+    /// If there are no processes left, panics as there is nothing to do.
+    unsafe fn terminate_current(&mut self, status: process::Status) -> Process {
+        let pid = self.get_running_pid().expect("No process running?");
+        self.next_switch = None;
+        self.current_index = 0;
+        self.current_process_metadata = None;
+        PROCMAN.update(|pm| {
+            pm.terminate(pid, status);
+            if let Some(ref mut process) = pm.get_at(0) {
+                self.current_process_metadata = Some(process.metadata());
+                rprintln!("T -> {:?}", process);
+                process.clone()
+            } else {
+                // No processes running. Halt.
+                panic!("All processes over");
+            }
+        })
+    }
+
     /// Prepare switch to the next process
     /// Returns the data for the process to switch to, if any
     unsafe fn prepare_switch(&mut self) -> Option<Process> {
@@ -50,7 +71,7 @@ impl State {
                 self.current_index = (self.current_index + 1) % pc;
                 let mut process = pm.get_at(self.current_index)?;
                 self.current_process_metadata = Some(process.metadata());
-                rprintln!("-> {:?}", process);
+                rprintln!("S -> {:?}", process);
                 Some(process.clone())
             })
             .expect("PreSwitch: Couldn't lock process manager")
@@ -98,6 +119,17 @@ impl Scheduler {
                 state.get_running_pid()
             } else {
                 // TODO: Just return? Result<Option<ProcessId>, ()>
+                panic!("Unable to lock scheduler");
+            }
+        }
+    }
+
+    pub fn terminate_current(&self, status: process::Status) -> Process {
+        unsafe {
+            if let Some(ref mut state) = (*self.0.get()).try_lock() {
+                state.terminate_current(status)
+            } else {
+                // TODO: What to do here?
                 panic!("Unable to lock scheduler");
             }
         }

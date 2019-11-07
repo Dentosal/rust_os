@@ -151,6 +151,10 @@ pub extern "C" fn rust_main() -> ! {
         let pid = PROCMAN.update(|pm| pm.spawn(mod_test));
         rprintln!("PID: {}", pid);
     }
+    {
+        let pid = PROCMAN.update(|pm| pm.spawn(mod_test));
+        rprintln!("PID: {}", pid);
+    }
 
     // kernel_shell::run();
 

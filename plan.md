@@ -92,3 +92,11 @@ Begin       | Size    |rwx| Content
 5. Switch back to process page tables
 6. Restore process registers and jump back into the process
   * `x86-interrupt` cc restores all registers and the return address
+
+## Process stack when not active
+
+Index | Size | Contents
+------|------|----------
+0     | 5    | Interrupt stack frame
+5     | 1    | Tmp value for process interrupt handler
+6     | 15   | Registers

@@ -151,14 +151,6 @@ pub(super) unsafe fn exception_irq15() {
 #[naked]
 pub(super) unsafe fn process_interrupt() {
     asm!("
-        // Save scratch registers, except previously saved: rax, rbx, rcx, r10..=r15
-        // (Not all those are scratch registers)
-        push rdx
-        push rsi
-        push rdi
-        push r8
-        push r9
-
         // Recreate interrupt stack frame from r10..=r14
         push r14
         push r13
@@ -172,6 +164,12 @@ pub(super) unsafe fn process_interrupt() {
         mov rdx, rsp
         mov rcx, r15
         call process_interrupt_inner
+
+        // Remove interrupt stack
+        add rsp, 5 * 8
+
+        // Return to trampoline
+        ret
     " :::: "volatile", "intel");
 }
 
@@ -194,7 +192,9 @@ unsafe extern "C" fn process_interrupt_inner(
 
     macro_rules! fail {
         ($error:expr) => {{
+            // Terminate current process
             let process = SCHEDULER.terminate_current(process::Status::Failed($error));
+            // Jump to next process immediately
             asm!("
                 mov rcx, [rcx]  // Get procedure offset
                 jmp rcx         // Jump into the procedure
@@ -211,17 +211,32 @@ unsafe extern "C" fn process_interrupt_inner(
         }};
     }
 
-    // TODO: Handle PIT ticks
-    // TODO: Handle keyboard input
-    // TODO: Handle (ignore) ata interrupts
-    // TODO: Handle spurious interrupts
-
     match interrupt {
         0xd7 => {
             rprintln!("syscall!");
             // TODO:
             // * Error code, if any, must be removed from the stack before returning
             asm!("jmp panic" :::: "volatile", "intel");
+        }
+        0x20 => {
+            // PIT timer ticked
+            let next_process = time::SYSCLOCK.tick();
+            pic::PICS.lock().notify_eoi(interrupt);
+            if let Some(process) = next_process {
+                // Switch to other process after returning
+                asm!(""
+                    ::
+                    "{rbx}"(process.stack_pointer.as_u64()),
+                    "{rbp}"(process.page_table.as_u64())
+                );
+            }
+        }
+        0x21..=0x2f => {
+            // TODO: Handle keyboard input
+            // TODO: Handle (ignore) ata interrupts
+            // TODO: Handle spurious interrupts
+            // pic::PICS.lock().notify_eoi(interrupt);
+            panic!("Unhandled interrupt: {}", interrupt);
         }
         0x00 => fail!(process::Error::DivideByZero(stack_frame)),
         0x0e => fail!(process::Error::PageFault(
@@ -234,10 +249,6 @@ unsafe extern "C" fn process_interrupt_inner(
             stack_frame,
             error_code
         )),
-        0x20..=0x2f => {
-            pic::PICS.lock().notify_eoi(interrupt);
-            fail!(process::Error::Interrupt(interrupt, stack_frame))
-        }
         _ => fail!(process::Error::Interrupt(interrupt, stack_frame)),
     }
 }

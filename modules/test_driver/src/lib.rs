@@ -10,6 +10,13 @@ pub extern "C" fn main() {
     // Test: addition
     let mut success: u64;
     let mut result: u64;
+
+    for _ in 0..1_000_000_000 {
+        unsafe {
+            asm!("xor rax, rax" ::: "rax" : "intel", "volatile");
+        }
+    }
+
     unsafe {
         asm!("xor rax, rax; div rax; mov rax, 0x01; mov rdi, 2; mov rsi, 3; int 0xd7"
         : "={rax}"(success), "={rdi}"(result)

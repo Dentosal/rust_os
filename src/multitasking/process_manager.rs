@@ -76,9 +76,11 @@ impl State {
             // Offset to leave registers zero when they are popped,
             // plus space for the return address and other iretq data
             let registers_popped = 15; // process_common.asm : push_all
+            let tmp_inthandler = 1;
             let iretq_structure = 5;
+            let stack_items = registers_popped + tmp_inthandler + iretq_structure;
             let stack_size_bytes = PROCESS_STACK_SIZE_PAGES * PAGE_SIZE_BYTES;
-            let stack_offset = stack_size_bytes - 8 * (registers_popped + iretq_structure);
+            let stack_offset = stack_size_bytes - 8 * stack_items;
             let stack_end = PROCESS_STACK + stack_size_bytes;
             rsp = PROCESS_STACK + stack_offset;
 

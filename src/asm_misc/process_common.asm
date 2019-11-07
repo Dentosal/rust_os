@@ -4,6 +4,7 @@
 [ORG 0x200000]
 
 ; Push and pop macros. RFLAGS not pushed, as it is part of the IST
+%define stack_stored_registers 15
 %macro push_all 0
     push rax
     push rbx
@@ -21,7 +22,6 @@
     push r15
     push rbp
 %endmacro
-
 %macro pop_all 0
     pop rbp
     pop r15
@@ -78,11 +78,12 @@ switch_to:
     mov rsp, rdx
     ; Reload CS
     push qword 0x8
-    lea rax, [rel .new_cs] ; to ._new_cs
+    lea rax, [rel .new_cs]
     push rax
     o64 retf
 .new_cs:
     pop_all
+    add rsp, 8 ; Discard tmpvar
     iretq
 
 ; Kernel addresses
@@ -108,27 +109,25 @@ process_interrupt:
     ; the address from which the subroutine was entered.
     ; It will be used to determine the interrupt number.
 
-    ; Save some registers to stack
+    ; Save registers to stack
     ; * rax: Stores interrupt vector number
     ; * rbx: Stores process stack pointer
     ; * rcx: Used for misc operations
     ; * r10-r14: Stores the interrupt frame
     ; * r15: Stores the exception error code, if any
-    push rax
-    push rbx
-    push rcx
-    push r10
-    push r11
-    push r12
-    push r13
-    push r14
-    push r15
+    ; Other registers are still preserved for process switching
+    push_all
 
     ; Get the process stack pointer (after the pushes here)
+    ; RBX is a scratch register, so it will not be overwritten by Rust code
     mov rbx, rsp
 
+    ; Save process page table address
+    ; RBP is a scratch register, so it will not be overwritten by Rust code
+    mov rbp, cr3
+
     ; Retrieve procedure entry address
-    mov rax, [rsp + 9 * 8] ; 9 marks number of pushes above
+    mov rax, [rsp + stack_stored_registers * 8] ; offset for the pushes above
     ; Remove base and instruction, so rax is just the offset, between 0 and 255 * 10
     sub rax, (.table_start + 5)
     ; Divide by 5, the size of a call instruction here
@@ -155,25 +154,25 @@ process_interrupt:
     ; No error code to get
     mov r15, 0
 
-    ; Get interrupt stack frame (10 for (pushes above + entry address))
-    mov r10, [rsp + (10 + 0) * 8]
-    mov r11, [rsp + (10 + 1) * 8]
-    mov r12, [rsp + (10 + 2) * 8]
-    mov r13, [rsp + (10 + 3) * 8]
-    mov r14, [rsp + (10 + 4) * 8]
+    ; Get interrupt stack frame (offset: pushes above + entry address)
+    mov r10, [rsp + (stack_stored_registers + 1 + 0) * 8]
+    mov r11, [rsp + (stack_stored_registers + 1 + 1) * 8]
+    mov r12, [rsp + (stack_stored_registers + 1 + 2) * 8]
+    mov r13, [rsp + (stack_stored_registers + 1 + 3) * 8]
+    mov r14, [rsp + (stack_stored_registers + 1 + 4) * 8]
 
     jmp .after_error_code
 
 .error_code:
-    ; Get error code (10 for (pushes above + entry address))
-    mov r10, [rsp + 10 * 8]
+    ; Get error code (offset: pushes above + entry address)
+    mov r10, [rsp + stack_stored_registers * 8]
 
-    ; Get interrupt stack frame (11 for (pushes above + entry address + error code))
-    mov r10, [rsp + (11 + 0) * 8]
-    mov r11, [rsp + (11 + 1) * 8]
-    mov r12, [rsp + (11 + 2) * 8]
-    mov r13, [rsp + (11 + 3) * 8]
-    mov r14, [rsp + (11 + 4) * 8]
+    ; Get interrupt stack frame (offset: pushes above + entry address + error code)
+    mov r10, [rsp + (stack_stored_registers + 1 + 0) * 8]
+    mov r11, [rsp + (stack_stored_registers + 1 + 1) * 8]
+    mov r12, [rsp + (stack_stored_registers + 1 + 2) * 8]
+    mov r13, [rsp + (stack_stored_registers + 1 + 3) * 8]
+    mov r14, [rsp + (stack_stored_registers + 1 + 4) * 8]
 
 .after_error_code:
 
@@ -198,8 +197,15 @@ process_interrupt:
     lgdt [rcx]
     add rsp, 10
 
-    ; Jump to kernel interrupt handler
-    jmp [interrupt_handler_ptr_addr]
+    ; Invoke the kernel interrupt handler
+    call [interrupt_handler_ptr_addr]
+
+    ; TODO: Check if this should be a special return?
+
+.return_normal:
+    mov rax, rbp ; P4 page table physical address
+    mov rdx, rbx ; rsp for the process
+    jmp switch_to
 
 .return_syscall:
     ; The kernel will jump here when returning from a system call

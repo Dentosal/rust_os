@@ -27,7 +27,7 @@ pub unsafe fn get_xsdp() -> Result<bool, XSDPParseError> {
             rprintln!("OK {:#x}", addr);
             // TODO: checksum
             Ok(true)
-        }
+        },
         Err(e) => Err(XSDPParseError::RSDPParseError(e)),
     }
 }

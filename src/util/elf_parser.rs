@@ -124,9 +124,9 @@ pub unsafe fn parse_elf(ptr: usize) -> Result<ELFData, ELFParsingError> {
                     // load, (needed)
                     elf_data.ph_table[ph_table] = Some(ph);
                     ph_table += 1;
-                }
-                0x60000000 => {} // OS Specific 0, decompression tables, (but unused here)
-                _ => {}          // unknown, not supported
+                },
+                0x60000000 => {}, // OS Specific 0, decompression tables, (but unused here)
+                _ => {},          // unknown, not supported
             }
         }
 

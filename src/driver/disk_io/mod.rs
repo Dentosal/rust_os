@@ -69,8 +69,7 @@ impl DiskController {
     }
 
     pub unsafe fn map<T>(
-        &mut self,
-        f: &mut dyn FnMut(&mut Box<dyn BlockDevice>) -> T,
+        &mut self, f: &mut dyn FnMut(&mut Box<dyn BlockDevice>) -> T,
     ) -> Option<T> {
         if let Some(ref mut driver) = self.driver {
             Some(f(driver))

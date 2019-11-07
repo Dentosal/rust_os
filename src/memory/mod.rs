@@ -79,9 +79,7 @@ impl MemoryController {
     ///
     /// Requires that the kernel page tables are active.
     pub fn alloc_both(
-        &mut self,
-        size_in_pages: usize,
-        flags: Flags,
+        &mut self, size_in_pages: usize, flags: Flags,
     ) -> (Vec<PhysFrame>, virtual_allocator::Area) {
         let mut frames: Vec<PhysFrame> = self.alloc_frames(size_in_pages);
 
@@ -249,9 +247,7 @@ pub fn init_late() {
 static MEM_CTRL_CONTAINER: Mutex<Option<MemoryController>> = Mutex::new(None);
 
 pub fn configure<F, T>(mut f: F) -> T
-where
-    F: FnMut(&mut MemoryController) -> T,
-{
+where F: FnMut(&mut MemoryController) -> T {
     let mut guard = MEM_CTRL_CONTAINER.lock();
     if let Some(ref mut mem_ctrl) = *guard {
         f(mem_ctrl)

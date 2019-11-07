@@ -26,10 +26,10 @@ pub struct Device {
 impl Device {
     fn new(id: u16, vendor: u16, location: DeviceLocation, class: DeviceClass) -> Device {
         Device {
-            id: id,
-            vendor: vendor,
-            location: location,
-            class: class,
+            id,
+            vendor,
+            location,
+            class,
         }
     }
 
@@ -114,9 +114,7 @@ impl PCIController {
     }
 
     pub fn find<P>(&self, pred: P) -> Option<Device>
-    where
-        P: Fn(Device) -> bool,
-    {
+    where P: Fn(Device) -> bool {
         for dev in self.devices.clone().unwrap() {
             if pred(dev) {
                 return Some(dev);

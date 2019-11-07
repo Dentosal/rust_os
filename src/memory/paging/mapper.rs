@@ -27,37 +27,23 @@ macro_rules! try_bool {
 const MAX_PAGE_TABLES: u64 = HUGE_PAGE_SIZE / 0x1000;
 
 macro_rules! get_page {
-    ($base:expr, $index:literal) => {{
-        Page::from_start_address($base + 0x1000u64 * $index).unwrap()
-    }};
+    ($base:expr, $index:literal) => {{ Page::from_start_address($base + 0x1000u64 * $index).unwrap() }};
 
-    ($base:expr) => {{
-        Page::from_start_address($base).unwrap()
-    }};
+    ($base:expr) => {{ Page::from_start_address($base).unwrap() }};
 }
 
 macro_rules! frame_addr {
-    ($base:expr, $index:expr) => {{
-        $base + 0x1000u64 * $index
-    }};
+    ($base:expr, $index:expr) => {{ $base + 0x1000u64 * $index }};
 }
 
 macro_rules! frame {
-    ($base:expr, $index:expr) => {{
-        PhysFrame::from_start_address(frame_addr!($base, $index)).unwrap()
-    }};
+    ($base:expr, $index:expr) => {{ PhysFrame::from_start_address(frame_addr!($base, $index)).unwrap() }};
 }
 
 macro_rules! pt_flags {
-    (4) => {{
-        Flags::PRESENT | Flags::WRITABLE
-    }};
-    (3) => {{
-        Flags::PRESENT | Flags::WRITABLE
-    }};
-    (2) => {{
-        Flags::PRESENT | Flags::WRITABLE | Flags::HUGE_PAGE
-    }};
+    (4) => {{ Flags::PRESENT | Flags::WRITABLE }};
+    (3) => {{ Flags::PRESENT | Flags::WRITABLE }};
+    (2) => {{ Flags::PRESENT | Flags::WRITABLE | Flags::HUGE_PAGE }};
 }
 
 /// # Paging manager
@@ -168,11 +154,7 @@ impl PageMap {
     ///
     /// `curr_addr` is the virtual address of this table in the current page tables
     pub unsafe fn map_to(
-        &mut self,
-        curr_addr: VirtAddr,
-        page: Page,
-        frame: PhysFrame,
-        flags: Flags,
+        &mut self, curr_addr: VirtAddr, page: Page, frame: PhysFrame, flags: Flags,
     ) -> MapperFlush<pg::Size2MiB> {
         let i4 = page.p4_index();
         let i3 = page.p3_index();
@@ -219,10 +201,7 @@ impl PageMap {
     }
 
     pub unsafe fn identity_map(
-        &mut self,
-        curr_addr: VirtAddr,
-        frame: PhysFrame,
-        flags: Flags,
+        &mut self, curr_addr: VirtAddr, frame: PhysFrame, flags: Flags,
     ) -> MapperFlush<pg::Size2MiB> {
         let page =
             Page::from_start_address(VirtAddr::new_unchecked(frame.start_address().as_u64()))

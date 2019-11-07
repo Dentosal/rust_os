@@ -75,13 +75,13 @@ impl GdtBuilder {
                 Descriptor::UserSegment(value) => {
                     ptr::write(base.add(self.entry_count), value);
                     self.entry_count += 1;
-                }
+                },
                 Descriptor::SystemSegment(value_low, value_high) => {
                     ptr::write(base.add(self.entry_count), value_low);
                     self.entry_count += 1;
                     ptr::write(base.add(self.entry_count), value_high);
                     self.entry_count += 1;
-                }
+                },
             };
         }
         SegmentSelector::new(index as u16, PrivilegeLevel::Ring0)

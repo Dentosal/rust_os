@@ -38,7 +38,7 @@ impl KeyReader {
                     }
                 }
                 key
-            }
+            },
             None => None,
         }
     }

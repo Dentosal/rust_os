@@ -154,7 +154,7 @@ impl BlockDevice for VirtioBlock {
         let data = loop {
             let req_done = req.read();
             match req_done.status {
-                0xff => {}
+                0xff => {},
                 0 => break req_done.data,
                 1 => panic!("VirtIO read failed (1 - IOERR)"),
                 2 => panic!("VirtIO read failed (2 - UNSUPP)"),

@@ -260,7 +260,7 @@ impl State {
                 // TODO: remove process data: free stack frames, etc.
                 self.process_list.swap_remove(index);
                 true
-            }
+            },
             None => false,
         }
     }
@@ -275,9 +275,7 @@ impl ProcessManager {
     }
 
     pub fn try_fetch<F, T>(&self, f: F) -> Option<T>
-    where
-        F: FnOnce(&State) -> T,
-    {
+    where F: FnOnce(&State) -> T {
         if let Some(ref state) = unsafe { (*self.0.get()).try_lock() } {
             Some(f(state))
         } else {
@@ -286,9 +284,7 @@ impl ProcessManager {
     }
 
     pub fn try_update<F, T>(&self, f: F) -> Option<T>
-    where
-        F: FnOnce(&mut State) -> T,
-    {
+    where F: FnOnce(&mut State) -> T {
         if let Some(ref mut state) = unsafe { (*self.0.get()).try_lock() } {
             Some(f(state))
         } else {
@@ -297,16 +293,12 @@ impl ProcessManager {
     }
 
     pub fn fetch<F, T>(&self, f: F) -> T
-    where
-        F: FnOnce(&State) -> T,
-    {
+    where F: FnOnce(&State) -> T {
         self.try_fetch(f).expect("Unable to lock process manager")
     }
 
     pub fn update<F, T>(&self, f: F) -> T
-    where
-        F: FnOnce(&mut State) -> T,
-    {
+    where F: FnOnce(&mut State) -> T {
         self.try_update(f).expect("Unable to lock process manager")
     }
 }

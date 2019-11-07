@@ -85,9 +85,7 @@ macro_rules! exception_handler {
         }
         idt::Descriptor::new(true, wrapper as u64, $pl, $tss_s)
     }};
-    ($name:ident) => {{
-        exception_handler!($name, PrivilegeLevel::Ring0, 0)
-    }};
+    ($name:ident) => {{ exception_handler!($name, PrivilegeLevel::Ring0, 0) }};
 }
 
 macro_rules! exception_handler_with_error_code {
@@ -97,9 +95,7 @@ macro_rules! exception_handler_with_error_code {
         }
         idt::Descriptor::new(true, wrapper as u64, $pl, $tss_s)
     }};
-    ($name:ident) => {{
-        exception_handler_with_error_code!($name, PrivilegeLevel::Ring0, 0)
-    }};
+    ($name:ident) => {{ exception_handler_with_error_code!($name, PrivilegeLevel::Ring0, 0) }};
 }
 
 macro_rules! simple_exception_handler {

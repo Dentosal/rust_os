@@ -48,10 +48,7 @@ pub struct Process {
 }
 impl Process {
     pub const fn new(
-        id: ProcessId,
-        parent: Option<ProcessId>,
-        page_table: PhysAddr,
-        stack_pointer: VirtAddr,
+        id: ProcessId, parent: Option<ProcessId>, page_table: PhysAddr, stack_pointer: VirtAddr,
     ) -> Self {
         Self {
             page_table,

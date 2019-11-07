@@ -1,0 +1,8 @@
+version = "Two"
+unstable_features = true
+match_block_trailing_comma = true
+use_field_init_shorthand = true
+where_single_line = true
+use_try_shorthand = true
+overflow_delimited_expr = true
+fn_args_layout = "Compressed"

@@ -73,9 +73,7 @@ macro_rules! no_interrupts {
 }
 
 macro_rules! sizeof {
-    ($t:ty) => {{
-        ::core::mem::size_of::<$t>()
-    }};
+    ($t:ty) => {{ ::core::mem::size_of::<$t>() }};
 }
 
 pub fn io_wait() {

@@ -51,7 +51,7 @@ impl VirtualAllocator {
         {
             Ok(_) => {
                 panic!("VirtAlloc: Double free: {:?} ({} pages)", start, size_pages);
-            }
+            },
             Err(i) => i,
         };
 

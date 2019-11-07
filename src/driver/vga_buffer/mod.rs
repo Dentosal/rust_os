@@ -169,7 +169,7 @@ impl Terminal {
 
             self.get_buffer().chars[row][col].write(CharCell {
                 character: byte,
-                color: color,
+                color,
             });
 
             self.cursor.next();
@@ -219,7 +219,7 @@ impl Terminal {
             let color = self.output_color;
             self.get_buffer().chars[SCREEN_HEIGHT - 1][col].write(CharCell {
                 character: b' ',
-                color: color,
+                color,
             });
         }
     }

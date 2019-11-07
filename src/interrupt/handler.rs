@@ -75,7 +75,7 @@ pub(super) unsafe fn exception_snp(stack_frame: &InterruptStackFrame, error_code
             0b11 => SegmentNotPresentTable::IDT,
             _ => {
                 unreachable!();
-            }
+            },
         },
         (error_code & 0xFFFF) >> 3,
         *stack_frame
@@ -175,11 +175,10 @@ pub(super) unsafe fn process_interrupt() {
 
 #[no_mangle]
 unsafe extern "C" fn process_interrupt_inner(
-    interrupt: u8,
-    process_stack: u64,
-    stack_frame_ptr: *const InterruptStackFrameValue,
+    interrupt: u8, process_stack: u64, stack_frame_ptr: *const InterruptStackFrameValue,
     error_code: u32,
-) {
+)
+{
     use x86_64::registers::control::Cr2;
 
     use crate::memory::process_common_code::COMMON_ADDRESS_VIRT;
@@ -217,7 +216,7 @@ unsafe extern "C" fn process_interrupt_inner(
             // TODO:
             // * Error code, if any, must be removed from the stack before returning
             asm!("jmp panic" :::: "volatile", "intel");
-        }
+        },
         0x20 => {
             // PIT timer ticked
             let next_process = time::SYSCLOCK.tick();
@@ -230,14 +229,14 @@ unsafe extern "C" fn process_interrupt_inner(
                     "{rbp}"(process.page_table.as_u64())
                 );
             }
-        }
+        },
         0x21..=0x2f => {
             // TODO: Handle keyboard input
             // TODO: Handle (ignore) ata interrupts
             // TODO: Handle spurious interrupts
             // pic::PICS.lock().notify_eoi(interrupt);
             panic!("Unhandled interrupt: {}", interrupt);
-        }
+        },
         0x00 => fail!(process::Error::DivideByZero(stack_frame)),
         0x0e => fail!(process::Error::PageFault(
             stack_frame,

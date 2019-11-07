@@ -13,10 +13,7 @@ pub struct Stack {
 impl Stack {
     fn new(top: PhysAddr, bottom: PhysAddr) -> Stack {
         assert!(top > bottom);
-        Stack {
-            top: top,
-            bottom: bottom,
-        }
+        Stack { top, bottom }
     }
 }
 
@@ -31,10 +28,7 @@ impl StackAllocator {
 
     /// Requires that the kernel page table is active
     pub fn alloc_stack<A: pg::FrameAllocator<pg::Size2MiB>>(
-        &mut self,
-        page_map: &mut PageMap,
-        frame_allocator: &mut A,
-        size_in_pages: usize,
+        &mut self, page_map: &mut PageMap, frame_allocator: &mut A, size_in_pages: usize,
     ) -> Option<Stack> {
         assert!(size_in_pages > 0);
 

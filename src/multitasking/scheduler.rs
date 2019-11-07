@@ -86,12 +86,12 @@ impl State {
                 } else {
                     None
                 }
-            }
+            },
             None => {
                 // start switching
                 self.next_switch = Some(now + TIME_SLICE);
                 None
-            }
+            },
         }
     }
 }

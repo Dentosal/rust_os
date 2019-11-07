@@ -21,7 +21,7 @@ Feature development is done in separate branches. Rebase workflow is used to com
 * Paging
 * Interrupts
 * Time handling
-* Keyboard input (Disabled at the moment)
+* Keyboard input
 * Disk IO:
     * ATA PIO (Read only)
     * VirtIO-blk (Read only)
@@ -32,16 +32,16 @@ Feature development is done in separate branches. Rebase workflow is used to com
 ## Planned in near future:
 * A shell (with virtual TTYs!)
 * A simple filesystem, and writing to disk
+* Executable programs, probably in ELF format
+* Multitasking
+
+## Not-in-so-near future features:
 * Networking
  * Intel E1000 driver
  * VirtIO-net driver
-
-## Not-in-so-near future features:
 * Automated tests
 * A proper filesystem, maybe SFS, FAT32, or ext3
-* Executable programs, probably in ELF format
 * Shell and utilities
-* Multitasking
 * Device drivers for USB/Audio/NICs
 
 # Running
@@ -73,4 +73,4 @@ You will also need a virtual machine. Qemu is suggested, but Bochs should work a
 With Qemu and Vagrant installed, run `./autobuild.sh -u`. With Bochs: `./autobuild.sh -ub`. To use VirtualBox, run `./autobuild.sh -uv`.
 
 # License
-This project is licensed under MIT license, that can be found in the file called LICENSE.
+This project is licensed under the MIT license, that can be found in the file called LICENSE.

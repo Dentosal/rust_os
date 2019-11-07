@@ -1,6 +1,11 @@
 from typing import Tuple, List, Set, Optional
 
+from dataclasses import dataclass
 from pathlib import Path
+from subprocess import run
+import re
+import toml
+import json
 
 from factory import *
 
@@ -74,12 +79,44 @@ def cmd_nasm(input: Path, output: Path, format: str) -> Cmd:
     )
 
 
+@dataclass
+class CargoPackage:
+    name: str
+    sources: Set[Path]
+
+    def load(pdir: Path) -> "CargoPackage":
+        """If cargo build depends on local packages, return their inputs as well."""
+        p = run(
+            ["cargo", "metadata", "--format-version", "1"],
+            capture_output=True,
+            cwd=pdir,
+            check=True,
+        )
+
+        data = json.loads(p.stdout.decode())
+        sources = {pdir / "src/", pdir / "Cargo.toml"}
+        for p in data["packages"]:
+            m = re.match(r"(.+?)\s(.+?)\s\((.+?)\+(.+)\)", p["id"])
+            assert m
+            name, version, source_type, location = m.groups()
+            if source_type == "path":
+                schema, path = location.split("://")
+                assert schema == "file"
+                p = Path(path)
+                sources.update({p / "src/", p / "Cargo.toml"})
+
+        return CargoPackage(
+            name=data["resolve"]["root"].split(" ", 1)[0], sources=sources
+        )
+
+
 def cmd_cargo_build(pdir: Path, target=None) -> Cmd:
+    package = CargoPackage.load(pdir)
     out_path = pdir / "target" / "release"
     if target:
         out_path /= target
     return Cmd(
-        inputs={pdir / "src/", pdir / "Cargo.toml"},
+        inputs=package.sources,
         output=out_path,
         cmd=["cargo", "build", "--release", "--color=always"],
         cwd=pdir,
@@ -87,15 +124,12 @@ def cmd_cargo_build(pdir: Path, target=None) -> Cmd:
 
 
 def cmd_cargo_xbuild(pdir: Path, target_json: Path) -> Cmd:
-    out_path = pdir / "target" / target_json.stem / "release"
-    import toml
-
-    with open(pdir / "Cargo.toml") as f:
-        t = toml.load(f)
-        out_path /= "lib" + t["package"]["name"] + ".a"
-
+    package = CargoPackage.load(pdir)
+    out_path = (
+        pdir / "target" / target_json.stem / "release" / ("lib" + package.name + ".a")
+    )
     return Cmd(
-        inputs={target_json, pdir / "src/", pdir / "Cargo.toml"},
+        inputs={target_json}.union(package.sources),
         output=out_path,
         cmd=["cargo", "xbuild", "--target", target_json, "--release", "--color=always"],
         cwd=pdir,

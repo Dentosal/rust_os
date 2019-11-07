@@ -41,9 +41,9 @@ then
     fi
     if [ $flag_native -eq 1 ]
     then
-        ./build.sh
+        factory
     else
-        vagrant ssh -c "cd /vagrant/ && ./build.sh"
+        vagrant ssh -c "cd /vagrant/ && factory"
     fi
 fi
 

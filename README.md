@@ -64,13 +64,19 @@ If you don't have a Unix-like system, then you should probably get one, they are
 
 Building with default automated build system required that Vagrant is installed. I use VirtualBox as my Vagrant provider, but [other providers](https://www.vagrantup.com/docs/providers/) should work as well.
 
-Vagrant isn't actually required: on systems with apt, like Debian or Ubuntu, it should be reasonably easy to just install the dependencies by hand. The install script can be found from Vagrantfile.
+Vagrant isn't actually required: on systems with apt, like Debian or Ubuntu, it should be reasonably easy to just install the dependencies by hand. The install script can be found from `Vagrantfile`.
 
 You will also need a virtual machine. Qemu is suggested, but Bochs should work as well. VirtualBox can also be used, but the project isn't actively tested with it. Moreover, you must run it yourself.
 
 ## Actually running
 
 With Qemu and Vagrant installed, run `./autobuild.sh -u`. With Bochs: `./autobuild.sh -ub`. To use VirtualBox, run `./autobuild.sh -uv`.
+
+## Local development
+
+```bash
+cargo fmt && factory && ./autobuild.sh -r
+```
 
 # License
 This project is licensed under the MIT license, that can be found in the file called LICENSE.

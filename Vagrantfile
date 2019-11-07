@@ -33,24 +33,30 @@ Vagrant.configure(2) do |config|
   # these run as user vagrant instead of root
   config.vm.provision "shell", privileged: false, inline: <<-SHELL
     sudo apt-get update
-    sudo apt-get upgrade
-    sudo apt-get autoremove
-    sudo apt-get install python3 python3-dev python3-pip -y
+    sudo apt-get upgrade -y
+    sudo apt-get autoremove -y
+    sudo apt-get install python3.7 python3.7-dev python3-pip -y
     sudo apt-get install vim git nasm -y
     #sudo apt-get install xorriso -y
     sudo apt-get install texinfo flex bison python-dev ncurses-dev -y
     sudo apt-get install cmake libssl-dev -y
 
-    python3 -m pip install --upgrade pip
-    python3 -m pip install requests
+    sudo python3.7 -m pip install --upgrade pip
+    sudo python3.7 -m pip install requests toml
 
-    curl -sf https://raw.githubusercontent.com/phil-opp/binutils-gdb/rust-os/build-rust-os-gdb.sh | sh
+    #curl -sf https://raw.githubusercontent.com/phil-opp/binutils-gdb/rust-os/build-rust-os-gdb.sh | sh
 
     curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain nightly -y
 
-    export PATH="$HOME/.cargo/bin:$PATH"
+    export PATH="$HOME/.cargo/bin:$HOME/.bin:$PATH"
     rustup component add rust-src
     cargo install --force cargo-xbuild
+
+    git clone https://github.com/Dentosal/factory.git /tmp/factory || true
+    cd /tmp/factory
+    git pull
+    PYTHON_SYS_EXECUTABLE=python3.7 cargo install --path . --force
+    cd -
 
     echo "export PATH="$HOME/.cargo/bin:$PATH"; cd /vagrant" >> $HOME/.bashrc
   SHELL

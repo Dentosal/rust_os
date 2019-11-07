@@ -177,7 +177,7 @@ pub(super) unsafe fn process_interrupt() {
 
 #[no_mangle]
 unsafe extern "C" fn process_interrupt_inner(
-    interrupt: u16,
+    interrupt: u8,
     process_stack: u64,
     stack_frame_ptr: *const InterruptStackFrameValue,
     error_code: u32,
@@ -201,7 +201,7 @@ unsafe extern "C" fn process_interrupt_inner(
                 "
                 :
                 :
-                    "{rcx}"(COMMON_ADDRESS_VIRT as *const u8 as u64),
+                    "{rcx}"(COMMON_ADDRESS_VIRT as *const u8 as u64), // switch_to
                     "{rdx}"(process.stack_pointer.as_u64()),
                     "{rax}"(process.page_table.as_u64())
                 :
@@ -219,6 +219,9 @@ unsafe extern "C" fn process_interrupt_inner(
     match interrupt {
         0xd7 => {
             rprintln!("syscall!");
+            // TODO:
+            // * Error code, if any, must be removed from the stack before returning
+            asm!("jmp panic" :::: "volatile", "intel");
         }
         0x00 => fail!(process::Error::DivideByZero(stack_frame)),
         0x0e => fail!(process::Error::PageFault(
@@ -231,8 +234,10 @@ unsafe extern "C" fn process_interrupt_inner(
             stack_frame,
             error_code
         )),
+        0x20..=0x2f => {
+            pic::PICS.lock().notify_eoi(interrupt);
+            fail!(process::Error::Interrupt(interrupt, stack_frame))
+        }
         _ => fail!(process::Error::Interrupt(interrupt, stack_frame)),
     }
-
-    asm!("jmp panic" :::: "volatile", "intel");
 }

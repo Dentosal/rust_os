@@ -3,9 +3,8 @@
 [BITS 64]
 [ORG 0x200000]
 
-; Push and pop macros
+; Push and pop macros. RFLAGS not pushed, as it is part of the IST
 %macro push_all 0
-    pushfq
     push rax
     push rbx
     push rcx
@@ -39,7 +38,6 @@
     pop rcx
     pop rbx
     pop rax
-    popfq
 %endmacro
 
 header:
@@ -85,7 +83,7 @@ switch_to:
     o64 retf
 .new_cs:
     pop_all
-    ret
+    iretq
 
 ; Kernel addresses
 %define interrupt_handler_ptr_addr 0x2000

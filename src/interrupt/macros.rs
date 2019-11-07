@@ -66,7 +66,7 @@ macro_rules! irq_handler_switch {
                 :
                 :
                     "i"($name as unsafe extern "C" fn() -> u128),
-                    "{rcx}"(COMMON_ADDRESS_VIRT as *const u8 as u64)
+                    "{rcx}"(COMMON_ADDRESS_VIRT as *const u8 as u64) // switch_to
                 :
                 : "intel"
             );

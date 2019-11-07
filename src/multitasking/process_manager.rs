@@ -72,6 +72,16 @@ impl State {
             let stack_frames = mm.alloc_frames(PROCESS_STACK_SIZE_PAGES as usize);
             let stack_area = mm.alloc_virtual_area(PROCESS_STACK_SIZE_PAGES);
 
+            // Set rsp
+            // Offset to leave registers zero when they are popped,
+            // plus space for the return address and other iretq data
+            let registers_popped = 15; // process_common.asm : push_all
+            let iretq_structure = 5;
+            let stack_size_bytes = PROCESS_STACK_SIZE_PAGES * PAGE_SIZE_BYTES;
+            let stack_offset = stack_size_bytes - 8 * (registers_popped + iretq_structure);
+            let stack_end = PROCESS_STACK + stack_size_bytes;
+            rsp = PROCESS_STACK + stack_offset;
+
             // Populate the process stack
             for (page_index, frame) in stack_frames.iter().enumerate() {
                 let vaddr = stack_area.start + (page_index as u64) * PAGE_SIZE_BYTES;
@@ -91,14 +101,27 @@ impl State {
 
                     // Set start address to the right position, on the last page
                     if page_index == (PROCESS_STACK_SIZE_PAGES as usize) - 1 {
-                        // Offset to leave registers zero when they are popped,
-                        // plus space for the return address itself
-                        ptr::write(
-                            vaddr
-                                .as_mut_ptr::<u64>()
-                                .offset((PAGE_SIZE_BYTES / 8 - 1) as isize),
-                            0x1_000_000u64,
-                        );
+                        // Push interrupt stack frame for
+                        // https://os.phil-opp.com/returning-from-exceptions/#returning-from-exceptions
+
+                        macro_rules! qwords_from_end {
+                            ($n:literal) => {
+                                vaddr
+                                    .as_mut_ptr::<u64>()
+                                    .add((PAGE_SIZE_BYTES as usize) / 8 - $n)
+                            };
+                        }
+
+                        // SS
+                        ptr::write(qwords_from_end!(1), 0);
+                        // RSP
+                        ptr::write(qwords_from_end!(2), stack_end.as_u64());
+                        // RFLAGFS: Interrupt flag on (https://en.wikipedia.org/wiki/FLAGS_register#FLAGS)
+                        ptr::write(qwords_from_end!(3), 1 << 9);
+                        // CS
+                        ptr::write(qwords_from_end!(4), 0x8u64);
+                        // RIP
+                        ptr::write(qwords_from_end!(5), 0x1_000_000u64);
                     }
 
                     // Unmap from kernel table
@@ -170,9 +193,6 @@ impl State {
                     .ignore();
                 }
             }
-
-            // Set rsp
-            rsp = PROCESS_STACK + (PROCESS_STACK_SIZE_PAGES * PAGE_SIZE_BYTES - 8 * (16 + 1));
 
             // Map the executable image to its own page table
 

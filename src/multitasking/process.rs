@@ -27,9 +27,9 @@ pub enum Error {
     /// Page fault
     PageFault(InterruptStackFrameValue, VirtAddr, PageFaultErrorCode),
     /// Unhandled interrupt without an error code
-    Interrupt(u16, InterruptStackFrameValue),
+    Interrupt(u8, InterruptStackFrameValue),
     /// Unhandled interrupt with an error code
-    InterruptWithCode(u16, InterruptStackFrameValue, u32),
+    InterruptWithCode(u8, InterruptStackFrameValue, u32),
     /// Invalid system call number
     SyscallNumber(u64),
 }

@@ -1,7 +1,7 @@
 #[cfg(not(test))]
-use core::{ptr, u16};
+use core::u16;
 #[cfg(test)]
-use std::{fmt, ptr, u16};
+use std::{fmt, u16};
 
 use super::error;
 
@@ -43,11 +43,7 @@ impl Node {
     }
 
     pub fn direction(&self, direction: bool) -> u16 {
-        if direction {
-            self.right
-        } else {
-            self.left
-        }
+        if direction { self.right } else { self.left }
     }
 
     pub fn with_direction(self, direction: bool, index: u16) -> Node {

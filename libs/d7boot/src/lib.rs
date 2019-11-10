@@ -20,28 +20,19 @@
 #![deny(unused_must_use)]
 // Unstable features
 #![feature(asm)]
-#![feature(const_fn)]
-#![feature(core_intrinsics)]
 #![feature(lang_items)]
 #![feature(naked_functions)]
-#![feature(panic_info_message)]
-#![feature(ptr_internals)]
-#![feature(stmt_expr_attributes)]
+
 
 #[cfg(not(test))]
-use core::{
-    intrinsics::{likely, unlikely},
-    mem,
-    panic::PanicInfo,
-    ptr,
-};
+use core::{mem, panic::PanicInfo, ptr};
 #[cfg(test)]
-use std::{
-    intrinsics::{likely, unlikely},
-    mem,
-    panic::PanicInfo,
-    ptr,
-};
+use std::{mem, panic::PanicInfo, ptr};
+
+#[inline(always)]
+fn unlikely(b: bool) -> bool {
+    b
+}
 
 mod symtree;
 
@@ -50,9 +41,7 @@ use symtree::SymTree;
 const EXTRA_CHECKS: bool = cfg!(test);
 
 macro_rules! sizeof {
-    ($t:ty) => {{
-        ::core::mem::size_of::<$t>()
-    }};
+    ($t:ty) => {{ ::core::mem::size_of::<$t>() }};
 }
 
 macro_rules! panic_indicator {
@@ -205,11 +194,7 @@ unsafe fn load_decompression_table(sym_tree: &mut SymTree, start: *const u8) {
 }
 
 unsafe fn decompress(
-    sym_tree: &SymTree,
-    frq_table: *const u8,
-    src: *const u8,
-    dst: *mut u8,
-    count: usize,
+    sym_tree: &SymTree, frq_table: *const u8, src: *const u8, dst: *mut u8, count: usize,
 ) {
     let mut out_offset = 0;
 
@@ -387,7 +372,7 @@ mod test {
     macro_rules! concat_arrays(
         ($ty:ty : $arr1:expr, $arr2:expr) => (
             {
-                let mut array: [$ty; ($arr1).len() + ($arr2).len()] = unsafe { std::mem::uninitialized() };
+                let mut array: [$ty; ($arr1).len() + ($arr2).len()] = [0; ($arr1).len() + ($arr2).len()];
                 for (i, &v) in array.iter_mut().zip(($arr1).iter().chain(($arr2).iter())) {
                     unsafe { ::std::ptr::write(i, v); }
                 }

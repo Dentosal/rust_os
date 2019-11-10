@@ -213,12 +213,22 @@ def step_boot_stage2(root_dir) -> Tuple[Union[Step, Set[Step]]]:
         Step(
             cmd=cmd_ld(
                 linker_script=root_dir / "libs/d7boot/linker.ld",
-                output=root_dir / "build/boot/stage2.bin",
+                output=root_dir / "build/boot/stage2.elf",
                 inputs=[
                     root_dir / "build/boot/entry.elf",
                     root_dir / "libs/d7boot/target/d7os/release/libd7boot.a",
                 ],
             )
+        ),
+        Step(
+            requires={step_cli_tools},
+            cmd=Cmd(
+                cmd=[
+                    root_dir / "libs/elf2bin/target/release/elf2bin",
+                    root_dir / "build/boot/stage2.elf",
+                    root_dir / "build/boot/stage2.bin",
+                ]
+            ),
         ),
     )
 
@@ -260,13 +270,19 @@ def step_kernel_modules(root_dir) -> Set[Tuple[Step]]:
                 cmd=cmd_cargo_xbuild(
                     pdir=path, target_json=root_dir / "libs/d7abi/d7abi.json"
                 ),
-                env={"RUSTFLAGS": "-g -C opt-level=z"},
+                env={"RUSTFLAGS": "-g -C opt-level=s"},
             ),
             Step(
                 cmd=lambda _: cmd_ld(
                     linker_script=root_dir / "libs/d7abi/linker.ld",
                     output=root_dir / "build/modules/" / (path.name + ".elf"),
                     inputs=[p for p in dir_files(path / "target/d7abi/release/", ".a")],
+                )
+            ),
+            Step(
+                cmd=cmd_cp(
+                    root_dir / "build/modules/" / (path.name + ".elf"),
+                    root_dir / "build/modules/" / (path.name + "_orig.elf"),
                 )
             ),
             Step(cmd=cmd_strip(root_dir / "build/modules/" / (path.name + ".elf"))),
@@ -291,6 +307,7 @@ def step_cli_tools(root_dir) -> Set[Step]:
         for (pdir, target) in [
             (root_dir / "libs/d7staticfs/", "mkimg"),
             (root_dir / "libs/d7elfpack/", "d7elfpack"),
+            (root_dir / "libs/elf2bin/", "elfbin"),
         ]
     }
 

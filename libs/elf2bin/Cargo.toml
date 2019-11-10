@@ -1,0 +1,8 @@
+[package]
+name = "elf2bin"
+version = "0.1.0"
+authors = ["Hannes Karppila <hannes.karppila@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+num-traits = "0.2"

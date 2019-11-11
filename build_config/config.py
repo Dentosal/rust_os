@@ -263,32 +263,36 @@ def step_kernel_asm_routines(root_dir) -> Set[Step]:
     }
 
 
+def kernel_module(root_dir: Path, path: Path) -> Tuple[Step]:
+    return (
+        Step(
+            note=f"Module: {path.name}",
+            cmd=cmd_cargo_xbuild(
+                pdir=path, target_json=root_dir / "libs/d7abi/d7abi.json"
+            ),
+            env={"RUSTFLAGS": "-g -C opt-level=s"},
+        ),
+        Step(
+            cmd=lambda _: cmd_ld(
+                linker_script=root_dir / "libs/d7abi/linker.ld",
+                output=root_dir / "build/modules/" / (path.name + ".elf"),
+                inputs=[p for p in dir_files(path / "target/d7abi/release/", ".a")],
+            ),
+            freshvar=f"module_{path.name}_fresh",
+        ),
+        Step(
+            condition=lambda cfg: not cfg[f"module_{path.name}_fresh"],
+            cmd=cmd_cp(
+                root_dir / "build/modules/" / (path.name + ".elf"),
+                root_dir / "build/modules/" / (path.name + "_orig.elf"),
+            ),
+        ),
+        Step(cmd=cmd_strip(root_dir / "build/modules/" / (path.name + ".elf"))),
+    )
+
+
 def step_kernel_modules(root_dir) -> Set[Tuple[Step]]:
-    return {
-        (
-            Step(
-                cmd=cmd_cargo_xbuild(
-                    pdir=path, target_json=root_dir / "libs/d7abi/d7abi.json"
-                ),
-                env={"RUSTFLAGS": "-g -C opt-level=s"},
-            ),
-            Step(
-                cmd=lambda _: cmd_ld(
-                    linker_script=root_dir / "libs/d7abi/linker.ld",
-                    output=root_dir / "build/modules/" / (path.name + ".elf"),
-                    inputs=[p for p in dir_files(path / "target/d7abi/release/", ".a")],
-                )
-            ),
-            Step(
-                cmd=cmd_cp(
-                    root_dir / "build/modules/" / (path.name + ".elf"),
-                    root_dir / "build/modules/" / (path.name + "_orig.elf"),
-                )
-            ),
-            Step(cmd=cmd_strip(root_dir / "build/modules/" / (path.name + ".elf"))),
-        )
-        for path in subdirs(root_dir / "modules/")
-    }
+    return {kernel_module(root_dir, path) for path in subdirs(root_dir / "modules/")}
 
 
 def step_process_common(root_dir) -> Step:

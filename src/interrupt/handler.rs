@@ -50,7 +50,7 @@ pub(super) unsafe fn exception_pf(stack_frame: &InterruptStackFrame, error_code:
     panic!(
         "Exception: Page Fault with error code {:?} ({:?}) at {:#x}\n{:?}",
         error_code,
-        PageFaultErrorCode::from_bits(error_code).unwrap(),
+        PageFaultErrorCode::from_bits(error_code).expect("#PF code invalid"),
         x86_64::registers::control::Cr2::read().as_u64(),
         *stack_frame
     );
@@ -184,8 +184,6 @@ unsafe extern "C" fn process_interrupt_inner(
     use x86_64::registers::control::Cr2;
 
     let pid = SCHEDULER.get_running_pid().expect("No process running?");
-    // rprintln!("Process pid={} interrupt intvec={}", pid, interrupt);
-    rprint!("{:?};", pid);
 
     let stack_frame: InterruptStackFrameValue = (*stack_frame_ptr).clone();
     let page_table = PhysAddr::new_unchecked(page_table);
@@ -228,7 +226,8 @@ unsafe extern "C" fn process_interrupt_inner(
             fail(process::Error::PageFault(
                 stack_frame,
                 Cr2::read(),
-                PageFaultErrorCode::from_bits(error_code as u64).unwrap(),
+                PageFaultErrorCode::from_bits(error_code as u64)
+                    .expect("Invalid page fault error code"),
             ))
         },
         0x08 | 0x0a | 0x0b | 0x0c | 0x0d | 0x11 | 0x1e => fail(process::Error::InterruptWithCode(

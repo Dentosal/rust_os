@@ -166,14 +166,14 @@ process_interrupt:
 
 .error_code:
     ; Get error code (offset: pushes above + entry address)
-    mov r10, [rsp + stack_stored_registers * 8]
+    mov r15, [rsp + (stack_stored_registers + 1) * 8]
 
     ; Get interrupt stack frame (offset: pushes above + entry address + error code)
-    mov r10, [rsp + (stack_stored_registers + 1 + 0) * 8]
-    mov r11, [rsp + (stack_stored_registers + 1 + 1) * 8]
-    mov r12, [rsp + (stack_stored_registers + 1 + 2) * 8]
-    mov r13, [rsp + (stack_stored_registers + 1 + 3) * 8]
-    mov r14, [rsp + (stack_stored_registers + 1 + 4) * 8]
+    mov r10, [rsp + (stack_stored_registers + 1 + 1 + 0) * 8]
+    mov r11, [rsp + (stack_stored_registers + 1 + 1 + 1) * 8]
+    mov r12, [rsp + (stack_stored_registers + 1 + 1 + 2) * 8]
+    mov r13, [rsp + (stack_stored_registers + 1 + 1 + 3) * 8]
+    mov r14, [rsp + (stack_stored_registers + 1 + 1 + 4) * 8]
 
 .after_error_code:
 

@@ -5,6 +5,7 @@ use core::hint::unreachable_unchecked;
 pub enum SyscallNumber {
     exit = 0x00,
     get_pid = 0x01,
+    print_string = 0x02,
 }
 
 macro_rules! syscall {
@@ -51,4 +52,10 @@ pub fn exit(return_code: u64) -> ! {
 
 pub fn get_pid() -> u64 {
     unsafe { syscall!(SyscallNumber::get_pid).unwrap() }
+}
+
+pub fn print_string(s: &str)  -> Result<u64, u64> {
+    let len = s.len() as u64;
+    let slice = s.as_ptr() as u64;
+    unsafe { syscall!(SyscallNumber::print_string; len, slice) }
 }

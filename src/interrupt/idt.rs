@@ -28,7 +28,7 @@ impl Descriptor {
         let ist_offset = ist_index + 1;
         assert!(ist_offset < 0b1000);
         assert!(present || (pointer == 0 && ring == Ring0)); // pointer and ring must be 0 if not present
-                                                             // example options: present => 1, ring 0 => 00, interrupt gate => 0, interrupt gate => 1110
+        // example options: present => 1, ring 0 => 00, interrupt gate => 0, interrupt gate => 1110
         let options: u8 =
             0b0_00_0_1110 | ((ring as u8) << 5) | ((if present { 1 } else { 0 }) << 7);
 
@@ -45,7 +45,7 @@ impl Descriptor {
 
     pub fn new_no_ist(present: bool, pointer: u64, ring: PrivilegeLevel) -> Descriptor {
         assert!(present || (pointer == 0 && ring == Ring0)); // pointer and ring must be 0 if not present
-                                                             // example options: present => 1, ring 0 => 00, interrupt gate => 0, interrupt gate => 1110
+        // example options: present => 1, ring 0 => 00, interrupt gate => 0, interrupt gate => 1110
         let options: u8 =
             0b0_00_0_1110 | ((ring as u8) << 5) | ((if present { 1 } else { 0 }) << 7);
 

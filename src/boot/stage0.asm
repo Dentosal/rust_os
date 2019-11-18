@@ -3,12 +3,6 @@
 
 %include "src/asm_routines/constants.asm"
 
-; disk sector size in bytes
-%define sector_size 512
-
-; number of sectors, including this MBR (stage0)
-%define bootloader_sector_count 6
-
 ; locate stage1 at 0x7e00->
 %define stage1_loadpoint 0x7e00
 
@@ -20,13 +14,13 @@
 
 ; disk load buffer for kernel
 %define disk_load_buffer 0xa000
-%define disk_load_buffer_size (sectors_per_operation * sector_size)
+%define disk_load_buffer_size (sectors_per_operation * BOOT_DISK_SECTOR_SIZE)
 
 ; bootdrive location (1 byte)
 %define bootdrive 0x7b00
 
 ; checks
-%if (disk_load_buffer + disk_load_buffer_size) > loadpoint
+%if (disk_load_buffer + disk_load_buffer_size) > BOOT_KERNEL_LOADPOINT
 %define qq (disk_load_buffer + disk_load_buffer_size)
 %fatal "Disk load buffer overlaps with kernel load point"
 %endif
@@ -98,7 +92,7 @@ boot:
     ; Stages 1 and 2
     mov dword [da_packet.lba_low],  1
     mov dword [da_packet.lba_high], 0
-    mov  word [da_packet.count],    (bootloader_sector_count - 1)
+    mov  word [da_packet.count],    (BOOTLOADER_SECTOR_COUNT - 1)
     mov  word [da_packet.address],  stage1_loadpoint
     mov  word [da_packet.segment],  0
 
@@ -110,7 +104,7 @@ boot:
     jc print_error
 
     ; Load the kernel
-    mov ecx, bootloader_sector_count ; LBA
+    mov ecx, BOOTLOADER_SECTOR_COUNT ; LBA
 
 .load_loop:
 
@@ -130,11 +124,11 @@ boot:
         jc print_error
 
         ; Copy to correct position
-        ; loadpoint + (ecx - bootloader_sector_count) * sector_size
+        ; BOOT_KERNEL_LOADPOINT + (ecx - BOOTLOADER_SECTOR_COUNT) * sector_size
         mov edi, ecx
-        sub edi, bootloader_sector_count
+        sub edi, BOOTLOADER_SECTOR_COUNT
         shl edi, 9 ; multiply by sector size (2**9 = 512 = 0x200)
-        add edi, loadpoint
+        add edi, BOOT_KERNEL_LOADPOINT
 
         mov esi, disk_load_buffer
         mov ecx, disk_load_buffer_size
@@ -149,7 +143,7 @@ boot:
 
     ; Test if all loaded
     add ecx, sectors_per_operation
-    cmp ecx, (kernel_size_sectors - bootloader_sector_count)
+    cmp ecx, (kernel_size_sectors - BOOTLOADER_SECTOR_COUNT)
     jle .load_loop
 
     ; hide cursor by moving it out of the screen
@@ -215,7 +209,7 @@ da_packet:
 ; http://wiki.osdev.org/Detecting_Memory_(x86)#BIOS_Function:_INT_0x15.2C_EAX_.3D_0xE820
 ; output: bp = entry count, trashes all registers except esi
 get_memory_map:
-    mov di, (boot_tmp_mmap_buffer+2)
+    mov di, (BOOT_TMP_MMAP_BUFFER+2)
 	xor ebx, ebx               ; ebx must be 0 to start
 	xor bp, bp                 ; keep an entry count in bp
 	mov edx, 0x0534D4150       ; Place "SMAP" into edx
@@ -253,7 +247,7 @@ get_memory_map:
 	test ebx, ebx              ; if ebx resets to 0, list is complete
 	jne short .e820lp
 .e820f:
-	mov [boot_tmp_mmap_buffer], bp ; store the entry count just below the array
+	mov [BOOT_TMP_MMAP_BUFFER], bp ; store the entry count just below the array
 	clc                        ; there is "jc" on end of list to this point, so the carry must be cleared
 	ret
 .failed:

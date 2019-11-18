@@ -42,7 +42,7 @@ Vagrant.configure(2) do |config|
     sudo apt-get install cmake libssl-dev -y
 
     sudo python3.7 -m pip install --upgrade pip
-    sudo python3.7 -m pip install requests toml
+    sudo python3.7 -m pip install requests toml natsort
 
     #curl -sf https://raw.githubusercontent.com/phil-opp/binutils-gdb/rust-os/build-rust-os-gdb.sh | sh
 

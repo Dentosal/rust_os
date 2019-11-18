@@ -1,0 +1,51 @@
+[[constant]]
+name = "BOOT_KERNEL_LOADPOINT"
+type = "PhysAddr"
+value = "0x10000"
+
+[[constant]]
+name = "BOOT_TMP_MMAP_BUFFER"
+type = "PhysAddr"
+value = "0x2000"
+
+# Number of sectors, including MBR (stage0)
+[[constant]]
+name = "BOOTLOADER_SECTOR_COUNT"
+type = "u64"
+value = "6"
+
+# disk sector size in bytes
+[[constant]]
+name = "BOOT_DISK_SECTOR_SIZE"
+type = "u64"
+value = "0x200"
+
+[[constant]]
+name = "BOOT_TMP_PAGE_TABLE_P4"
+type = "PhysAddr"
+value = "0x6_0000"
+
+[[constant]]
+name = "BOOT_PAGE_TABLE_SECTION_START"
+type = "PhysAddr"
+value = "0x6_0000"
+
+[[constant]]
+name = "BOOT_PAGE_TABLE_P4"
+type = "PhysAddr"
+value = "BOOT_PAGE_TABLE_SECTION_START"
+
+[[constant]]
+name = "BOOT_PAGE_TABLE_P3"
+type = "PhysAddr"
+value = "(add BOOT_PAGE_TABLE_SECTION_START 0x1000)"
+
+[[constant]]
+name = "BOOT_PAGE_TABLE_P2"
+type = "PhysAddr"
+value = "(add BOOT_PAGE_TABLE_SECTION_START 0x2000)"
+
+[[constant]]
+name = "BOOT_PAGE_TABLE_SECTION_END"
+type = "PhysAddr"
+value = "(add BOOT_PAGE_TABLE_SECTION_START 0x2000)"

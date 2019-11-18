@@ -2,28 +2,4 @@
 ; putting any concrete data here WILL cause everything (including bootloader)
 ; to break
 
-; These constants MUST match the ones in Plan.md
-; If a constant defined here doesn't exists in that file, then it should be fine too
-
-; Kernel elf executable initial load point
-%define loadpoint 0x10000
-
-; GDT
-%define gdt 0x1000
-%define gdt_selector_zero 0x00
-%define gdt_selector_code 0x08
-%define gdt_selector_data 0x10
-
-; IDT
-%define idt 0x0
-%define idt_size 0x1000
-
-; Temporary memory map
-%define boot_tmp_mmap_buffer 0x2000
-
-; Boot stage page tables
-%define page_table_section_start    0x00060000
-%define page_table_p4               page_table_section_start
-%define page_table_p3               page_table_section_start + 0x1000
-%define page_table_p2               page_table_section_start + 0x2000
-%define page_table_section_end      page_table_section_start + 0x2000
+%include "build/constants.asm"

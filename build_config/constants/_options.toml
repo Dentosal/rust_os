@@ -1,0 +1,41 @@
+[codegen]
+enabled = ["nasm", "rust", "python", "dummy_json"]
+
+[lang.nasm]
+file_ext = ".asm"
+template = "%define $name $value"
+comment = "; $comment"
+format.boolean = ["1", "0"]
+
+[lang.nasm.type.PhysAddr]
+format.integer = { radix = "hex", underscores = 4 }
+
+[lang.nasm.type.VirtAddr]
+format.integer = { radix = "hex", underscores = 4 }
+
+[lang.nasm.type.size_bytes]
+format.integer = { radix = "hex", underscores = 4 }
+
+[lang.rust]
+file_ext = ".rs"
+template = "pub const $name: $type = $value;"
+import = "use $import;"
+comment = "// $comment"
+format.boolean = ["true", "false"]
+formatter = ["rustfmt"]
+
+[lang.rust.type.PhysAddr]
+value_prefix = "unsafe {PhysAddr::new_unchecked("
+value_suffix = ")}"
+format.integer = { radix = "hex", underscores = 4 }
+import = ["x86_64::PhysAddr"]
+
+[lang.rust.type.VirtAddr]
+value_prefix = "unsafe {VirtAddr::new_unchecked_raw("
+value_suffix = ")}"
+format.integer = { radix = "hex", underscores = 4 }
+import = ["x86_64::VirtAddr"]
+
+[lang.rust.type.size_bytes]
+name = "u64"
+format.integer = { radix = "hex", underscores = 4 }

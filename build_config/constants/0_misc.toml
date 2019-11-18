@@ -1,0 +1,83 @@
+# GDT & IDT
+[[constant]]
+name = "GDT_ADDR"
+type = "PhysAddr"
+value = "0x1000"
+
+[[constant]]
+name = "GDT_SELECTOR_ZERO"
+type = "PhysAddr"
+value = "0x00"
+
+[[constant]]
+name = "GDT_SELECTOR_CODE"
+type = "PhysAddr"
+value = "0x08"
+
+[[constant]]
+name = "GDT_SELECTOR_DATA"
+type = "PhysAddr"
+value = "0x10"
+
+[[constant]]
+name = "IDT_ADDR"
+type = "PhysAddr"
+value = "0x0"
+
+[[constant]]
+name = "IDT_SIZE"
+type = "PhysAddr"
+value = "0x1000"
+
+
+# Kernel position and size
+[[constant]]
+name = "KERNEL_LOCATION"
+type = "PhysAddr"
+value = "0x100_0000"
+
+[[constant]]
+name = "KERNEL_SIZE_LIMIT"
+type = "size_bytes"
+value = "0x20_0000" # TODO: find a solution, or document and test properly
+
+[[constant]]
+name = "KERNEL_END"
+type = "PhysAddr"
+value = "(add KERNEL_LOCATION KERNEL_SIZE_LIMIT)"
+
+# Paging
+[[constant]]
+name = "PAGE_SIZE_BYTES"
+type = "u64"
+value = "0x200_000"
+
+# Page table location
+[[constant]]
+name = "PAGE_TABLES_LOCATION"
+type = "PhysAddr"
+value = "0x1000_0000"
+
+[[constant]]
+name = "PAGE_TABLES_SIZE_LIMIT"
+type = "size_bytes"
+value = "0x100_0000"
+
+[[constant]]
+name = "PAGE_TABLES_END"
+type = "PhysAddr"
+value = "(add PAGE_TABLES_LOCATION PAGE_TABLES_SIZE_LIMIT)"
+
+
+# Mark for allocators
+[[constant]]
+name = "MEMORY_RESERVED_BELOW"
+type = "PhysAddr"
+value = "PAGE_TABLES_END"
+
+# Kernel stack for system calls
+[[constant]]
+name = "SYSCALL_STACK"
+type = "VirtAddr"
+value = "0x1100_0000"
+

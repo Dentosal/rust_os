@@ -1,0 +1,25 @@
+# Process virtual memory area
+[[constant]]
+name = "PROCESS_COMMON_CODE"
+type = "VirtAddr"
+value = "0x20_0000"
+
+[[constant]]
+name = "PROCESS_STACK"
+type = "VirtAddr"
+value = "0x40_0000"
+
+[[constant]]
+name = "PROCESS_STACK_SIZE_PAGES"
+type = "u64"
+value = "2"
+
+[[constant]]
+name = "PROCESS_STACK_SIZE_BYTES"
+type = "size_bytes"
+value = "(mul PAGE_SIZE_BYTES PROCESS_STACK_SIZE_PAGES)"
+
+[[constant]]
+name = "PROCESS_STACK_END"
+type = "VirtAddr"
+value = "(add PROCESS_STACK PROCESS_STACK_SIZE_BYTES)"

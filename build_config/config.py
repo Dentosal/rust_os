@@ -1,16 +1,22 @@
 from typing import Tuple, List, Set, Optional
 
+from natsort import natsorted
 from dataclasses import dataclass
+from functools import cmp_to_key
 from pathlib import Path
 from subprocess import run
-import re
-import toml
 import json
+import re
+import string
+import sys
+import toml
 
 from factory import *
 
 
-def dir_files(path: Path, suffix=None) -> Set[Path]:
+def dir_files(path: Path, suffix=None, filter_start=False) -> Set[Path]:
+    assert not suffix or suffix.startswith(".")
+
     def suffix_ok(s):
         if suffix is None:
             return True
@@ -19,7 +25,19 @@ def dir_files(path: Path, suffix=None) -> Set[Path]:
         else:
             return s in suffix
 
-    return {p for p in path.iterdir() if p.is_file() and suffix_ok(p.suffix)}
+    def start_ok(s):
+        if not filter_start:
+            return True
+        return not (s.startswith("_") or s.startswith("."))
+
+    return {
+        p
+        for p in path.iterdir()
+        if p.is_file() and suffix_ok(p.suffix) and start_ok(p.stem)
+    }
+
+def sort_paths(paths) -> List[Path]:
+    return natsorted(list(paths))
 
 
 def subdirs(path: Path) -> Set[Path]:
@@ -173,23 +191,70 @@ def cmd_readelf(input: Path, output: Path) -> Cmd:
     )
 
 
+def constcodegen_output_files(
+    target_dir: Path, options_toml: Path, constant_files: Path
+) -> Set[Path]:
+
+    args = ["constcodegen", "--dry-run", "-p", "-o", options_toml, "-t", target_dir]
+    for fp in constant_files:
+        args.append("-c")
+        args.append(fp)
+
+    p = run(args, capture_output=True)
+    if p.returncode != 0:
+        print(p.stderr.decode())
+        exit("Error: Failed to extract codegen targets")
+    files = p.stdout.decode().strip().split("\n")
+    return {Path(path) for path in files}
+
+
+def cmd_constcodegen(
+    target_dir: Path, options_toml: Path, constant_files: Set[Path]
+) -> Cmd:
+    def inner(cfg):
+        output_files = constcodegen_output_files(
+            target_dir, options_toml, constant_files
+        )
+        args = ["constcodegen", "-o", options_toml, "-t", target_dir]
+        for fp in constant_files:
+            args.append("-c")
+            args.append(fp)
+        return Cmd(
+            inputs={options_toml}.union(constant_files), output=output_files, cmd=args
+        )
+
+    return inner
+
+
+def step_codegen(root_dir: Path) -> Step:
+    return Step(
+        cmd=cmd_constcodegen(
+            root_dir / "build/",
+            root_dir / "build_config/constants/_options.toml",
+            sort_paths(dir_files(root_dir / "build_config/constants/", ".toml", True)),
+        )
+    )
+
+
 def step_boot_stage0(root_dir) -> Step:
     return Step(
+        requires={step_codegen},
         cmd=cmd_nasm(
             root_dir / "src/boot/stage0.asm",
             root_dir / "build/boot/stage0.bin",
             format="bin",
-        )
+        ),
     )
 
 
 def step_boot_stage1(root_dir) -> Step:
     return Step(
+        requires={step_codegen},
         cmd=cmd_nasm(
             root_dir / "src/boot/stage1.asm",
             root_dir / "build/boot/stage1.bin",
             format="bin",
-        )
+        ),
     )
 
 
@@ -197,11 +262,12 @@ def step_boot_stage2(root_dir) -> Tuple[Union[Step, Set[Step]]]:
     return (
         {
             Step(
+                requires={step_codegen},
                 cmd=cmd_nasm(
                     root_dir / "libs/d7boot/src/entry.asm",
                     root_dir / "build/boot/entry.elf",
                     format="elf64",
-                )
+                ),
             ),
             Step(
                 cmd=cmd_cargo_xbuild(
@@ -235,15 +301,17 @@ def step_boot_stage2(root_dir) -> Tuple[Union[Step, Set[Step]]]:
 
 def step_kernel_entry(root_dir) -> Step:
     return Step(
+        requires={step_codegen},
         cmd=cmd_nasm(
             root_dir / "src/entry.asm", root_dir / "build/entry.o", format="elf64"
-        )
+        ),
     )
 
 
 def step_kernel_rs(root_dir) -> Step:
     return (
         Step(
+            requires={step_codegen},
             cmd=cmd_cargo_xbuild(pdir=root_dir, target_json=root_dir / "d7os.json"),
             env={"RUSTFLAGS": "-g -C opt-level=s"},
         ),
@@ -253,11 +321,12 @@ def step_kernel_rs(root_dir) -> Step:
 def step_kernel_asm_routines(root_dir) -> Set[Step]:
     return {
         Step(
+            requires={step_codegen},
             cmd=cmd_nasm(
                 input=path,
                 output=root_dir / "build/asm_routines" / (path.stem + ".o"),
                 format="elf64",
-            )
+            ),
         )
         for path in dir_files(root_dir / "src/asm_routines", ".asm")
     }
@@ -297,11 +366,12 @@ def step_kernel_modules(root_dir) -> Set[Tuple[Step]]:
 
 def step_process_common(root_dir) -> Step:
     return Step(
+        requires={step_codegen},
         cmd=cmd_nasm(
             root_dir / "src/asm_misc/process_common.asm",
             root_dir / "build/process_common.bin",
             format="bin",
-        )
+        ),
     )
 
 

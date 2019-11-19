@@ -46,7 +46,12 @@ Vagrant.configure(2) do |config|
 
     #curl -sf https://raw.githubusercontent.com/phil-opp/binutils-gdb/rust-os/build-rust-os-gdb.sh | sh
 
+    if hash rustup; then
+    rustup update
+    else
     curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain nightly -y
+    fi
+    rustup component add rustfmt
 
     export PATH="$HOME/.cargo/bin:$HOME/.bin:$PATH"
     rustup component add rust-src
@@ -54,6 +59,12 @@ Vagrant.configure(2) do |config|
 
     git clone https://github.com/Dentosal/factory.git /tmp/factory || true
     cd /tmp/factory
+    git pull
+    PYTHON_SYS_EXECUTABLE=python3.7 cargo install --path . --force
+    cd -
+
+    git clone https://github.com/Dentosal/constcodegen.git /tmp/constcodegen || true
+    cd /tmp/constcodegen
     git pull
     PYTHON_SYS_EXECUTABLE=python3.7 cargo install --path . --force
     cd -

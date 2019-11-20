@@ -38,22 +38,22 @@ pub extern "C" fn _start() {
 #[panic_handler]
 #[no_mangle]
 extern "C" fn panic(info: &PanicInfo) -> ! {
-    use self::syscall::print_string;
+    use self::syscall::debug_print;
     unsafe {
         if let Some(location) = info.location() {
-            let _ = print_string(&format!(
+            let _ = debug_print(&format!(
                 "Error: file '{}', line {}",
                 location.file(),
                 location.line()
             ));
         } else {
-            let _ = print_string("Error: (location unavailable)");
+            let _ = debug_print("Error: (location unavailable)");
         }
 
         if let Some(msg) = info.message() {
-            let _ = print_string(&format!("  {:?}", msg));
+            let _ = debug_print(&format!("  {:?}", msg));
         } else {
-            let _ = print_string("  Info unavailable");
+            let _ = debug_print("  Info unavailable");
         }
 
         asm!("cli"::::"intel","volatile");

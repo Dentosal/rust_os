@@ -7,7 +7,7 @@ Number | Name           | Arguments (logical) | On success  | Short description
 -------|----------------|---------------------|-------------|-------------------
 0x00   | exit           | status_code         | !           | Terminate the calling process
 0x01   | get_pid        |                     | pid         | Get pid of the calling process
-0x02   | print_string   | len, string         | -           | Print a utf8 string to kernel terminal
+0x02   | debug_print    | str_len, str_ptr    | -           | Print a UTF-8 string to the kernel terminal
 0x03   | mem_set_size   | total_bytes         | total_bytes | Set dynamic memory size, rounds up to page size
 0x10   | proc_kill      | pid, method         | StatusCode  | Terminate a process
 0x11   | proc_exec      | path, args          | pid         | Execute a program

@@ -28,7 +28,6 @@ const MAX_PAGE_TABLES: u64 = HUGE_PAGE_SIZE / 0x1000;
 
 macro_rules! get_page {
     ($base:expr, $index:literal) => {{ Page::from_start_address($base + 0x1000u64 * $index).unwrap() }};
-
     ($base:expr) => {{ Page::from_start_address($base).unwrap() }};
 }
 
@@ -38,6 +37,16 @@ macro_rules! frame_addr {
 
 macro_rules! frame {
     ($base:expr, $index:expr) => {{ PhysFrame::from_start_address(frame_addr!($base, $index)).unwrap() }};
+}
+
+macro_rules! opt_addr {
+    ($entry:expr) => {
+        if $entry.is_unused() {
+            None
+        } else {
+            Some($entry.addr())
+        }
+    };
 }
 
 macro_rules! pt_flags {
@@ -55,8 +64,8 @@ macro_rules! pt_flags {
 pub struct PageMap {
     /// Physical address of the page table, and by extension, the P4 table
     phys_addr: PhysAddr,
-    /// Virtual address of the page table area
-    virt_addr: VirtAddr,
+    // /// Virtual address of the page table area
+    // virt_addr: VirtAddr,
     /// Next table will be placed to `PAGE_TABLE_AREA + PAGE_SIZE * page_count`,
     /// where `PAGE_SIZE` is `0x1000`.
     page_count: u64,
@@ -99,20 +108,44 @@ impl PageMap {
 
         Self {
             phys_addr,
-            virt_addr,
+            //virt_addr,
             page_count: 3,
         }
     }
 
-    /// Return physical address for given virtual address, if any available
+    /// Obtains `PageMap` object without initialization.
+    /// This object MUST NOT be modified.
+    #[must_use]
+    pub unsafe fn raw(phys_addr: PhysAddr) -> Self {
+        Self {
+            phys_addr,
+            page_count: 0,
+        }
+    }
+
+    /// Return the physical address for a given virtual address, if any available.
+    ///
+    /// This function does not flush the TLB.
+    ///
+    /// # Arguments
+    ///
+    /// * `curr_addr`: Virtual address of this table accessible with the current page tables
+    /// * `addr`: Virtual address to resolve
     pub unsafe fn translate(&self, curr_addr: VirtAddr, addr: VirtAddr) -> Option<PhysAddr> {
-        panic!("TODO: Offsets");
-        // let page = get_page!(addr);
-        // let p4: &PageTable = &*get_page!(curr_addr).start_address().as_ptr();
-        // let p3: &PageTable = &*p4[page.p4_index()].addr().as_ptr();
-        // let p2: &PageTable = &*p3[page.p3_index()].addr().as_ptr();
-        // assert!(p2[page.p2_index()].flags().contains(Flags::HUGE_PAGE));
-        // p2[page.p2_index()].addr()
+        let p4: &PageTable = &*curr_addr.as_ptr();
+
+        let next_addr = opt_addr!(p4[addr.p4_index()])?;
+        let offset = next_addr - self.p4_addr();
+        let p3: &PageTable = &*(curr_addr + offset).as_ptr();
+
+        let next_addr = opt_addr!(p3[addr.p3_index()])?;
+        let offset = next_addr - self.p4_addr();
+        let p2: &PageTable = &*(curr_addr + offset).as_ptr();
+
+        let next_addr = opt_addr!(p2[addr.p2_index()])?;
+        assert!(p2[addr.p2_index()].flags().contains(Flags::HUGE_PAGE));
+
+        Some(next_addr)
     }
 
     #[inline(always)]

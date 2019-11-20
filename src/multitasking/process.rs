@@ -41,6 +41,8 @@ pub enum Error {
     InterruptWithCode(u8, InterruptStackFrameValue, u32),
     /// Invalid system call number
     SyscallNumber(u64),
+    /// Invalid pointer passed to system call
+    Pointer(VirtAddr),
 }
 
 /// # A suspeneded process

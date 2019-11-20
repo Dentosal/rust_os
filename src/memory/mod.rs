@@ -13,13 +13,11 @@ pub mod paging;
 pub mod prelude;
 mod utils;
 
-use crate::multitasking::ElfImage;
+use crate::multitasking::{ElfImage, Process};
 use crate::util::elf_parser::{self, ELFData, ELFProgramHeader};
 
 pub use self::allocators::*;
-pub use self::constants::*;
 pub use self::prelude::*;
-pub use self::utils::*;
 
 use self::paging::PageMap;
 
@@ -57,13 +55,13 @@ impl MemoryController {
     }
 
     /// Allocates a contiguous virtual memory area
-    pub fn alloc_virtual_area(&mut self, size_in_pages: u64) -> virtual_allocator::Area {
+    pub fn alloc_virtual_area(&mut self, size_in_pages: u64) -> Area {
         let start = self.virtual_allocator.allocate(size_in_pages);
-        virtual_allocator::Area::new_pages(start, size_in_pages)
+        Area::new_pages(start, size_in_pages)
     }
 
     /// Frees a virtual memory area
-    pub fn free_virtual_area(&mut self, area: virtual_allocator::Area) {
+    pub fn free_virtual_area(&mut self, area: Area) {
         self.virtual_allocator.free(area.start, area.size_pages());
     }
 
@@ -73,7 +71,7 @@ impl MemoryController {
     /// This function alwrays flushes the TLB.
     ///
     /// Requires that the kernel page tables are active.
-    pub fn alloc_pages(&mut self, size_in_pages: usize, flags: Flags) -> virtual_allocator::Area {
+    pub fn alloc_pages(&mut self, size_in_pages: usize, flags: Flags) -> Area {
         self.alloc_both(size_in_pages, flags).1
     }
 
@@ -83,9 +81,7 @@ impl MemoryController {
     /// This function alwrays flushes the TLB.
     ///
     /// Requires that the kernel page tables are active.
-    pub fn alloc_both(
-        &mut self, size_in_pages: usize, flags: Flags,
-    ) -> (Vec<PhysFrame>, virtual_allocator::Area) {
+    pub fn alloc_both(&mut self, size_in_pages: usize, flags: Flags) -> (Vec<PhysFrame>, Area) {
         let mut frames: Vec<PhysFrame> = self.alloc_frames(size_in_pages);
 
         let start = self.virtual_allocator.allocate(size_in_pages as u64);
@@ -104,10 +100,68 @@ impl MemoryController {
             }
         }
 
-        (
-            frames,
-            virtual_allocator::Area::new_pages(start, size_in_pages as u64),
-        )
+        (frames, Area::new_pages(start, size_in_pages as u64))
+    }
+
+    /// Maps process page tables to (current) kernel tables.
+    /// Returns None if the area is not mapped in the process tables.
+    ///
+    /// This function flushes the TLB multiple times,
+    /// and the given area is mapped and flushed when returning.
+    ///
+    /// Requires that the kernel page tables are active.
+    pub fn process_map_area(
+        &mut self, process: &Process, area: Area, writable: bool,
+    ) -> Option<Area> {
+        let pt_frame = PhysFrame::from_start_address(process.page_table).unwrap();
+
+        let mut flags = Flags::PRESENT | Flags::NO_EXECUTE;
+        if writable {
+            flags |= Flags::WRITABLE;
+        }
+
+        unsafe {
+            // Map process tables to kernel memory
+            let tmp_area = self.alloc_virtual_area(1);
+            let tmp_page = Page::from_start_address(tmp_area.start).unwrap();
+            let pt_vaddr = tmp_area.start;
+            self.page_map
+                .map_to(
+                    PT_VADDR,
+                    tmp_page,
+                    pt_frame,
+                    Flags::PRESENT | Flags::NO_EXECUTE,
+                )
+                .flush();
+
+            // Resolve the start and end addresses
+            let process_pt = PageMap::raw(pt_frame.start_address());
+
+            let frame_addresses: Vec<PhysAddr> = area
+                .pages()
+                .map(|page| process_pt.translate(pt_vaddr, page))
+                .collect::<Option<_>>()?;
+
+            // Unmap the process page table
+            self.page_map.unmap(PT_VADDR, tmp_page).flush();
+            self.free_virtual_area(tmp_area);
+
+            // Map the are to kernel tables
+            let result_area = self.alloc_virtual_area(area.size_pages());
+            for (i, frame_start) in frame_addresses.into_iter().enumerate() {
+                self.page_map
+                    .map_to(
+                        PT_VADDR,
+                        Page::from_start_address(result_area.start + (i as u64) * PAGE_SIZE_BYTES)
+                            .unwrap(),
+                        PhysFrame::from_start_address(frame_start).unwrap(),
+                        flags,
+                    )
+                    .flush()
+            }
+
+            Some(result_area)
+        }
     }
 
     /// Loads a program from ELF ímage to physical memory.

@@ -2,7 +2,7 @@ use x86_64::VirtAddr;
 
 use alloc::vec::Vec;
 
-use super::super::prelude::PAGE_SIZE_BYTES;
+use super::super::prelude::*;
 
 const START_ADDR: VirtAddr = unsafe { VirtAddr::new_unchecked_raw(0x100_000_000) };
 const END_ADDR: VirtAddr = unsafe { VirtAddr::new_unchecked_raw(0x200_000_000) };
@@ -69,7 +69,7 @@ impl VirtualAllocator {
     }
 }
 
-/// Range start..end
+/// Range start..end, never empty
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Area {
     pub start: VirtAddr,
@@ -77,9 +77,18 @@ pub struct Area {
 }
 impl Area {
     pub fn new_pages(start: VirtAddr, size_pages: u64) -> Self {
+        debug_assert_ne!(size_pages, 0);
         Self {
             start,
             end: start + size_pages * PAGE_SIZE_BYTES,
+        }
+    }
+
+    pub fn new_containing_block(start: VirtAddr, size_bytes: u64) -> Self {
+        debug_assert_ne!(size_bytes, 0);
+        Self {
+            start: page_align(start, false),
+            end: page_align(start + size_bytes, true),
         }
     }
 
@@ -91,5 +100,19 @@ impl Area {
     #[inline]
     pub fn size_pages(&self) -> u64 {
         self.size_bytes() / PAGE_SIZE_BYTES
+    }
+
+    #[inline]
+    pub fn pages(&self) -> impl Iterator<Item = VirtAddr> {
+        (self.start.as_u64()..self.end.as_u64())
+            .step_by(PAGE_SIZE_BYTES as usize)
+            .map(VirtAddr::new)
+        // let result: Vec<VirtAddr> = Vec::new();
+        // let mut cursor = self.start;
+        // while cursor < self.end {
+        //     result.push(cursor);
+        //     cursor += PAGE_SIZE_BYTES;
+        // }
+        // result
     }
 }

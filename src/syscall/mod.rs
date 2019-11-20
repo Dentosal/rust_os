@@ -3,9 +3,12 @@ use x86_64::structures::idt::{InterruptStackFrame, InterruptStackFrameValue, Pag
 use x86_64::structures::paging::PageTableFlags as Flags;
 use x86_64::{PhysAddr, VirtAddr};
 
+use alloc::prelude::v1::String;
+
 use crate::memory;
 use crate::memory::paging::PageMap;
 use crate::memory::prelude::*;
+use crate::memory::Area;
 use crate::memory::PROCESS_STACK;
 use crate::multitasking::{process, Process, ProcessId, PROCMAN, SCHEDULER};
 
@@ -20,12 +23,36 @@ pub enum SyscallResult {
 }
 
 #[must_use]
-pub fn syscall(process: &Process, routine: u64, args: (u64, u64, u64, u64)) -> SyscallResult {
+pub fn syscall(
+    m: &mut memory::MemoryController, process: &Process, routine: u64, args: (u64, u64, u64, u64),
+) -> SyscallResult {
     match routine {
         // exit
         0x00 => SyscallResult::Terminate(process::ProcessResult::Completed(args.0)),
         // get_pid
         0x01 => SyscallResult::Success(process.id().as_u64()),
+        // print_string
+        0x02 => {
+            let (str_len, str_ptr_u64, _, _) = args;
+            let str_ptr = VirtAddr::new(str_ptr_u64);
+            let area = Area::new_containing_block(str_ptr, str_len);
+            let str_offset: u64 = str_ptr_u64 - area.start.as_u64();
+            if let Some(pmap) = m.process_map_area(process, area, false) {
+                let slice: &[u8] = unsafe {
+                    core::slice::from_raw_parts(
+                        (pmap.start + str_offset).as_ptr(),
+                        str_len as usize,
+                    )
+                };
+                let string = core::str::from_utf8(slice).expect("!UTF-8?");
+                rprintln!("[pid={}] {}", process.id().as_u64(), string);
+                SyscallResult::Success(0)
+            } else {
+                SyscallResult::Terminate(process::ProcessResult::Failed(process::Error::Pointer(
+                    str_ptr,
+                )))
+            }
+        },
         // Invalid system call number
         n => SyscallResult::Terminate(process::ProcessResult::Failed(
             process::Error::SyscallNumber(n),
@@ -70,7 +97,7 @@ pub fn handle_syscall(
         let reg_rdx: u64 = unsafe { ptr::read(stack_ptr.add(3)) };
         let reg_rcx: u64 = unsafe { ptr::read(stack_ptr.add(2)) };
 
-        let res = match syscall(&process, reg_rax, (reg_rdi, reg_rsi, reg_rdx, reg_rcx)) {
+        let res = match syscall(mm, &process, reg_rax, (reg_rdi, reg_rsi, reg_rdx, reg_rcx)) {
             SyscallResult::Success(v) => unsafe {
                 ptr::write(stack_ptr.add(0), 1); // Success
                 ptr::write(stack_ptr.add(5), v); // Value

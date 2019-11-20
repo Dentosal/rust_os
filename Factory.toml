@@ -1,5 +1,6 @@
 config = "build_config/config.py"
 target = "all"
+plan_dot = "build/plan.dot"
 stats_dot = "build/stats.dot"
 
 

@@ -16,7 +16,7 @@ fn round_up_sector(p: u64) -> u64 {
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
 
-    if args.len() == 0 {
+    if args.is_empty() {
         println!("usage: disk.img kernel_skip_index [filename=filepath ...]");
         return;
     }
@@ -38,7 +38,8 @@ fn main() {
             assert!(!e.name_matches(fs_filename), "Duplicate names not allowed");
         }
 
-        let f = File::open(rl_filename).expect(&format!("File not found: {:?}", rl_filename));
+        let f =
+            File::open(rl_filename).unwrap_or_else(|_| panic!("File not found: {:?}", rl_filename));
         let meta = f.metadata().expect("Metadata not found");
         assert!(meta.is_file());
 
@@ -74,7 +75,7 @@ fn main() {
         let mut f = File::open(disk_img_path).expect("Target file not found");
         let mut magic_check: [u8; 4] = [0; 4];
         f.seek(SeekFrom::Start(MBR_POSITION as u64)).unwrap();
-        f.read(&mut magic_check).unwrap();
+        f.read_exact(&mut magic_check).unwrap();
         assert_eq!(
             magic_check,
             HEADER_MAGIC.to_le_bytes(),
@@ -88,7 +89,7 @@ fn main() {
         let mut empty_check: [u8; 4] = [0; 4];
         f.seek(SeekFrom::Start((kernel_skip_index as u64) * SECTOR_SIZE))
             .unwrap();
-        f.read(&mut empty_check).unwrap();
+        f.read_exact(&mut empty_check).unwrap();
         assert_eq!(empty_check, [0; 4]);
     }
 
@@ -101,9 +102,9 @@ fn main() {
             .open(disk_img_path)
             .unwrap();
 
-        let mut lba_ptr: [u8; 4] = (kernel_skip_index as u32).to_le_bytes();
+        let lba_ptr: [u8; 4] = (kernel_skip_index as u32).to_le_bytes();
         f.seek(SeekFrom::Start(MBR_POSITION as u64)).unwrap();
-        f.write_all(&mut lba_ptr).unwrap();
+        f.write_all(&lba_ptr).unwrap();
     }
 
     {
@@ -143,7 +144,8 @@ fn main() {
 
         // Copy files to disk image
         for (i, (path, entry, _)) in files.clone().iter().enumerate() {
-            let mut rf = File::open(path).expect(&format!("Source file '{}' not found", path));
+            let mut rf =
+                File::open(path).unwrap_or_else(|_| panic!("Source file '{}' not found", path));
 
             files[i].2 = files_sectors_count as u32;
 
@@ -187,5 +189,5 @@ fn main() {
             host_path
         );
     }
-    println!("");
+    println!();
 }

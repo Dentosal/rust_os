@@ -54,7 +54,7 @@ pub fn load_module(path: &str) -> Option<ElfImage> {
         for byte_offset in 0..PAGE_SIZE_BYTES {
             let i = page_offset * PAGE_SIZE_BYTES + byte_offset;
             unsafe {
-                ptr::write(base.offset(i as isize), it.next().unwrap_or(0));
+                ptr::write(base.add(i as usize), it.next().unwrap_or(0));
             }
         }
     }

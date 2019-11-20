@@ -37,7 +37,7 @@ impl Allocator {
     /// Maps internal contiguous index to page start address
     /// Panics if out of bounds
     fn to_page_addr(&self, mut index: usize) -> PhysAddr {
-        for area in self.areas.iter().filter_map(|opt| opt.clone()) {
+        for area in self.areas.iter().filter_map(|opt| *opt) {
             let size = area.size_pages() as usize;
             if index < size {
                 return area.start() + Page::SIZE * (index as u64);

@@ -3,7 +3,7 @@
 const KERNEL_ELF_IMAGE_POSITION: usize = 0x10_000; // must match with plan.md
 const MAX_PH_ENTRY_COUNT: usize = 20;
 
-const ELF_MAGIC: u32 = 0x464c457F;
+const ELF_MAGIC: u32 = 0x464c457f;
 const ELF_BITNESS_64: u8 = 2;
 const ELF_LITTLE_ENDIAN: u8 = 1;
 const CURRENT_ELF_VERSION: u8 = 1;
@@ -96,9 +96,9 @@ pub unsafe fn parse_elf(ptr: usize) -> Result<ELFData, ELFParsingError> {
         Err(ELFParsingError::InvalidELF)
     } else if elf_header.endianness != ELF_LITTLE_ENDIAN {
         Err(ELFParsingError::WrongEndianness)
-    } else if elf_header.elf_version != CURRENT_ELF_VERSION {
-        Err(ELFParsingError::WrongVersion)
-    } else if elf_header.elf_version_2 != CURRENT_ELF_VERSION as u32 {
+    } else if elf_header.elf_version != CURRENT_ELF_VERSION
+        || elf_header.elf_version_2 != CURRENT_ELF_VERSION as u32
+    {
         Err(ELFParsingError::WrongVersion)
     } else if elf_header.instrucion_set != ELF_ARCH_X86_64 {
         Err(ELFParsingError::WrongInstrcutionSet)

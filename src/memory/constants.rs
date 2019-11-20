@@ -1,3 +1,4 @@
+#![allow(clippy::unreadable_literal)]
 //! Constants memory-related things
 
 use super::prelude::*;

@@ -3,8 +3,10 @@ use super::key::Key;
 
 use alloc::vec::Vec;
 
+type KeyEvent = (Key, KeyboardEventType);
+
 pub struct Keymap {
-    mapping: Option<Vec<(Vec<u8>, (Key, KeyboardEventType))>>,
+    mapping: Option<Vec<(Vec<u8>, KeyEvent)>>,
 }
 
 impl Keymap {

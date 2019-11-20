@@ -53,7 +53,7 @@ pub enum OpenMode {
     ReadWrite,
 }
 impl OpenMode {
-    fn can_read(&self) -> bool {
+    fn can_read(self) -> bool {
         use OpenMode::*;
         match self {
             Read => true,
@@ -61,7 +61,7 @@ impl OpenMode {
             ReadWrite => true,
         }
     }
-    fn can_write(&self) -> bool {
+    fn can_write(self) -> bool {
         use OpenMode::*;
         match self {
             Read => false,
@@ -115,7 +115,7 @@ impl FileDescriptor {
 }
 impl PartialEq for FileDescriptor {
     fn eq(&self, other: &FileDescriptor) -> bool {
-        return self.id != FileDescriptorId::invalid() && self.id == other.id;
+        self.id != FileDescriptorId::invalid() && self.id == other.id
     }
 }
 impl Drop for FileDescriptor {
@@ -141,17 +141,17 @@ impl RamFS {
     }
 
     fn focus_rec<T>(
-        mut cont: &mut Box<Node>,
-        mut path: Vec<&str>,
-        f: &mut dyn FnMut(&mut Box<Node>) -> Result<T, FileSystemError>,
-    ) -> Result<T, FileSystemError> {
+        cont: &mut Node, mut path: Vec<&str>,
+        f: &mut dyn FnMut(&mut Node) -> Result<T, FileSystemError>,
+    ) -> Result<T, FileSystemError>
+    {
         if path.is_empty() {
-            return f(&mut cont);
+            return f(cont);
         }
 
         match cont {
-            box Node::Leaf(_) => unimplemented!(),
-            box Node::Branch(ref mut branch) => {
+            Node::Leaf(_) => unimplemented!(),
+            Node::Branch(ref mut branch) => {
                 let name = path.remove(0);
 
                 let mut i = 0;
@@ -161,15 +161,13 @@ impl RamFS {
                     }
                     i += 1;
                 }
-                return Err(FileSystemError::DoesNotExist);
-            }
+                Err(FileSystemError::DoesNotExist)
+            },
         }
     }
 
     fn focus<T>(
-        &mut self,
-        path: Vec<&str>,
-        f: &mut dyn FnMut(&mut Box<Node>) -> Result<T, FileSystemError>,
+        &mut self, path: Vec<&str>, f: &mut dyn FnMut(&mut Node) -> Result<T, FileSystemError>,
     ) -> Result<T, FileSystemError> {
         RamFS::focus_rec(&mut self.tree, path, f)
     }
@@ -189,11 +187,11 @@ impl RamFS {
         let name = pre_path.pop().unwrap();
 
         self.focus(pre_path, &mut |cont| match *cont {
-            box Node::Leaf(_) => unimplemented!(),
-            box Node::Branch(ref mut b) => {
-                b.add_branch(box Node::Branch(Branch::new(name)));
+            Node::Leaf(_) => unimplemented!(),
+            Node::Branch(ref mut b) => {
+                b.add_branch(Node::Branch(Branch::new(name)));
                 Ok(())
-            }
+            },
         })
     }
 
@@ -207,11 +205,11 @@ impl RamFS {
         let name = pre_path.pop().unwrap();
 
         self.focus(pre_path, &mut |cont| match *cont {
-            box Node::Leaf(_) => unimplemented!(),
-            box Node::Branch(ref mut b) => {
-                b.add_branch(box Node::Leaf(Leaf::new(name)));
+            Node::Leaf(_) => unimplemented!(),
+            Node::Branch(ref mut b) => {
+                b.add_branch(Node::Leaf(Leaf::new(name)));
                 Ok(())
-            }
+            },
         })
     }
 
@@ -239,9 +237,7 @@ impl RamFS {
     }
 
     pub fn open_file(
-        &mut self,
-        path: Vec<&str>,
-        mode: OpenMode,
+        &mut self, path: Vec<&str>, mode: OpenMode,
     ) -> Result<FileDescriptor, FileSystemError> {
         // TODO: check that path+mode can be opened
         // ^: is it already open? etc.
@@ -261,16 +257,14 @@ impl RamFS {
         self.focus(
             fd.path.iter().map(|v| v.as_str()).collect(),
             &mut |cont| match cont {
-                box Node::Leaf(ref mut leaf) => Ok(leaf.bytes.len()),
-                box Node::Branch(_) => Err(FileSystemError::FileRequired),
+                Node::Leaf(ref mut leaf) => Ok(leaf.bytes.len()),
+                Node::Branch(_) => Err(FileSystemError::FileRequired),
             },
         )
     }
 
     pub fn file_seek(
-        &mut self,
-        fd: &mut FileDescriptor,
-        offset: usize,
+        &mut self, fd: &mut FileDescriptor, offset: usize,
     ) -> Result<usize, FileSystemError> {
         assert!(fd.id.is_valid());
 
@@ -284,9 +278,7 @@ impl RamFS {
     }
 
     pub fn file_read(
-        &mut self,
-        fd: &mut FileDescriptor,
-        count: Option<usize>,
+        &mut self, fd: &mut FileDescriptor, count: Option<usize>,
     ) -> Result<Vec<u8>, FileSystemError> {
         assert!(fd.id.is_valid());
 
@@ -299,15 +291,15 @@ impl RamFS {
         let result: Result<Vec<u8>, FileSystemError> = self.focus(
             fd.path.iter().map(|v| v.as_str()).collect(),
             &mut |cont| match cont {
-                box Node::Leaf(ref mut leaf) => {
-                    let iter = leaf.bytes.iter().skip(cursor);
+                Node::Leaf(ref mut leaf) => {
+                    let iter = leaf.bytes.iter().skip(cursor).copied();
                     if let Some(limit) = count {
-                        Ok(iter.take(limit).map(|v| *v).collect())
+                        Ok(iter.take(limit).collect())
                     } else {
-                        Ok(iter.map(|v| *v).collect())
+                        Ok(iter.collect())
                     }
-                }
-                box Node::Branch(_) => Err(FileSystemError::FileRequired),
+                },
+                Node::Branch(_) => Err(FileSystemError::FileRequired),
             },
         );
 
@@ -318,9 +310,7 @@ impl RamFS {
     }
 
     pub fn file_write(
-        &mut self,
-        fd: &mut FileDescriptor,
-        write_bytes: Vec<u8>,
+        &mut self, fd: &mut FileDescriptor, write_bytes: Vec<u8>,
     ) -> Result<(), FileSystemError> {
         assert!(fd.id.is_valid());
 
@@ -333,19 +323,19 @@ impl RamFS {
         let result = self.focus(
             fd.path.iter().map(|v| v.as_str()).collect(),
             &mut |node| match node {
-                box Node::Leaf(ref mut leaf) => {
-                    for i in 0..write_bytes.len() {
+                Node::Leaf(ref mut leaf) => {
+                    for byte in &write_bytes {
                         if cursor == leaf.bytes.len() {
-                            leaf.bytes.push(write_bytes[i]);
+                            leaf.bytes.push(*byte);
                         } else {
-                            leaf.bytes[cursor] = write_bytes[i];
+                            leaf.bytes[cursor] = *byte;
                         }
 
                         cursor += 1;
                     }
                     Ok(())
-                }
-                box Node::Branch(_) => Err(FileSystemError::FileRequired),
+                },
+                Node::Branch(_) => Err(FileSystemError::FileRequired),
             },
         );
 
@@ -353,6 +343,11 @@ impl RamFS {
             fd.cursor = cursor;
         }
         result
+    }
+}
+impl Default for RamFS {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -387,7 +382,7 @@ impl Node {
 #[derive(Debug)]
 struct Branch {
     name: String,
-    branches: Vec<Box<Node>>,
+    branches: Vec<Node>,
 }
 
 /// Leaf, a file
@@ -416,7 +411,7 @@ impl Branch {
         self.name.clone()
     }
 
-    pub fn add_branch(&mut self, branch: Box<Node>) {
+    pub fn add_branch(&mut self, branch: Node) {
         self.branches.push(branch);
     }
 }

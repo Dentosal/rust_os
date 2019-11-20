@@ -19,6 +19,8 @@ macro_rules! syscall {
     ($n:expr) => {syscall!($n; 0, 0, 0, 0)};
 }
 
+/// # Safety
+/// Allows any unsafe system call to be called, and doesn't protect from invalid arguments.
 pub unsafe fn syscall(number: u64, args: (u64, u64, u64, u64)) -> Result<u64, u64> {
     let mut success: u64;
     let mut result: u64;
@@ -61,6 +63,10 @@ pub fn print_string(s: &str) -> Result<u64, u64> {
     unsafe { syscall!(SyscallNumber::print_string; len, slice) }
 }
 
+
+/// # Safety
+/// Can be used to confuse memory manager, and generally shouldn't
+/// be used outside this library.
 pub unsafe fn mem_set_size(new_size_bytes: u64) -> Result<u64, u64> {
     syscall!(SyscallNumber::mem_set_size; new_size_bytes)
 }

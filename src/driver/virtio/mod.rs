@@ -30,7 +30,7 @@ impl FeatureBits {
         FeatureBits { fields }
     }
 
-    pub fn fields(&self) -> [u32; 2] {
+    pub fn fields(self) -> [u32; 2] {
         self.fields
     }
 
@@ -38,7 +38,7 @@ impl FeatureBits {
         self.fields[pos.0] &= !(1 << pos.1);
     }
 
-    pub fn is_enabled(&self, pos: (usize, u32)) -> bool {
+    pub fn is_enabled(self, pos: (usize, u32)) -> bool {
         self.fields[pos.0] & !(1 << pos.1) != 0
     }
 }

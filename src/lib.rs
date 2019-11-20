@@ -3,6 +3,9 @@
 #![forbid(bare_trait_objects)]
 #![forbid(tyvar_behind_raw_pointer)]
 #![deny(unused_assignments)]
+#![allow(clippy::inconsistent_digit_grouping)]
+#![allow(clippy::needless_range_loop)]
+#![allow(clippy::empty_loop)]
 // Code style (development time)
 #![allow(unused_macros)]
 #![allow(dead_code)]
@@ -13,6 +16,10 @@
 #![allow(unused_mut)]
 #![allow(unused_unsafe)]
 #![allow(unreachable_code)]
+#![allow(clippy::missing_safety_doc)]
+#![allow(clippy::unreadable_literal)]
+#![allow(clippy::cast_ptr_alignment)]
+#![allow(clippy::identity_op)]
 // Safety
 #![deny(overflowing_literals)]
 #![deny(safe_packed_borrows)]

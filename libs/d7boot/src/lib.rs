@@ -23,7 +23,6 @@
 #![feature(lang_items)]
 #![feature(naked_functions)]
 
-
 #[cfg(not(test))]
 use core::{mem, panic::PanicInfo, ptr};
 #[cfg(test)]
@@ -208,7 +207,7 @@ unsafe fn decompress(
         progress_indicator((if offset % 2 == 0 { 0x23 } else { 0x20 }) as u8); // blink #
 
         let next_bit = {
-            let b: u8 = ptr::read(src.offset(offset as isize));
+            let b: u8 = ptr::read(src.add(offset));
             let bit = b & (1 << bit_sc) == 0; // note the flip
 
             if bit_sc == 0 {

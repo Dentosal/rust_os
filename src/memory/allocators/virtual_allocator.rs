@@ -107,12 +107,5 @@ impl Area {
         (self.start.as_u64()..self.end.as_u64())
             .step_by(PAGE_SIZE_BYTES as usize)
             .map(VirtAddr::new)
-        // let result: Vec<VirtAddr> = Vec::new();
-        // let mut cursor = self.start;
-        // while cursor < self.end {
-        //     result.push(cursor);
-        //     cursor += PAGE_SIZE_BYTES;
-        // }
-        // result
     }
 }

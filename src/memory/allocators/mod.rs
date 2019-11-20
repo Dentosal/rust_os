@@ -1,4 +1,3 @@
-pub mod dma_allocator;
 pub(super) mod frame_allocator;
 pub mod process_common_code;
 pub(super) mod stack_allocator;

@@ -31,11 +31,9 @@ impl KeyReader {
                 let key = self.keymap.get(buf.clone());
                 if key.is_some() {
                     buf.clear();
-                } else {
-                    if buf.len() > BUFFER_SIZE_LIMIT {
-                        buf.clear();
-                        rprintln!("WARNING: Keyboard buffer full: detection error");
-                    }
+                } else if buf.len() > BUFFER_SIZE_LIMIT {
+                    buf.clear();
+                    rprintln!("WARNING: Keyboard buffer full: detection error");
                 }
                 key
             },

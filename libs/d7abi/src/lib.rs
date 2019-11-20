@@ -1,7 +1,10 @@
 // Lints
 #![forbid(private_in_public)]
 #![forbid(bare_trait_objects)]
+#![deny(unused_must_use)]
 #![deny(unused_assignments)]
+#![deny(clippy::missing_safety_doc)]
+#![allow(clippy::empty_loop)]
 // no_std
 #![no_std]
 // Unstable features
@@ -38,19 +41,19 @@ extern "C" fn panic(info: &PanicInfo) -> ! {
     use self::syscall::print_string;
     unsafe {
         if let Some(location) = info.location() {
-            print_string(&format!(
+            let _ = print_string(&format!(
                 "Error: file '{}', line {}",
                 location.file(),
                 location.line()
             ));
         } else {
-            print_string("Error: (location unavailable)");
+            let _ = print_string("Error: (location unavailable)");
         }
 
         if let Some(msg) = info.message() {
-            print_string(&format!("  {:?}", msg));
+            let _ = print_string(&format!("  {:?}", msg));
         } else {
-            print_string("  Info unavailable");
+            let _ = print_string("  Info unavailable");
         }
 
         asm!("cli"::::"intel","volatile");

@@ -18,7 +18,7 @@ use crate::util::elf_parser::ELFData;
 
 use super::constants::BOOT_TMP_PAGE_TABLE_P4;
 use super::prelude::*;
-use super::{dma_allocator, Mapper, Page, PhysFrame};
+use super::{Mapper, Page, PhysFrame};
 
 pub unsafe fn enable_nxe() {
     Efer::update(|flags| flags.set(EferFlags::NO_EXECUTE_ENABLE, true))
@@ -64,21 +64,6 @@ pub unsafe fn init(elf_metadata: ELFData) -> PageMap {
                 Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE,
             )
             .ignore();
-    }
-
-    // Identity map DMA memory allocator
-    let start_frame = PhysFrame::containing_address(dma_allocator::BASE);
-    let end_frame = PhysFrame::containing_address(dma_allocator::BASE + (dma_allocator::SIZE - 1));
-    for frame in PhysFrame::range_inclusive(start_frame, end_frame) {
-        unsafe {
-            new_table
-                .identity_map(
-                    PT_VADDR,
-                    frame,
-                    Flags::WRITABLE | Flags::PRESENT | Flags::NO_EXECUTE,
-                )
-                .ignore();
-        }
     }
 
     rprintln!("Switching to new table...");

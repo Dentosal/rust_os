@@ -9,7 +9,7 @@ use huffman_compress::Book;
 pub fn compress(book: Book<u8>, data: Vec<u8>) -> Vec<u8> {
     // rle::compress(huffman::compress(book, data))
     // huffman::compress(book, rle::compress(data))
-    huffman::compress(book,data)
+    huffman::compress(book, data)
 }
 
 pub fn decompress(bittree: BitVec, frq_table: Vec<u8>, compressed: Vec<u8>) -> Vec<u8> {

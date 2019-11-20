@@ -156,7 +156,7 @@ pub enum Key {
     PrintScreen,
 }
 impl Key {
-    pub fn produces_text(&self) -> Option<String> {
+    pub fn produces_text(self) -> Option<String> {
         use self::Key::*;
         let s = match self {
             K0 => "0",
@@ -215,10 +215,6 @@ impl Key {
         }
         .to_owned();
 
-        if s.is_empty() {
-            None
-        } else {
-            Some(s.to_owned())
-        }
+        if s.is_empty() { None } else { Some(s) }
     }
 }

@@ -298,7 +298,7 @@ impl MemoryController {
 
                     // Copy p_filesz bytes from p_offset to target
                     ptr::copy_nonoverlapping(
-                        elf_image.as_ptr().offset(ph.offset as isize),
+                        elf_image.as_ptr().add(ph.offset as usize),
                         area.start.as_mut_ptr(),
                         ph.size_in_file as usize,
                     );

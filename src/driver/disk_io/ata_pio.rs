@@ -177,15 +177,16 @@ impl AtaPio {
 
         let lba48_supported = (data[83] & (1 << 10)) != 0;
         let lba28_sectors = (data[60] as u32) | ((data[61] as u32) << 0x10);
-        let mut lba48_sectors: Option<u64> = None;
-        if lba48_supported {
-            lba48_sectors = Some(
+        let lba48_sectors: Option<u64> = if lba48_supported {
+            Some(
                 (data[100] as u64)
                     | ((data[101] as u64) << 0x10)
                     | ((data[102] as u64) << 0x20)
                     | ((data[103] as u64) << 0x30),
-            );
-        }
+            )
+        } else {
+            None
+        };
 
         if lba28_sectors == 0 && (lba48_sectors.is_none() || lba48_sectors == Some(0)) {
             panic!("ATA_PIO: The drive controller does not support LBA.");

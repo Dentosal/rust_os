@@ -65,7 +65,7 @@ fn check_function(loc: DeviceLocation) -> Vec<Device> {
 fn check_bus(bus: u8) -> Vec<Device> {
     (0..=32)
         .map(|dev| check_device(bus, dev))
-        .flat_map(|v| v)
+        .flatten()
         .collect()
 }
 

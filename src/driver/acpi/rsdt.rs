@@ -1,7 +1,7 @@
 //! This module is only used to retrieve XSDT address from RSDT.
 //! More info: http://wiki.osdev.org/RSDP
 
-const RSDP_SIGNATURE: &'static [u8; 8] = b"RSD PTR ";
+const RSDP_SIGNATURE: &[u8; 8] = b"RSD PTR ";
 
 #[repr(C, packed)]
 struct RSDPDescriptor {
@@ -62,7 +62,7 @@ pub unsafe fn get_rsdp_and_parse() -> Result<u64, RSDPParseError> {
 /// Verifying checksums: http://wiki.osdev.org/RSDP#Checksum_validation
 unsafe fn parse_rsdp(p: usize) -> Result<u64, RSDPParseError> {
     // Version detection and first checksum field
-    let ref basic_rsdpd: RSDPDescriptor = *(p as *const _);
+    let basic_rsdpd: &RSDPDescriptor = &*(p as *const _);
     // let basic_rsdpd_bytes: [u8; size_of::<RSDPDescriptor>()] = *(p as *const _);
     let basic_rsdpd_bytes: [u8; 20] = *(p as *const _); // XXX: size_of is not const-expr, counted bytes by hand
 
@@ -72,16 +72,16 @@ unsafe fn parse_rsdp(p: usize) -> Result<u64, RSDPParseError> {
         return Err(RSDPParseError::UnsupportedVersion);
     }
     // Checksum
-    let csum_1: u32 = basic_rsdpd_bytes.iter().fold(0, |a, &b| a + b) as u32;
+    let csum_1: u32 = basic_rsdpd_bytes.iter().map(|b| *b as u32).sum();
     if (csum_1 & 0xFF) != 0 {
         return Err(RSDPParseError::IncorrectChecksum);
     }
 
     // Full structure, find XSDT and check second checksum
-    let ref rsdpd: RSDPDescriptor20 = *(p as *const _);
+    let rsdpd: &RSDPDescriptor20 = &*(p as *const _);
     // let rsdpd_new_bytes: [u8; size_of::<RSDPDescriptor>()] = *(p as *const _);
     let rsdpd_new_bytes: [u8; 64] = *(p as *const _); // XXX: size_of is not const-expr, counted bytes by hand
-    let csum_2: u32 = rsdpd_new_bytes.iter().fold(0, |a, &b| a + b) as u32;
+    let csum_2: u32 = rsdpd_new_bytes.iter().map(|b| *b as u32).sum();
     if (csum_2 & 0xFF) != 0 {
         return Err(RSDPParseError::IncorrectChecksum);
     }

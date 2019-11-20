@@ -126,7 +126,7 @@ impl NIC for VirtioNet {
             ptr::write_volatile(buffer as *mut NetHeader, header);
             for i in 0..packet.len() {
                 ptr::write_volatile(
-                    buffer.offset(mem::size_of::<NetHeader>() as isize + i as isize),
+                    buffer.add(mem::size_of::<NetHeader>() + i),
                     packet[i],
                 );
             }
@@ -134,14 +134,14 @@ impl NIC for VirtioNet {
 
         unsafe {
             for i in 0..(mem::size_of::<NetHeader>()) {
-                rprint!("{:02x} ", ptr::read_volatile(buffer.offset(i as isize)));
+                rprint!("{:02x} ", ptr::read_volatile(buffer.add(i)));
             }
             rprintln!("\nHeader over");
             for i in 0..packet.len() {
                 rprint!(
                     "{:02x} ",
                     ptr::read_volatile(
-                        buffer.offset(mem::size_of::<NetHeader>() as isize + i as isize)
+                        buffer.add(mem::size_of::<NetHeader>() + i)
                     )
                 );
             }
@@ -151,12 +151,12 @@ impl NIC for VirtioNet {
         unsafe {
             assert!(ptr::read_volatile(buffer) == 0);
             assert!(
-                ptr::read_volatile(buffer.offset(mem::size_of::<NetHeader>() as isize))
+                ptr::read_volatile(buffer.add(mem::size_of::<NetHeader>()))
                     == packet[0]
             );
             assert!(
                 ptr::read_volatile(
-                    buffer.offset((mem::size_of::<NetHeader>() + packet.len() - 1) as isize)
+                    buffer.add((mem::size_of::<NetHeader>() + packet.len() - 1))
                 ) == packet[packet.len() - 1]
             );
         }

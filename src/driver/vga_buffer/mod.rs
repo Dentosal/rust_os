@@ -43,15 +43,15 @@ impl CellColor {
         CellColor((background as u8) << 4 | (foreground as u8))
     }
 
-    pub fn foreground(&self) -> Color {
+    pub fn foreground(self) -> Color {
         unsafe { mem::transmute::<u8, Color>(self.0 & 0xf) }
     }
 
-    pub fn background(&self) -> Color {
+    pub fn background(self) -> Color {
         unsafe { mem::transmute::<u8, Color>((self.0 & 0xf0) >> 4) }
     }
 
-    pub fn invert(&self) -> CellColor {
+    pub fn invert(self) -> CellColor {
         CellColor::new(self.background(), self.foreground())
     }
 }

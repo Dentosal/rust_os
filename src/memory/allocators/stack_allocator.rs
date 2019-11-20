@@ -32,8 +32,8 @@ impl StackAllocator {
     ) -> Option<Stack> {
         assert!(size_in_pages > 0);
 
-        // Clone the range, since we only want to change it on success
-        let mut range = self.range.clone();
+        // Copy the range, since we only want to change it on success
+        let mut range = self.range;
 
         // try to allocate the stack pages and a guard page
         let guard_page = range.next();

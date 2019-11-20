@@ -36,7 +36,7 @@ unsafe fn load_common_code(mem_ctrl: &mut MemoryController) {
 
     let base: *mut u8 = common_addr.as_mut_ptr();
     for (offset, byte) in bytes.into_iter().enumerate() {
-        ptr::write(base.offset(offset as isize), byte);
+        ptr::write(base.add(offset), byte);
     }
 
     mem_ctrl

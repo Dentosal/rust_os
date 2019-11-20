@@ -4,13 +4,12 @@
 #![forbid(private_in_public)]
 #![forbid(bare_trait_objects)]
 #![deny(unused_assignments)]
-
 #![no_std]
 
 extern crate spin;
 
+use core::alloc::{Alloc, AllocErr, GlobalAlloc, Layout};
 use core::ptr::NonNull;
-use core::alloc::{GlobalAlloc, Alloc, AllocErr, Layout};
 
 pub const HEAP_START: u64 = 0x40_000_000; // At 1 GiB
 pub const HEAP_SIZE: u64 = 0x1_000_000;
@@ -47,7 +46,11 @@ pub struct BumpAllocator {
 
 impl BumpAllocator {
     pub const fn new(heap_start: u64, heap_end: u64) -> Self {
-        Self { heap_start, heap_end, next: AtomicU64::new(heap_start) }
+        Self {
+            heap_start,
+            heap_end,
+            next: AtomicU64::new(heap_start),
+        }
     }
 }
 
@@ -61,14 +64,17 @@ unsafe impl<'a> Alloc for &'a BumpAllocator {
 
             if alloc_end <= self.heap_end {
                 // update the `next` pointer if it still has the value `current_next`
-                let next_now = self.next.compare_and_swap(current_next, alloc_end,
-                    Ordering::Relaxed);
+                let next_now =
+                    self.next
+                        .compare_and_swap(current_next, alloc_end, Ordering::Relaxed);
                 if next_now == current_next {
                     // next address was successfully updated, allocation succeeded
-                    return Ok(NonNull::new(alloc_start as *mut _).expect("Tried to alloc null ptr"));
+                    return Ok(
+                        NonNull::new(alloc_start as *mut _).expect("Tried to alloc null ptr")
+                    );
                 }
             } else {
-                return Err(AllocErr)
+                return Err(AllocErr);
             }
         }
     }
@@ -78,25 +84,30 @@ unsafe impl<'a> Alloc for &'a BumpAllocator {
     }
 }
 
-
 pub struct GlobAlloc {
-    alloc: Mutex<BumpAllocator>
+    alloc: Mutex<BumpAllocator>,
 }
 impl GlobAlloc {
     pub const fn new(alloc: BumpAllocator) -> Self {
         Self {
-            alloc: Mutex::new(alloc)
+            alloc: Mutex::new(alloc),
         }
     }
 }
 unsafe impl GlobalAlloc for GlobAlloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let alloc = self.alloc.lock();
-        (&*alloc).alloc(layout).expect("Could not allocate").as_mut()
+        (&*alloc)
+            .alloc(layout)
+            .expect("Could not allocate")
+            .as_mut()
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         let alloc = self.alloc.lock();
-        (&*alloc).dealloc(NonNull::new(ptr as *mut _).expect("Cannot deallocate null pointer"), layout);
+        (&*alloc).dealloc(
+            NonNull::new(ptr as *mut _).expect("Cannot deallocate null pointer"),
+            layout,
+        );
     }
 }

@@ -14,11 +14,11 @@ use self::scheduler::Scheduler;
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ProcessId(u64);
 impl ProcessId {
-    fn next(&self) -> Self {
+    fn next(self) -> Self {
         Self(self.0.wrapping_add(1))
     }
 
-    pub fn as_u64(&self) -> u64 {
+    pub fn as_u64(self) -> u64 {
         self.0
     }
 }

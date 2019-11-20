@@ -42,12 +42,7 @@ macro_rules! init_array(
 fn read_int<T: PrimInt + Unsigned + ToPrimitive + NumCast>(f: &mut File) -> T {
     let mut result: T = T::zero();
 
-    let mut bytes = f
-        .bytes()
-        .take(size_of::<T>())
-        .map(|x| Some(x))
-        .chain(None)
-        .collect::<Vec<_>>();
+    let mut bytes = f.bytes().take(size_of::<T>()).map(Some).chain(None).collect::<Vec<_>>();
 
     bytes.reverse();
 
@@ -67,7 +62,7 @@ fn read_int_at<T: PrimInt + Unsigned + ToPrimitive + NumCast>(f: &mut File, pos:
 
 fn check_at_eq(f: &mut File, pos: u64, target: &[u8], msg: &str) {
     f.seek(SeekFrom::Start(pos)).unwrap();
-    for (a, t) in f.bytes().map(|x| Some(x)).chain(None).zip(target.iter()) {
+    for (a, t) in f.bytes().map(Some).chain(None).zip(target.iter()) {
         if let Some(b) = a {
             assert_eq!(&b.unwrap(), t, "Byte mismatch in {}", msg);
         } else {
@@ -102,7 +97,7 @@ struct ProgramHeader {
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
 
-    if args.len() == 0 {
+    if args.is_empty() {
         println!("usage: in_elf out_elf");
         return;
     }
@@ -110,7 +105,7 @@ fn main() {
     let in_path = &args[0];
     let out_path = &args[1];
 
-    let mut f = File::open(in_path).expect(&format!("Input file not found ({})", in_path));
+    let mut f = File::open(in_path).unwrap_or_else(|_| panic!("Input file not found ({})", in_path));
 
     check_elf(&mut f);
 
@@ -203,16 +198,16 @@ fn main() {
     assert_eq!(bittree.len(), 511);
 
     // Write new file, from scratch
-    let mut outf = File::create(out_path).expect(&format!("Could not create output file ({})", out_path));
+    let mut outf = File::create(out_path).unwrap_or_else(|_| panic!("Could not create output file ({})", out_path));
 
     // https://en.wikipedia.org/wiki/Executable_and_Linkable_Format#File_header
     #[rustfmt::skip]
     let file_header: [u8; 0x40] = [
         // Magic
         0x7f,
-        'E' as u8,
-        'L' as u8,
-        'F' as u8,
+        b'E',
+        b'L',
+        b'F',
         // Class: 64bit, Data: little-endian, Version: 1, ABI: System V
         2, 1, 1, 0,
         // ABI version (meaning not defined), 7x padding
@@ -275,7 +270,7 @@ fn main() {
     // One more program header, containing info for the decompression tables
 
     // Segment type: 0x60000000 OS Specific (first available)
-    outf.write_all(&0x60000000u32.to_le_bytes()).unwrap();
+    outf.write_all(&0x6000_0000u32.to_le_bytes()).unwrap();
     // Flags: No
     outf.write_all(&0u32.to_le_bytes()).unwrap();
     // Offset: using offset counter

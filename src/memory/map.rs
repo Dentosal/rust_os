@@ -13,12 +13,12 @@ use super::prelude::*;
 pub const MAX_OK_ENTRIES: usize = 20;
 
 #[rustfmt::skip]
-fn read_item(index: isize) -> (u64, u64, u32, u32) {
+fn read_item(index: usize) -> (u64, u64, u32, u32) {
     let base = (BOOT_TMP_MMAP_BUFFER + 2u64).as_u64() as *mut u8;
-    let e_start:        u64 = unsafe { ptr::read_volatile(base.offset(24*index+ 0) as *mut u64) };
-    let e_size:         u64 = unsafe { ptr::read_volatile(base.offset(24*index+ 8) as *mut u64) };
-    let e_type:         u32 = unsafe { ptr::read_volatile(base.offset(24*index+16) as *mut u32) };
-    let e_acpi_data:    u32 = unsafe { ptr::read_volatile(base.offset(24*index+20) as *mut u32) };
+    let e_start:        u64 = unsafe { ptr::read_unaligned(base.add(24*index     ) as *mut u64) };
+    let e_size:         u64 = unsafe { ptr::read_unaligned(base.add(24*index +  8) as *mut u64) };
+    let e_type:         u32 = unsafe { ptr::read_unaligned(base.add(24*index + 16) as *mut u32) };
+    let e_acpi_data:    u32 = unsafe { ptr::read_unaligned(base.add(24*index + 20) as *mut u32) };
     (e_start, e_size, e_type, e_acpi_data)
 }
 
@@ -62,7 +62,7 @@ pub(crate) fn load_memory_map() -> [Option<PhysMemoryRange>; MAX_OK_ENTRIES] {
 
         let entry_count: u8 =
             unsafe { ptr::read_volatile(BOOT_TMP_MMAP_BUFFER.as_u64() as *mut u8) };
-        for index in 0..(entry_count as isize) {
+        for index in 0..(entry_count as usize) {
             let (e_start, e_size, e_type, e_acpi_data) = read_item(index);
             rprintln!(
                 "Section {:>3}: {:>16x}-{:>16x}: type: {:#x}, acpi: {:#x}",

@@ -106,7 +106,7 @@ pub fn init() {
     handlers[0x2e] = irq_handler!(exception_irq14);
     handlers[0x2e] = irq_handler!(exception_irq15);
 
-    for index in 0..=(idt::ENTRY_COUNT - 1) {
+    for index in 0..idt::ENTRY_COUNT {
         unsafe {
             ptr::write_volatile(
                 (idt::ADDRESS + index * mem::size_of::<idt::Descriptor>()) as *mut _,

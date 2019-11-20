@@ -59,9 +59,7 @@ impl FileEntry {
     pub fn to_bytes(&self) -> [u8; 16] {
         let mut result = [0; 16];
 
-        for i in 0..12 {
-            result[i] = self.name[i];
-        }
+        result[..12].clone_from_slice(&self.name[..12]);
 
         for (i, &b) in self.size.to_le_bytes().iter().enumerate() {
             result[12 + i] = b;
@@ -80,7 +78,7 @@ impl FileEntry {
 
     pub fn name_matches(&self, name: &str) -> bool {
         let mut trimmed: &[u8] = &self.name;
-        while trimmed.len() > 0 && trimmed[trimmed.len() - 1] == 0 {
+        while (!trimmed.is_empty()) && trimmed[trimmed.len() - 1] == 0 {
             trimmed = &trimmed[..trimmed.len() - 1];
         }
         trimmed == name.as_bytes()

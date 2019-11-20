@@ -110,6 +110,9 @@ pub struct SystemTimeError(Duration);
 
 impl Instant {
     /// Used by the system clock as constructor
+    ///
+    /// # Safety
+    ///
     /// Unsafe to prevent accidental use, as well as to remind about
     /// the monotonicity guarantees
     pub unsafe fn create(ts: TimeSpec) -> Self {
@@ -141,14 +144,14 @@ impl Instant {
     /// `Instant` (which means it's inside the bounds of the underlying data structure), `None`
     /// otherwise.
     pub fn checked_add(&self, duration: Duration) -> Option<Instant> {
-        self.0.checked_add_duration(&duration).map(|t| Instant(t))
+        self.0.checked_add_duration(&duration).map(Instant)
     }
 
     /// Returns `Some(t)` where `t` is the time `self - duration` if `t` can be represented as
     /// `Instant` (which means it's inside the bounds of the underlying data structure), `None`
     /// otherwise.
     pub fn checked_sub(&self, duration: Duration) -> Option<Instant> {
-        self.0.checked_sub_duration(&duration).map(|t| Instant(t))
+        self.0.checked_sub_duration(&duration).map(Instant)
     }
 }
 

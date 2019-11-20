@@ -6,10 +6,10 @@ use crate::driver::keyboard;
 pub fn wait_enter() {
     loop {
         if let Some(event) = { (*keyboard::KEYBOARD.lock()).pop_event() } {
-            if event.event_type == keyboard::KeyboardEventType::Press {
-                if event.key == keyboard::Key::Enter {
-                    break;
-                }
+            if event.event_type == keyboard::KeyboardEventType::Press
+                && event.key == keyboard::Key::Enter
+            {
+                break;
             }
         }
     }
@@ -26,7 +26,7 @@ fn read_line() -> String {
                         buffer.pop();
                     }
                 } else if let Some(c) = event.key.produces_text() {
-                    if c == "\n".to_owned() {
+                    if c == "\n" {
                         return buffer;
                     }
                     rprint!("{}", c);

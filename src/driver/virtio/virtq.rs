@@ -4,7 +4,6 @@ use core::ptr;
 use cpuio::UnsafePort;
 
 use crate::driver::pci;
-use crate::memory::dma_allocator::DMA_ALLOCATOR;
 use crate::memory::prelude::PhysAddr;
 use crate::memory::Page;
 
@@ -121,10 +120,11 @@ impl VirtQueue {
         assert!(vq_size_bytes % Page::SIZE == 0);
 
         let pointer = {
-            DMA_ALLOCATOR
-                .lock()
-                .allocate_blocks((vq_size_bytes / Page::SIZE) as usize)
-                .expect("Could not allocate DMA buffer for VirtIO")
+            unimplemented!("DMA allocator not implmented")
+            // DMA_ALLOCATOR
+            //     .lock()
+            //     .allocate_blocks((vq_size_bytes / Page::SIZE) as usize)
+            //     .expect("Could not allocate DMA buffer for VirtIO")
         };
 
         VirtQueue {
@@ -148,7 +148,7 @@ impl VirtQueue {
         // * empty used
         for i in 0..VirtQueue::calc_size(self.queue_size) {
             unsafe {
-                ptr::write_volatile(self.pointer.offset(i as isize), 0u8);
+                ptr::write_volatile(self.pointer.add(i as usize), 0u8);
             }
         }
     }
@@ -197,7 +197,7 @@ impl VirtQueue {
         unsafe {
             let p = self
                 .pointer
-                .offset((index * (mem::size_of::<VirtQueueDesc>() as u16)) as isize);
+                .add((index * (mem::size_of::<VirtQueueDesc>() as u16)) as usize);
             ptr::write_volatile(p as *mut VirtQueueDesc, desc);
         }
     }
@@ -207,7 +207,7 @@ impl VirtQueue {
         unsafe {
             let p = self
                 .pointer
-                .offset(VirtQueue::calc_sizes(self.queue_size).0 as isize);
+                .add(VirtQueue::calc_sizes(self.queue_size).0 as usize);
             ptr::read_volatile(p as *const AvailableHeader)
         }
     }
@@ -217,7 +217,7 @@ impl VirtQueue {
         unsafe {
             let p = self
                 .pointer
-                .offset(VirtQueue::calc_sizes(self.queue_size).0 as isize);
+                .add(VirtQueue::calc_sizes(self.queue_size).0 as usize);
             ptr::write_volatile(p as *mut AvailableHeader, header);
         }
     }
@@ -227,10 +227,10 @@ impl VirtQueue {
         assert!(index < self.queue_size);
 
         unsafe {
-            let p = self.pointer.offset(
+            let p = self.pointer.add(
                 (VirtQueue::calc_sizes(self.queue_size).0
                     + (sizeof!(AvailableHeader) as u64)
-                    + ((index as u64) * (sizeof!(AvailableItem) as u64))) as isize,
+                    + ((index as u64) * (sizeof!(AvailableItem) as u64))) as usize,
             );
             ptr::write_volatile(p as *mut AvailableItem, AvailableItem { desc_index });
         }

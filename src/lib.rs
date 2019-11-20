@@ -23,6 +23,7 @@
 #![feature(abi_x86_interrupt)]
 #![feature(alloc_prelude)]
 #![feature(allocator_api)]
+#![feature(alloc_error_handler)]
 #![feature(asm)]
 #![feature(box_into_raw_non_null)]
 #![feature(box_syntax, box_patterns)]
@@ -172,9 +173,8 @@ static HEAP_ALLOCATOR: d7alloc::GlobAlloc = d7alloc::GlobAlloc::new(d7alloc::Bum
     d7alloc::HEAP_START + d7alloc::HEAP_SIZE,
 ));
 
-#[lang = "oom"]
-#[no_mangle]
-extern "C" fn rust_oom(_: Layout) -> ! {
+#[alloc_error_handler]
+fn out_of_memory(_: Layout) -> ! {
     unsafe {
         asm!("cli"::::"intel","volatile");
         panic_indicator!(0x4f4D4f21); // !M as in "No memory"

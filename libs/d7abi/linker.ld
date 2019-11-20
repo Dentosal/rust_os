@@ -1,5 +1,5 @@
 OUTPUT_FORMAT(elf64-x86-64)
-ENTRY(main)
+ENTRY(_start)
 
 SECTIONS {
     /* Load point for programs is 0x1_000_000 */

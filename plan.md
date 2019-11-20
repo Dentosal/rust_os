@@ -69,13 +69,13 @@ Numbers     | Description
 
 # Process Memory Layout
 
-Begin       | Size    |rwx| Content
-------------|---------|---|---------
-           0| 200_000 |r--| IDT, GDT
-     200_000| 200_000 |r-x| Common code for process switching
-     400_000| 400_000 |rw-| Process stack
-   1_000_000|       ? |+++| Process elf image
-           ?|       ? |rw-| Process heap
+Begin         | Size    |rwx| Content
+--------------|---------|---|---------
+             0| 20_0000 |r--| IDT, GDT
+       20_0000| 20_0000 |r-x| Common code for process switching
+       40_0000| 40_0000 |rw-| Process stack
+      100_0000|       ? |+++| Process elf image
+ 100_0000_0000|*dynamic*|rw-| Process dynamic memory (At 1 TiB)
 
 
 

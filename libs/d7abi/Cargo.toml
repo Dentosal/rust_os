@@ -13,3 +13,6 @@ panic = "abort"
 
 [dependencies]
 spin = "0.5"
+
+[dependencies.x86_64]
+git = "https://github.com/Dentosal/x86_64"

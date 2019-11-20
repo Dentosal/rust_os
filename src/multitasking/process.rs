@@ -2,6 +2,7 @@ use alloc::prelude::v1::Vec;
 use x86_64::structures::idt::{InterruptStackFrameValue, PageFaultErrorCode};
 use x86_64::{PhysAddr, VirtAddr};
 
+use crate::memory::paging::PageMap;
 use crate::memory::prelude::*;
 
 use super::ProcessId;
@@ -51,17 +52,19 @@ pub enum Error {
 #[derive(Debug, Clone)]
 pub struct Process {
     /// Physical address of page tables
-    pub page_table: PhysAddr,
+    pub page_table: PageMap,
     /// Stack pointer in process address space
     pub stack_pointer: VirtAddr,
     /// Stack frames
     pub stack_frames: Vec<PhysFrame>,
+    /// Dynamic memory frames
+    pub dynamic_memory_frames: Vec<PhysFrame>,
     /// Metadata used for scheduling etc.
     metadata: ProcessMetadata,
 }
 impl Process {
     pub const fn new(
-        id: ProcessId, parent: Option<ProcessId>, page_table: PhysAddr, stack_pointer: VirtAddr,
+        id: ProcessId, parent: Option<ProcessId>, page_table: PageMap, stack_pointer: VirtAddr,
         stack_frames: Vec<PhysFrame>,
     ) -> Self
     {
@@ -69,6 +72,7 @@ impl Process {
             page_table,
             stack_pointer,
             stack_frames,
+            dynamic_memory_frames: Vec::new(),
             metadata: ProcessMetadata {
                 id,
                 parent,

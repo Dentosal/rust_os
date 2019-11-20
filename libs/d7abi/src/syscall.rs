@@ -6,6 +6,7 @@ pub enum SyscallNumber {
     exit = 0x00,
     get_pid = 0x01,
     print_string = 0x02,
+    mem_set_size = 0x03,
 }
 
 macro_rules! syscall {
@@ -54,8 +55,12 @@ pub fn get_pid() -> u64 {
     unsafe { syscall!(SyscallNumber::get_pid).unwrap() }
 }
 
-pub fn print_string(s: &str)  -> Result<u64, u64> {
+pub fn print_string(s: &str) -> Result<u64, u64> {
     let len = s.len() as u64;
     let slice = s.as_ptr() as u64;
     unsafe { syscall!(SyscallNumber::print_string; len, slice) }
+}
+
+pub unsafe fn mem_set_size(new_size_bytes: u64) -> Result<u64, u64> {
+    syscall!(SyscallNumber::mem_set_size; new_size_bytes)
 }

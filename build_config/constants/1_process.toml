@@ -23,3 +23,8 @@ value = "(mul PAGE_SIZE_BYTES PROCESS_STACK_SIZE_PAGES)"
 name = "PROCESS_STACK_END"
 type = "VirtAddr"
 value = "(add PROCESS_STACK PROCESS_STACK_SIZE_BYTES)"
+
+[[constant]]
+name = "PROCESS_DYNAMIC_MEMORY"
+type = "VirtAddr"
+value = "0x100_0000_0000"

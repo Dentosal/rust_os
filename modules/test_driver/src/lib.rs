@@ -1,18 +1,20 @@
 #![no_std]
 #![feature(asm)]
+#![feature(alloc_prelude)]
+#![feature(allocator_api)]
 #![deny(unused_must_use)]
 
 use d7abi::syscall;
 
+#[macro_use]
+extern crate alloc;
+
 #[no_mangle]
-pub extern "C" fn main() {
+fn main() -> u64 {
     // Test: get pid and use it as exit code
     let pid = syscall::get_pid();
 
-    match syscall::print_string("a b c") {
-        Ok(_) => syscall::exit(5),
-        Err(_) => syscall::exit(6),
-    }
+    syscall::print_string(&format!("My pid is {}", pid)).unwrap();
 
-    syscall::exit(pid);
+    pid
 }

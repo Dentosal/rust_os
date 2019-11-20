@@ -54,6 +54,40 @@ impl MemoryController {
             .collect()
     }
 
+    /// Allocates a set of physical memory frames filled with zeros.
+    ///
+    /// Flushes the TLB.
+    pub fn alloc_frames_zeroed(&mut self, size_in_pages: usize) -> Vec<PhysFrame> {
+        // Use a temporary virtual memory area
+        let tmp_area = self.alloc_virtual_area(1);
+        let tmp_page = Page::from_start_address(tmp_area.start).unwrap();
+
+        let frames = self.alloc_frames(size_in_pages);
+        for frame in frames.iter() {
+            unsafe {
+                self.page_map
+                    .map_to(
+                        PT_VADDR,
+                        tmp_page,
+                        frame.clone(),
+                        Flags::PRESENT | Flags::NO_EXECUTE | Flags::WRITABLE,
+                    )
+                    .flush();
+
+                let p: *mut u8 = tmp_area.start.as_mut_ptr();
+                ptr::write_bytes(p, 0, frame.size() as usize);
+            }
+        }
+
+        // Deallocate temporary area
+        unsafe {
+            self.page_map.unmap(PT_VADDR, tmp_page).flush();
+        }
+        self.free_virtual_area(tmp_area);
+
+        frames
+    }
+
     /// Allocates a contiguous virtual memory area
     pub fn alloc_virtual_area(&mut self, size_in_pages: u64) -> Area {
         let start = self.virtual_allocator.allocate(size_in_pages);
@@ -113,8 +147,6 @@ impl MemoryController {
     pub fn process_map_area(
         &mut self, process: &Process, area: Area, writable: bool,
     ) -> Option<Area> {
-        let pt_frame = PhysFrame::from_start_address(process.page_table).unwrap();
-
         let mut flags = Flags::PRESENT | Flags::NO_EXECUTE;
         if writable {
             flags |= Flags::WRITABLE;
@@ -126,20 +158,13 @@ impl MemoryController {
             let tmp_page = Page::from_start_address(tmp_area.start).unwrap();
             let pt_vaddr = tmp_area.start;
             self.page_map
-                .map_to(
-                    PT_VADDR,
-                    tmp_page,
-                    pt_frame,
-                    Flags::PRESENT | Flags::NO_EXECUTE,
-                )
+                .map_table(PT_VADDR, tmp_page, &process.page_table, false)
                 .flush();
 
-            // Resolve the start and end addresses
-            let process_pt = PageMap::raw(pt_frame.start_address());
-
+            // Resolve the addresses
             let frame_addresses: Vec<PhysAddr> = area
                 .pages()
-                .map(|page| process_pt.translate(pt_vaddr, page))
+                .map(|page| process.page_table.translate(pt_vaddr, page))
                 .collect::<Option<_>>()?;
 
             // Unmap the process page table
@@ -162,6 +187,73 @@ impl MemoryController {
 
             Some(result_area)
         }
+    }
+
+    /// Allocate or free memory for a process.
+    ///
+    /// This function flushes the TLB multiple times.
+    ///
+    /// Requires that the kernel page tables are active.
+    pub fn process_set_dynamic_memory(
+        &mut self, process: &mut Process, new_size_bytes: u64,
+    ) -> Option<u64> {
+        let flags = Flags::PRESENT | Flags::NO_EXECUTE | Flags::WRITABLE;
+
+        let old_frame_count = process.dynamic_memory_frames.len() as u64;
+        let old_size_bytes = old_frame_count * PAGE_SIZE_BYTES;
+
+        if old_size_bytes == new_size_bytes {
+            return Some(new_size_bytes);
+        }
+
+        assert!(old_size_bytes == page_align_u64(old_size_bytes, false));
+        let new_size_bytes = page_align_u64(new_size_bytes, true);
+
+        // Map process tables to kernel memory
+        let tmp_area = self.alloc_virtual_area(1);
+        let tmp_page = Page::from_start_address(tmp_area.start).unwrap();
+        let pt_vaddr = tmp_area.start;
+        unsafe {
+            self.page_map
+                .map_table(PT_VADDR, tmp_page, &process.page_table, true)
+                .flush();
+        }
+
+        if old_size_bytes < new_size_bytes {
+            // Allocate more memory
+            let add_bytes = new_size_bytes - old_size_bytes;
+            let add_frames = add_bytes / PAGE_SIZE_BYTES;
+            let new_frames = self.alloc_frames_zeroed(add_frames as usize);
+
+            // Map to process memory space
+            for (i, frame) in new_frames.iter().enumerate() {
+                let page = Page::from_start_address(
+                    PROCESS_DYNAMIC_MEMORY + (old_frame_count + (i as u64)) * PAGE_SIZE_BYTES,
+                )
+                .unwrap();
+
+                unsafe {
+                    process
+                        .page_table
+                        .map_to(tmp_area.start, page, frame.clone(), flags)
+                        .ignore();
+                }
+            }
+
+            // Store frame information into the Process struct
+            process.dynamic_memory_frames.extend(new_frames);
+        } else {
+            // Deallocate memory
+            unimplemented!("Process: deallocate memory");
+        }
+
+        // Unmap process tables
+        unsafe {
+            self.page_map.unmap(PT_VADDR, tmp_page).flush();
+        }
+        self.free_virtual_area(tmp_area);
+
+        Some(new_size_bytes)
     }
 
     /// Loads a program from ELF ímage to physical memory.

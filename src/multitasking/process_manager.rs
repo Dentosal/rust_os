@@ -241,7 +241,7 @@ impl State {
             // TODO: Unmap process structures from kernel page map
             // ^ at least the process page table is not unmapped yet
 
-            Process::new(self.id_counter, parent, pm.p4_addr(), rsp, stack_frames)
+            Process::new(self.id_counter, parent, pm, rsp, stack_frames)
         });
 
         let pid = process.id();
@@ -281,7 +281,8 @@ impl State {
     pub fn store_state(&mut self, pid: ProcessId, page_table: PhysAddr, stack_pointer: VirtAddr) {
         if let Some(index) = self.process_list.iter().position(|p| p.id() == pid) {
             let p = &mut self.process_list[index];
-            p.page_table = page_table;
+            // p.page_table = page_table;
+            assert_eq!(p.page_table.p4_addr(), page_table, "???");
             p.stack_pointer = stack_pointer;
         } else {
             panic!("No such process pid {}", pid);

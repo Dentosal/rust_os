@@ -14,9 +14,6 @@ panic = "abort"
 [profile.release]
 panic = "abort"
 
-[dependencies]
-spin = "0.5"
-
 [dependencies.d7abi]
 version = "*"
 path = "../../libs/d7abi"

@@ -61,14 +61,13 @@ macro_rules! pt_flags {
 ///
 /// NOTE: When/if expanding page map to have multiple pages, the current
 /// implmentation requires adjacent pages in memory.
+#[derive(Debug, Clone)]
 pub struct PageMap {
     /// Physical address of the page table, and by extension, the P4 table
     phys_addr: PhysAddr,
-    // /// Virtual address of the page table area
-    // virt_addr: VirtAddr,
-    /// Next table will be placed to `PAGE_TABLE_AREA + PAGE_SIZE * page_count`,
+    /// Next table will be placed to `PAGE_TABLE_AREA + PAGE_SIZE * table_count`,
     /// where `PAGE_SIZE` is `0x1000`.
-    page_count: u64,
+    table_count: u64,
 }
 
 impl PageMap {
@@ -109,17 +108,7 @@ impl PageMap {
         Self {
             phys_addr,
             //virt_addr,
-            page_count: 3,
-        }
-    }
-
-    /// Obtains `PageMap` object without initialization.
-    /// This object MUST NOT be modified.
-    #[must_use]
-    pub unsafe fn raw(phys_addr: PhysAddr) -> Self {
-        Self {
-            phys_addr,
-            page_count: 0,
+            table_count: 3,
         }
     }
 
@@ -166,16 +155,20 @@ impl PageMap {
         let i2 = page.p2_index();
 
         let p4: &mut PageTable = &mut *curr_addr.as_mut_ptr();
+        let offset: isize = (curr_addr.as_u64() as isize) - (self.p4_addr().as_u64() as isize);
 
         if p4[i4].is_unused() {
             panic!("Unmap nonexistent: P3 missing");
         }
-        let p3: &mut PageTable = &mut *p4[i4].addr().as_mut_ptr();
+
+        let p3: &mut PageTable =
+            &mut *((p4[i4].addr().as_u64() as isize + offset) as *mut PageTable);
 
         if p3[i3].is_unused() {
             panic!("Unmap nonexistent: P2 missing");
         }
-        let p2: &mut PageTable = &mut *p3[i3].addr().as_mut_ptr();
+        let p2: &mut PageTable =
+            &mut *((p3[i3].addr().as_u64() as isize + offset) as *mut PageTable);
 
         // Unmap the address
         p2[i2].set_unused();
@@ -201,17 +194,23 @@ impl PageMap {
 
         let p4: &mut PageTable = &mut *curr_addr.as_mut_ptr();
 
-        if p4[i4].is_unused() {
+        let p3: &mut PageTable = if p4[i4].is_unused() {
             // P3 table missing
-            panic!("P3 MISSING"); // TODO: Over 512GiB virtual address required?
-        }
-        let p3: &mut PageTable =
-            &mut *((p4[i4].addr().as_u64() as isize + offset) as *mut PageTable);
+            let addr = frame_addr!(self.phys_addr, self.table_count);
+            self.table_count += 1;
+            p4[i4].set_addr(addr, pt_flags!(3));
+            let mut table: &mut PageTable =
+                unsafe { &mut *((addr.as_u64() as isize + offset) as *mut PageTable) };
+            table.zero();
+            table
+        } else {
+            &mut *((p4[i4].addr().as_u64() as isize + offset) as *mut PageTable)
+        };
 
         let p2: &mut PageTable = if p3[i3].is_unused() {
             // P2 table missing
-            let addr = frame_addr!(self.phys_addr, self.page_count);
-            self.page_count += 1;
+            let addr = frame_addr!(self.phys_addr, self.table_count);
+            self.table_count += 1;
             p3[i3].set_addr(addr, pt_flags!(3));
             let mut table: &mut PageTable =
                 unsafe { &mut *((addr.as_u64() as isize + offset) as *mut PageTable) };
@@ -223,6 +222,7 @@ impl PageMap {
 
         // Map the address
         p2[i2].set_addr(frame.start_address(), flags | Flags::HUGE_PAGE);
+
         // rprintln!(
         //     "mapped {:?} to {:?} with {:?}",
         //     frame,
@@ -240,6 +240,23 @@ impl PageMap {
             Page::from_start_address(VirtAddr::new_unchecked(frame.start_address().as_u64()))
                 .expect("Invalid physical address: no corresponding virtual address");
         self.map_to(curr_addr, page, frame, flags)
+    }
+
+    /// Map other page table into this address space
+    pub unsafe fn map_table(
+        &mut self, curr_addr: VirtAddr, page: Page, other: &Self, writable: bool,
+    ) -> MapperFlush<pg::Size2MiB> {
+        let mut flags = Flags::PRESENT | Flags::NO_EXECUTE;
+        if writable {
+            flags |= Flags::WRITABLE;
+        }
+
+        self.map_to(
+            curr_addr,
+            page,
+            PhysFrame::from_start_address(other.p4_addr()).unwrap(),
+            flags,
+        )
     }
 
     /// Maps elf executable based om program headers

@@ -40,7 +40,7 @@ pub(super) unsafe fn exception_df(stack_frame: &InterruptStackFrame, error_code:
 /// General Protection Fault handler
 pub(super) unsafe fn exception_gpf(stack_frame: &InterruptStackFrame, error_code: u64) {
     panic!(
-        "Exception: General Protection Fault with error code {:#x}\n{:?}",
+        "Exception: General Protection Fault with error code {:#x}\n{:#?}",
         error_code, *stack_frame
     );
 }
@@ -48,7 +48,7 @@ pub(super) unsafe fn exception_gpf(stack_frame: &InterruptStackFrame, error_code
 /// Page Fault handler
 pub(super) unsafe fn exception_pf(stack_frame: &InterruptStackFrame, error_code: u64) {
     panic!(
-        "Exception: Page Fault with error code {:?} ({:?}) at {:#x}\n{:?}",
+        "Exception: Page Fault with error code {:?} ({:?}) at {:#x}\n{:#?}",
         error_code,
         PageFaultErrorCode::from_bits(error_code).expect("#PF code invalid"),
         x86_64::registers::control::Cr2::read().as_u64(),
@@ -89,7 +89,8 @@ pub(super) unsafe extern "C" fn exception_irq0() -> u128 {
     let next_process = time::SYSCLOCK.tick();
     pic::PICS.lock().notify_eoi(0x20);
     if let Some(process) = next_process {
-        ((process.stack_pointer.as_u64() as u128) << 64) | (process.page_table.as_u64() as u128)
+        ((process.stack_pointer.as_u64() as u128) << 64)
+            | (process.page_table.p4_addr().as_u64() as u128)
     } else {
         0
     }
@@ -209,7 +210,7 @@ unsafe extern "C" fn process_interrupt_inner(
                 });
                 // Switch to other process after returning
                 return ((process.stack_pointer.as_u64() as u128) << 64)
-                    | (process.page_table.as_u64() as u128);
+                    | (process.page_table.p4_addr().as_u64() as u128);
             }
         },
         0x21..=0x2f => {
@@ -261,7 +262,7 @@ fn terminate(result: process::ProcessResult) -> ! {
             :
                 "{rcx}"(COMMON_ADDRESS_VIRT as *const u8 as u64), // switch_to
                 "{rdx}"(next_process.stack_pointer.as_u64()),
-                "{rax}"(next_process.page_table.as_u64())
+                "{rax}"(next_process.page_table.p4_addr().as_u64())
             :
             : "intel"
         );

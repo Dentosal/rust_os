@@ -153,7 +153,7 @@ pub extern "C" fn rust_main() -> ! {
 
     let mod_test = multitasking::load_module("mod_test").expect("Module not found");
 
-    use multitasking::PROCMAN;
+    use crate::multitasking::PROCMAN;
 
     {
         let pid = PROCMAN.update(|pm| pm.spawn(mod_test));
@@ -180,6 +180,7 @@ static HEAP_ALLOCATOR: d7alloc::GlobAlloc = d7alloc::GlobAlloc::new(d7alloc::Bum
     d7alloc::HEAP_START + d7alloc::HEAP_SIZE,
 ));
 
+#[cfg(not(test))]
 #[alloc_error_handler]
 fn out_of_memory(_: Layout) -> ! {
     unsafe {

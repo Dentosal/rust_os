@@ -35,7 +35,7 @@ fn unlikely(b: bool) -> bool {
 
 mod symtree;
 
-use symtree::SymTree;
+use crate::symtree::SymTree;
 
 const EXTRA_CHECKS: bool = cfg!(test);
 

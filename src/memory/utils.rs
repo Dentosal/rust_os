@@ -4,7 +4,7 @@ use super::prelude::*;
 
 pub trait EitherAddr {
     fn as_u64(self) -> u64;
-    fn from_u64(u64) -> Self;
+    fn from_u64(_: u64) -> Self;
 }
 impl EitherAddr for PhysAddr {
     fn as_u64(self) -> u64 {

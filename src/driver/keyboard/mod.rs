@@ -6,7 +6,7 @@ mod keyreader;
 use cpuio::UnsafePort;
 use spin::Mutex;
 
-use util::io_wait;
+use crate::util::io_wait;
 
 pub use self::event::{KeyboardEvent, KeyboardEventType};
 pub use self::key::Key;

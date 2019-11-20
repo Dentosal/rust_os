@@ -2,6 +2,7 @@
 name = "d7alloc"
 version = "0.1.0"
 authors = ["Hannes Karppila <hannes.karppila@gmail.com>"]
+edition = "2018"
 
 [dependencies]
 spin = "0.5"

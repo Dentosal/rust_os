@@ -132,7 +132,7 @@ impl AtaPio {
         // Send IDENTIFY command
         Self::send_command(0xEC);
 
-        use time::sleep_ms;
+        use crate::time::sleep_ms;
         sleep_ms(1);
 
         let mut first_cleared = true;

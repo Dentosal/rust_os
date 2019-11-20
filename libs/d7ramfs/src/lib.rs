@@ -49,7 +49,7 @@ pub enum OpenMode {
 }
 impl OpenMode {
     fn can_read(self) -> bool {
-        use OpenMode::*;
+        use crate::OpenMode::*;
         match self {
             Read => true,
             Write => false,
@@ -57,7 +57,7 @@ impl OpenMode {
         }
     }
     fn can_write(self) -> bool {
-        use OpenMode::*;
+        use crate::OpenMode::*;
         match self {
             Read => false,
             Write => true,
@@ -357,7 +357,7 @@ impl Node {
     }
 
     pub fn name(&self) -> String {
-        use Node::*;
+        use crate::Node::*;
         match self {
             Branch(n) => n.name(),
             Leaf(n) => n.name(),
@@ -365,7 +365,7 @@ impl Node {
     }
 
     pub fn kind(&self) -> NodeType {
-        use Node::*;
+        use crate::Node::*;
         match self {
             Branch(n) => NodeType::Directory,
             Leaf(n) => NodeType::File,

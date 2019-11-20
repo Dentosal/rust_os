@@ -1,7 +1,7 @@
 #![allow(unused_variables)]
 #![allow(unused_imports)]
 
-use util::{inb, outb};
+use crate::util::{inb, outb};
 
 const PIT_CH0: u16 = 0x40; // Channel 0 data port (read/write) (PIC TIMER)
 const PIT_CH1: u16 = 0x41; // Channel 1 data port (read/write) (UNUSED)

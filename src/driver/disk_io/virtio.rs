@@ -161,7 +161,7 @@ impl BlockDevice for VirtioBlock {
                 n => panic!("VirtIO read failed ({} - ?)", n),
             }
 
-            use time::sleep_ms;
+            use crate::time::sleep_ms;
             sleep_ms(1);
         };
 

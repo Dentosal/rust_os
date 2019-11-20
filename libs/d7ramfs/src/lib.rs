@@ -10,9 +10,9 @@
 #![feature(vec_remove_item)]
 #![no_std]
 
-// #[cfg(test)]
-// #[macro_use]
-// extern crate std;
+#[cfg(test)]
+#[macro_use]
+extern crate std;
 
 extern crate alloc;
 use alloc::borrow::ToOwned;
@@ -20,14 +20,9 @@ use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-// https://github.com/rust-lang/rust/issues/45599
-
-#[cfg(any(test))]
-extern crate alloc_system;
-
-#[cfg(any(test))]
+#[cfg(test)]
 #[global_allocator]
-static A: alloc_system::System = alloc_system::System;
+static A: std::alloc::System = std::alloc::System;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NodeType {

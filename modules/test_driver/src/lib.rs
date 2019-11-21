@@ -14,7 +14,12 @@ fn main() -> u64 {
     // Test: get pid and use it as exit code
     let pid = syscall::get_pid();
 
-    syscall::debug_print(&format!("My pid is {}", pid)).unwrap();
+    // syscall::debug_print(&format!("My pid is {}", pid)).unwrap();
+
+    for i in 0..100 {
+        syscall::debug_print(&format!("iter = {}", i)).unwrap();
+        syscall::clock_sleep_ns(100_000_000 * (1 + pid)).unwrap();
+    }
 
     pid
 }

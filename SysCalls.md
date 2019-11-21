@@ -30,10 +30,13 @@ Number | Name           | Arguments (logical) | On success  | Short description
 0x48   | fd_poll        | fd, TBD             | TODO        | Polls list of fds
 0x49   | fd_select      | fd, TBD             | TODO        | Polls list of fds
 0x50   | sched_yield    | -                   | -           | Yield control to schedule next process
+0x51   | sched_wait     | TBD, (timeout)      | -           | Wait for some event to occur
 0x60   | clock_sleep_ns | ns                  | -           | Sleep specified number of nanoseconds
-0x61   | clock_get_ts   | -                   | timestamp   | Get timestamp
-0x62   | clock_get_rt   | -                   | real_time   | Get current real-world time
-0x63   | clock_set_rt   | real_time           | -           | Set current real-world time
+0x6a   | clock_get_ts   | -                   | timestamp   | Get timestamp
+0x6b   | clock_get_rt   | -                   | real_time   | Get current real-world time
+0x6c   | clock_set_rt   | real_time           | -           | Set current real-world time
+0x70   | mount          | path                | mount_id    | Create a fs node and manage fs under it
+0x71   | unmount        | mount_id            | -           | Remove a mount
 
 
 ## Call structure

@@ -41,9 +41,11 @@
     pop rbp
 %endmacro
 
+; Offset lookup header
 header:
     dq switch_to
     dq process_interrupt.table_start
+    dq idle
 
 ;# Description
 ; Switch to another process.
@@ -215,3 +217,23 @@ process_interrupt:
     ; The kernel will jump here when returning from a page fault,
     ; i.e. after loading a swapped-out page from disk
     ; TODO
+
+
+;# Description
+; Idle loop to run when all processes are sleeping
+; Does not modify any registers, memory, or stack
+; Uses iretq to return from interrupt state.
+; The looped hlt instruction is interrupted by
+; the timer periodically.
+idle:
+    ; Fabricate suitable iretq structure
+    push qword 0x0      ; Stack segment
+    push qword rsp      ; Stack pointer
+    push qword 0x0202   ; RFLAGS: Interrupt flag only (0x2 is reserved)
+    push qword 0x8      ; Code segment
+    push qword .loop    ; RIP: Address of .loop
+    ; "Return" into the .loop below
+    iretq
+.loop:
+    hlt
+    jmp .loop

@@ -7,6 +7,8 @@ pub enum SyscallNumber {
     get_pid = 0x01,
     debug_print = 0x02,
     mem_set_size = 0x03,
+    sched_yield = 0x50,
+    clock_sleep_ns = 0x60,
 }
 
 macro_rules! syscall {
@@ -69,4 +71,13 @@ pub fn debug_print(s: &str) -> Result<u64, u64> {
 /// be used outside this library.
 pub unsafe fn mem_set_size(new_size_bytes: u64) -> Result<u64, u64> {
     syscall!(SyscallNumber::mem_set_size; new_size_bytes)
+}
+
+pub fn sched_yield() {
+    let _ = unsafe { syscall!(SyscallNumber::sched_yield) };
+}
+
+/// Max sleep time is 2**64 ns, about 584 years.
+pub fn clock_sleep_ns(ns: u64) -> Result<(), u64> {
+    unsafe { syscall!(SyscallNumber::clock_sleep_ns; ns).map(|_| ()) }
 }

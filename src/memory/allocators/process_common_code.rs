@@ -6,10 +6,8 @@ use crate::memory::{self, prelude::*};
 
 use super::super::MemoryController;
 
-const COMMON_FUNCTION_COUNT: u8 = 1;
-
-pub static mut COMMON_ADDRESS_PHYS: u64 = 0;
-pub const COMMON_ADDRESS_VIRT: u64 = 0x200_000;
+pub static mut COMMON_ADDRESS_PHYS: u64 = 0; // Temp value
+pub const COMMON_ADDRESS_VIRT: u64 = 0x20_0000;
 
 pub static mut PROCESS_IDT_PHYS_ADDR: u64 = 0;
 

@@ -18,7 +18,7 @@ Feature development is done in separate branches. Rebase workflow is used to com
 * Proper x86-64 long mode
 * Text mode terminal
 * Physical memory manager
-* Paging
+* Paging (and PTI!)
 * Interrupts
 * Time handling
 * Keyboard input
@@ -28,12 +28,12 @@ Feature development is done in separate branches. Rebase workflow is used to com
 * Kernel image compression
 * Simple RamFS
 * Simple StaticFS
+* Executable programs, in ELF format
+* Multitasking
 
 ## Planned in near future:
 * A shell (with virtual TTYs!)
 * A simple filesystem, and writing to disk
-* Executable programs, probably in ELF format
-* Multitasking
 
 ## Not-in-so-near future features:
 * Networking

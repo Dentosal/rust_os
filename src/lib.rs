@@ -28,9 +28,9 @@
 #![no_std]
 // Unstable features
 #![feature(abi_x86_interrupt)]
+#![feature(alloc_error_handler)]
 #![feature(alloc_prelude)]
 #![feature(allocator_api)]
-#![feature(alloc_error_handler)]
 #![feature(asm)]
 #![feature(box_into_raw_non_null)]
 #![feature(box_syntax, box_patterns)]
@@ -38,9 +38,9 @@
 #![feature(core_intrinsics)]
 #![feature(integer_atomics)]
 #![feature(lang_items)]
+#![feature(maybe_uninit_extra)]
 #![feature(naked_functions)]
 #![feature(no_more_cas)]
-#![feature(maybe_uninit_extra)]
 #![feature(panic_info_message)]
 #![feature(ptr_internals)]
 #![feature(stmt_expr_attributes)]
@@ -87,6 +87,7 @@ mod syscall;
 mod time;
 
 /// The kernel main function
+#[cfg(not(test))]
 #[no_mangle]
 pub extern "C" fn rust_main() -> ! {
     rreset!();
@@ -151,16 +152,19 @@ pub extern "C" fn rust_main() -> ! {
         rprintln!("File not found");
     }
 
+    use crate::multitasking::SCHEDULER;
     let mod_test = multitasking::load_module("mod_test").expect("Module not found");
 
-    use crate::multitasking::PROCMAN;
-
     {
-        let pid = PROCMAN.update(|pm| pm.spawn(mod_test));
+        let pid = SCHEDULER.try_lock().unwrap().spawn(mod_test);
         rprintln!("Spawned process: pid = {}", pid);
     }
     {
-        let pid = PROCMAN.update(|pm| pm.spawn(mod_test));
+        let pid = SCHEDULER.try_lock().unwrap().spawn(mod_test);
+        rprintln!("Spawned process: pid = {}", pid);
+    }
+    {
+        let pid = SCHEDULER.try_lock().unwrap().spawn(mod_test);
         rprintln!("Spawned process: pid = {}", pid);
     }
 
@@ -180,7 +184,6 @@ static HEAP_ALLOCATOR: d7alloc::GlobAlloc = d7alloc::GlobAlloc::new(d7alloc::Bum
     d7alloc::HEAP_START + d7alloc::HEAP_SIZE,
 ));
 
-#[cfg(not(test))]
 #[alloc_error_handler]
 fn out_of_memory(_: Layout) -> ! {
     unsafe {
@@ -191,20 +194,6 @@ fn out_of_memory(_: Layout) -> ! {
     loop {}
 }
 
-#[cfg(not(test))]
-#[allow(non_snake_case)]
-#[no_mangle]
-pub extern "C" fn _Unwind_Resume() -> ! {
-    loop {}
-}
-
-#[cfg(not(test))]
-#[lang = "eh_personality"]
-extern "C" fn eh_personality() -> ! {
-    loop {}
-}
-
-#[cfg(not(test))]
 #[panic_handler]
 #[allow(unused_variables)]
 #[no_mangle]

@@ -3,7 +3,7 @@ use x86_64::{PhysAddr, VirtAddr};
 
 use crate::driver::keyboard;
 use crate::driver::pic;
-use crate::multitasking::{process, ProcessId, PROCMAN, SCHEDULER};
+use crate::multitasking::{process, ProcessId, ProcessSwitch, SCHEDULER};
 use crate::time;
 
 /// Breakpoint handler
@@ -84,15 +84,21 @@ pub(super) unsafe fn exception_snp(stack_frame: &InterruptStackFrame, error_code
     );
 }
 
-/// PIT timer ticked
+/// PIT timer ticked while the kernel was running
+/// This occurs in two cases:
+/// 1. Before scheduler has taken over (early)
+/// 2. When the kernel is in idle state (no process is running)
+/// In both cases idle and continue are equivalent
 pub(super) unsafe extern "C" fn exception_irq0() -> u128 {
     let next_process = time::SYSCLOCK.tick();
     pic::PICS.lock().notify_eoi(0x20);
-    if let Some(process) = next_process {
-        ((process.stack_pointer.as_u64() as u128) << 64)
-            | (process.page_table.p4_addr().as_u64() as u128)
-    } else {
-        0
+    match next_process {
+        ProcessSwitch::Switch(process) => {
+            ((process.stack_pointer.as_u64() as u128) << 64)
+                | (process.page_table.p4_addr().as_u64() as u128)
+        },
+        ProcessSwitch::Continue => 0,
+        ProcessSwitch::Idle => 0,
     }
 }
 
@@ -184,7 +190,11 @@ unsafe extern "C" fn process_interrupt_inner(
 {
     use x86_64::registers::control::Cr2;
 
-    let pid = SCHEDULER.get_running_pid().expect("No process running?");
+    let pid = SCHEDULER
+        .try_lock()
+        .unwrap()
+        .get_running_pid()
+        .expect("No process running?");
 
     let stack_frame: InterruptStackFrameValue = (*stack_frame_ptr).clone();
     let page_table = PhysAddr::new_unchecked(page_table);
@@ -192,25 +202,64 @@ unsafe extern "C" fn process_interrupt_inner(
 
     match interrupt {
         0xd7 => {
-            use crate::syscall::{handle_syscall, SyscallResult};
-            if let Some(termination_status) =
-                handle_syscall(pid, page_table, process_stack, stack_frame)
-            {
-                terminate(termination_status);
+            use crate::syscall::{handle_syscall, SyscallResult, SyscallResultAction};
+            match handle_syscall(pid, page_table, process_stack, stack_frame) {
+                SyscallResultAction::Terminate(status) => terminate(status),
+                SyscallResultAction::Continue => {},
+                SyscallResultAction::Switch(schedule) => {
+                    // get the next process
+                    let next_process = {
+                        let mut sched = SCHEDULER.try_lock().unwrap();
+                        sched.switch(Some(schedule))
+                    };
+                    match next_process {
+                        ProcessSwitch::Switch(process) => {
+                            // Store old process details
+                            {
+                                let mut sched = SCHEDULER.try_lock().unwrap();
+                                sched.store_state(pid, page_table, process_stack);
+                            }
+                            // Switch to other process after returning
+                            return ((process.stack_pointer.as_u64() as u128) << 64)
+                                | (process.page_table.p4_addr().as_u64() as u128);
+                        },
+                        ProcessSwitch::Continue => {},
+                        ProcessSwitch::Idle => {
+                            // Store old process details
+                            {
+                                let mut sched = SCHEDULER.try_lock().unwrap();
+                                sched.store_state(pid, page_table, process_stack);
+                            }
+                            // Switch to idle state
+                            idle();
+                        },
+                    }
+                },
             }
         },
         0x20 => {
             // PIT timer ticked
             let next_process = time::SYSCLOCK.tick();
             pic::PICS.lock().notify_eoi(interrupt);
-            if let Some(process) = next_process {
-                // Store old process details
-                PROCMAN.update(|pm| {
-                    pm.store_state(pid, page_table, process_stack);
-                });
-                // Switch to other process after returning
-                return ((process.stack_pointer.as_u64() as u128) << 64)
-                    | (process.page_table.p4_addr().as_u64() as u128);
+            match next_process {
+                ProcessSwitch::Continue => {},
+                ProcessSwitch::Idle => {
+                    SCHEDULER
+                        .try_lock()
+                        .unwrap()
+                        .store_state(pid, page_table, process_stack);
+                    idle();
+                },
+                ProcessSwitch::Switch(process) => {
+                    // Store old process details
+                    SCHEDULER
+                        .try_lock()
+                        .unwrap()
+                        .store_state(pid, page_table, process_stack);
+                    // Switch to other process after returning
+                    return ((process.stack_pointer.as_u64() as u128) << 64)
+                        | (process.page_table.p4_addr().as_u64() as u128);
+                },
             }
         },
         0x21..=0x2f => {
@@ -251,20 +300,50 @@ fn terminate(result: process::ProcessResult) -> ! {
     use crate::memory::process_common_code::COMMON_ADDRESS_VIRT;
 
     // Terminate current process
-    let next_process = SCHEDULER.terminate_current(result);
-    // Jump to next process immediately
+    let next_process = unsafe {
+        SCHEDULER
+            .try_lock()
+            .expect("Sched unlock")
+            .terminate_current(result)
+    };
+
+    match next_process {
+        ProcessSwitch::Continue => unreachable!(),
+        ProcessSwitch::Idle => {
+            idle();
+        },
+        ProcessSwitch::Switch(process) => {
+            // Jump to next process immediately
+            unsafe {
+                asm!("
+                        mov rcx, [rcx]  // Get procedure offset
+                        jmp rcx         // Jump into the procedure
+                        "
+                    :
+                    :
+                        "{rcx}"(COMMON_ADDRESS_VIRT as *const u8 as u64), // switch_to
+                        "{rdx}"(process.stack_pointer.as_u64()),
+                        "{rax}"(process.page_table.p4_addr().as_u64())
+                    :
+                    : "intel"
+                );
+                ::core::hint::unreachable_unchecked();
+            }
+        },
+    }
+}
+
+fn idle() -> ! {
+    use crate::memory::process_common_code::COMMON_ADDRESS_VIRT;
+
+    // Jump into the idle state
     unsafe {
         asm!("
-            mov rcx, [rcx]  // Get procedure offset
-            jmp rcx         // Jump into the procedure
+            mov rcx, [rcx + 2 * 8]  // Offset: idle
+            jmp rcx                 // Jump into the procedure
             "
-            :
-            :
-                "{rcx}"(COMMON_ADDRESS_VIRT as *const u8 as u64), // switch_to
-                "{rdx}"(next_process.stack_pointer.as_u64()),
-                "{rax}"(next_process.page_table.p4_addr().as_u64())
-            :
-            : "intel"
+            :: "{rcx}"((COMMON_ADDRESS_VIRT) as *const u8 as u64)
+            :: "intel"
         );
         ::core::hint::unreachable_unchecked();
     }

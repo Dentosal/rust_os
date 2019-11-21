@@ -243,13 +243,17 @@ impl ::core::fmt::Write for Terminal {
 /// Actual print function. This should only be externally called using the rprint! and rprintln! macros.
 pub fn print(fmt: ::core::fmt::Arguments) {
     use core::fmt::Write;
-    TERMINAL.lock().write_fmt(fmt).unwrap();
+    TERMINAL
+        .try_lock()
+        .expect("TERMINAL LOCKED")
+        .write_fmt(fmt)
+        .unwrap();
 }
 
 /// Print with color
 pub fn printc(fmt: ::core::fmt::Arguments, color: CellColor) {
     use core::fmt::Write;
-    let mut t = TERMINAL.lock();
+    let mut t = TERMINAL.try_lock().expect("TERMINAL LOCKED");
     let old_color = t.get_color();
     t.set_color(color);
     t.write_fmt(fmt).unwrap();
@@ -291,7 +295,10 @@ macro_rules! rprintlnc {
 }
 macro_rules! rreset {
     () => {{
-        $crate::driver::vga_buffer::TERMINAL.lock().reset();
+        $crate::driver::vga_buffer::TERMINAL
+            .try_lock()
+            .expect("TERMINAL LOCKED")
+            .reset();
     }};
 }
 macro_rules! rforce_unlock {

@@ -78,10 +78,10 @@ fn p_index_vecdeque<K: Ord, V>(v: &VecDeque<(K, V)>, t: &K) -> usize {
     // TODO: use binary search?
     let mut i = 0;
     while i < v.len() {
-        if &v[i].0 > t {
+        if v[i].0 > *t {
             return i;
         }
         i += 1;
     }
-    return v.len();
+    v.len()
 }

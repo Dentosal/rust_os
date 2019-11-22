@@ -1,12 +1,9 @@
 [package]
-name = "d7_test_driver"
+name = "libd7"
 version = "0.1.0"
 authors = ["Hannes Karppila <hannes.karppila@gmail.com>"]
 publish = false
 edition = "2018"
-
-[lib]
-crate-type = ["staticlib"]
 
 [profile.dev]
 panic = "abort"
@@ -14,6 +11,11 @@ panic = "abort"
 [profile.release]
 panic = "abort"
 
-[dependencies.libd7]
-version = "*"
-path = "../../libs/libd7"
+[dependencies]
+spin = "0.5"
+
+[dependencies.d7abi]
+path = "../d7abi"
+
+[dependencies.x86_64]
+git = "https://github.com/Dentosal/x86_64"

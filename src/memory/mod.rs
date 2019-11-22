@@ -1,5 +1,7 @@
 use alloc::vec::Vec;
+use core::mem;
 use core::ptr;
+use core::slice;
 use spin::Mutex;
 use x86_64::structures::paging as pg;
 use x86_64::structures::paging::PageTableFlags as Flags;
@@ -137,56 +139,136 @@ impl MemoryController {
         (frames, Area::new_pages(start, size_in_pages as u64))
     }
 
-    /// Maps process page tables to (current) kernel tables.
-    /// Returns None if the area is not mapped in the process tables.
+    /// Maps list of physical frames to given virtual memory area.
     ///
-    /// This function flushes the TLB multiple times,
-    /// and the given area is mapped and flushed when returning.
+    /// This function flushes the TLB.
     ///
     /// Requires that the kernel page tables are active.
-    pub fn process_map_area(
-        &mut self, process: &Process, area: Area, writable: bool,
-    ) -> Option<Area> {
+    pub unsafe fn map_area(&mut self, area: Area, frames: &[PhysFrame], writable: bool) {
         let mut flags = Flags::PRESENT | Flags::NO_EXECUTE;
         if writable {
             flags |= Flags::WRITABLE;
         }
 
-        unsafe {
-            // Map process tables to kernel memory
-            let tmp_area = self.alloc_virtual_area(1);
-            let tmp_page = Page::from_start_address(tmp_area.start).unwrap();
-            let pt_vaddr = tmp_area.start;
+        for (i, frame) in frames.iter().enumerate() {
             self.page_map
-                .map_table(PT_VADDR, tmp_page, &process.page_table, false)
+                .map_to(
+                    PT_VADDR,
+                    Page::from_start_address(area.start + (i as u64) * PAGE_SIZE_BYTES).unwrap(),
+                    frame.clone(),
+                    flags,
+                )
                 .flush();
-
-            // Resolve the addresses
-            let frame_addresses: Vec<PhysAddr> = area
-                .pages()
-                .map(|page| process.page_table.translate(pt_vaddr, page))
-                .collect::<Option<_>>()?;
-
-            // Unmap the process page table
-            self.page_map.unmap(PT_VADDR, tmp_page).flush();
-            self.free_virtual_area(tmp_area);
-
-            // Map the are to kernel tables
-            let result_area = self.alloc_virtual_area(area.size_pages());
-            for (i, frame_start) in frame_addresses.into_iter().enumerate() {
-                self.page_map
-                    .map_to(
-                        PT_VADDR,
-                        Page::from_start_address(result_area.start + (i as u64) * PAGE_SIZE_BYTES)
-                            .unwrap(),
-                        PhysFrame::from_start_address(frame_start).unwrap(),
-                        flags,
-                    )
-                    .flush()
-            }
-
-            Some(result_area)
         }
+    }
+
+    /// Unmaps a virtual memory area.
+    ///
+    /// This function flushes the TLB.
+    ///
+    /// Requires that the kernel page tables are active.
+    pub unsafe fn unmap_area(&mut self, area: Area) {
+        for page in area.page_starts() {
+            self.page_map
+                .unmap(PT_VADDR, Page::from_start_address(page).unwrap())
+                .flush();
+        }
+    }
+
+    /// Uses process page tables to map area from the process memory
+    /// space to the kernel page tables.
+    ///
+    /// This function flushes the TLB multiple times,
+    /// and the given area is mapped and flushed when returning.
+    ///
+    /// Requires that the kernel page tables are active.
+    #[must_use]
+    pub unsafe fn process_map_area(
+        &mut self, process: &Process, area: Area, writable: bool,
+    ) -> Option<Area> {
+        // Map process tables to kernel memory
+        let tmp_area = self.alloc_virtual_area(1);
+        let tmp_page = Page::from_start_address(tmp_area.start).unwrap();
+        let pt_vaddr = tmp_area.start;
+        self.page_map
+            .map_table(PT_VADDR, tmp_page, &process.page_table, false)
+            .flush();
+
+        // Resolve the addresses
+        let frame_addrs: Vec<PhysAddr> = area
+            .page_starts()
+            .map(|page| process.page_table.translate(pt_vaddr, page))
+            .collect::<Option<_>>()?;
+
+        let frames: Vec<PhysFrame> = frame_addrs
+            .into_iter()
+            .map(|start| PhysFrame::from_start_address(start).unwrap())
+            .collect();
+
+        // Unmap the process page table
+        self.page_map.unmap(PT_VADDR, tmp_page).flush();
+        self.free_virtual_area(tmp_area);
+
+        // Map the are to kernel tables
+        let result_area = self.alloc_virtual_area(area.size_pages());
+        self.map_area(result_area, &frames, writable);
+        Some(result_area)
+    }
+
+    /// Make a range of bytes from process memory space immutably available.
+    /// The returned `Area` should be freed when the data is no longer needed.
+    #[must_use]
+    pub unsafe fn process_slice<'a>(
+        &mut self, process: &Process, count: u64, ptr: VirtAddr,
+    ) -> Option<(Area, &'a [u8])> {
+        let area = Area::new_containing_block(ptr, count);
+        let offset: u64 = ptr.as_u64() - area.start.as_u64();
+        let pmap = self.process_map_area(process, area, false)?;
+        let slice: &[u8] =
+            unsafe { slice::from_raw_parts((pmap.start + offset).as_ptr(), count as usize) };
+        Some((pmap, slice))
+    }
+
+    /// Make a range of bytes from process memory space mutably available.
+    /// The returned `Area` should be freed when the data is no longer needed.
+    #[must_use]
+    pub unsafe fn process_slice_mut<'a>(
+        &mut self, process: &Process, count: u64, ptr: VirtAddr,
+    ) -> Option<(Area, &'a mut [u8])> {
+        let area = Area::new_containing_block(ptr, count);
+        let offset: u64 = ptr.as_u64() - area.start.as_u64();
+        let pmap = self.process_map_area(process, area, true)?;
+        let slice: &mut [u8] = unsafe {
+            slice::from_raw_parts_mut((pmap.start + offset).as_mut_ptr(), count as usize)
+        };
+        Some((pmap, slice))
+    }
+
+    /// Write bytes into the process memory space
+    pub unsafe fn process_write_bytes(
+        &mut self, process: &Process, bytes: &[u8], ptr: VirtAddr,
+    ) -> Option<()> {
+        let area = Area::new_containing_block(ptr, bytes.len() as u64);
+        let offset: u64 = ptr.as_u64() - area.start.as_u64();
+        let pmap = self.process_map_area(process, area, true)?;
+        ptr::copy_nonoverlapping(
+            bytes.as_ptr(),
+            (pmap.start + offset).as_mut_ptr(),
+            bytes.len(),
+        );
+        self.unmap_area(pmap);
+        Some(())
+    }
+
+    /// Write a value into the process memory space
+    pub unsafe fn process_write_value<T>(
+        &mut self, process: &Process, value: T, ptr: VirtAddr,
+    ) -> Option<()> {
+        self.process_write_bytes(
+            process,
+            core::slice::from_raw_parts((&value) as *const T as *const u8, mem::size_of::<T>()),
+            ptr,
+        )
     }
 
     /// Allocate or free memory for a process.

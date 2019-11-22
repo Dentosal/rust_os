@@ -159,14 +159,14 @@ pub extern "C" fn rust_main() -> ! {
         let pid = SCHEDULER.try_lock().unwrap().spawn(mod_test);
         rprintln!("Spawned process: pid = {}", pid);
     }
-    {
-        let pid = SCHEDULER.try_lock().unwrap().spawn(mod_test);
-        rprintln!("Spawned process: pid = {}", pid);
-    }
-    {
-        let pid = SCHEDULER.try_lock().unwrap().spawn(mod_test);
-        rprintln!("Spawned process: pid = {}", pid);
-    }
+    // {
+    //     let pid = SCHEDULER.try_lock().unwrap().spawn(mod_test);
+    //     rprintln!("Spawned process: pid = {}", pid);
+    // }
+    // {
+    //     let pid = SCHEDULER.try_lock().unwrap().spawn(mod_test);
+    //     rprintln!("Spawned process: pid = {}", pid);
+    // }
 
     // Wait until the next clock tick interrupt,
     // after that the process scheduler takes over

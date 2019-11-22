@@ -1,5 +1,5 @@
 [package]
-name = "d7_test_driver"
+name = "d7_init"
 version = "0.1.0"
 authors = ["Hannes Karppila <hannes.karppila@gmail.com>"]
 publish = false

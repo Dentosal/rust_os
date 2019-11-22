@@ -4,7 +4,7 @@
 #![feature(allocator_api)]
 #![deny(unused_must_use)]
 
-use d7abi::syscall;
+use libd7::syscall;
 
 #[macro_use]
 extern crate alloc;
@@ -14,11 +14,26 @@ fn main() -> u64 {
     // Test: get pid and use it as exit code
     let pid = syscall::get_pid();
 
-    // syscall::debug_print(&format!("My pid is {}", pid)).unwrap();
+    let fileinfo = syscall::fs_fileinfo("/").unwrap();
+    syscall::debug_print(&format!("Fileinfo / : {:?}", fileinfo));
 
-    for i in 0..100 {
-        syscall::debug_print(&format!("iter = {}", i)).unwrap();
-        syscall::clock_sleep_ns(100_000_000 * (1 + pid)).unwrap();
+    let mut buffer = [0; 64];
+
+    let root_fd = syscall::fs_open("/").unwrap();
+    let count = syscall::fd_read(root_fd, &mut buffer).unwrap();
+    syscall::debug_print(&format!("/ : {:?}", &buffer[..count]));
+
+    let fd = syscall::fs_open("/dev/zero").unwrap();
+    let count = syscall::fd_read(fd, &mut buffer).unwrap();
+    syscall::debug_print(&format!("/dev/zero : {:?}", &buffer[..count]));
+
+    let fd = syscall::fs_open("/dev/null").unwrap();
+    let count = syscall::fd_read(fd, &mut buffer).unwrap();
+    syscall::debug_print(&format!("/dev/null : {:?}", &buffer[..count]));
+
+    for i in 0..2 {
+        syscall::debug_print(&format!("iter = {}", i));
+        syscall::sched_sleep_ns(100_000_000 * (1 + pid)).unwrap();
     }
 
     pid

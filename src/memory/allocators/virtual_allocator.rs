@@ -103,7 +103,7 @@ impl Area {
     }
 
     #[inline]
-    pub fn pages(&self) -> impl Iterator<Item = VirtAddr> {
+    pub fn page_starts(&self) -> impl Iterator<Item = VirtAddr> {
         (self.start.as_u64()..self.end.as_u64())
             .step_by(PAGE_SIZE_BYTES as usize)
             .map(VirtAddr::new)

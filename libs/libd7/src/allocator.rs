@@ -3,8 +3,8 @@ use core::ptr::NonNull;
 
 use spin::Mutex;
 
-use super::kernel_constants::PROCESS_DYNAMIC_MEMORY;
 use super::syscall::mem_set_size;
+use d7abi::PROCESS_DYNAMIC_MEMORY;
 
 /// Align downwards. Returns the greatest x with alignment `align`
 /// so that x <= addr. The alignment must be a power of 2.

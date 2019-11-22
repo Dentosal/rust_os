@@ -1,5 +1,6 @@
-use core::hint::unreachable_unchecked;
+use num_enum::TryFromPrimitive;
 
+#[derive(Debug, TryFromPrimitive)]
 #[allow(non_camel_case_types)]
 #[repr(u64)]
 pub enum SyscallNumber {
@@ -7,77 +8,58 @@ pub enum SyscallNumber {
     get_pid = 0x01,
     debug_print = 0x02,
     mem_set_size = 0x03,
+    fs_fileinfo = 0x30,
+    fs_create = 0x31,
+    fs_open = 0x32,
+    fd_close = 0x40,
+    fd_read = 0x41,
+    fd_write = 0x42,
+    fd_synchronize = 0x43,
+    fd_control = 0x44,
     sched_yield = 0x50,
-    clock_sleep_ns = 0x60,
+    sched_sleep_ns = 0x51,
 }
 
-macro_rules! syscall {
-    ($n:expr; $a0:expr, $a1:expr, $a2:expr, $a3:expr) => {
-        syscall($n as u64, ($a0, $a1, $a2, $a3))
-    };
-    ($n:expr; $a0:expr, $a1:expr, $a2:expr) => {syscall!($n; $a0, $a1, $a2, 0)};
-    ($n:expr; $a0:expr, $a1:expr) => {syscall!($n; $a0, $a1, 0, 0)};
-    ($n:expr; $a0:expr) => {syscall!($n; $a0, 0, 0, 0)};
-    ($n:expr) => {syscall!($n; 0, 0, 0, 0)};
+#[derive(Debug, TryFromPrimitive)]
+#[allow(non_camel_case_types)]
+#[repr(u64)]
+pub enum SyscallErrorCode {
+    unknown = 0,
 }
 
+/// VFS node metadata.
+/// `Copy` is required here as kernel copies it into the process memory.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[repr(C)]
+pub struct FileInfo {
+    /// Is this a special device managed by the kenrel
+    pub is_special: bool,
+    /// Mount id, if this is a mount point
+    pub mount_id: Option<u64>,
+}
+
+/// VFS file descriptor
 /// # Safety
-/// Allows any unsafe system call to be called, and doesn't protect from invalid arguments.
-pub unsafe fn syscall(number: u64, args: (u64, u64, u64, u64)) -> Result<u64, u64> {
-    let mut success: u64;
-    let mut result: u64;
+/// Almost all operations on file descriptors are unsafe,
+/// as they can be used to obtain invalid file descriptors
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
+pub struct FileDescriptor(u64);
+impl FileDescriptor {
+    #![allow(clippy::missing_safety_doc)]
 
-    asm!("int 0xd7"
-        : "={rax}"(success), "={rdi}"(result)
-        :
-            "{rax}"(number),
-            "{rdi}"(args.0),
-            "{rsi}"(args.1),
-            "{rdx}"(args.2),
-            "{rcx}"(args.3)
-        :
-        : "intel"
-    );
-
-    if success == 1 {
-        Ok(result)
-    } else if success == 0 {
-        Err(result)
-    } else {
-        panic!("System call: invalid boolean for success {}", success);
+    /// Creates new file descriptor from raw u64
+    pub unsafe fn from_u64(raw: u64) -> Self {
+        Self(raw)
     }
-}
 
-pub fn exit(return_code: u64) -> ! {
-    unsafe {
-        asm!("int 0xd7" :: "{rax}"(SyscallNumber::exit), "{rdi}"(return_code) :: "intel");
-        unreachable_unchecked();
+    /// Obtains raw integer value of this fd
+    pub unsafe fn as_u64(self) -> u64 {
+        self.0
     }
-}
 
-pub fn get_pid() -> u64 {
-    unsafe { syscall!(SyscallNumber::get_pid).unwrap() }
-}
-
-pub fn debug_print(s: &str) -> Result<u64, u64> {
-    let len = s.len() as u64;
-    let slice = s.as_ptr() as u64;
-    unsafe { syscall!(SyscallNumber::debug_print; len, slice) }
-}
-
-
-/// # Safety
-/// Can be used to confuse memory manager, and generally shouldn't
-/// be used outside this library.
-pub unsafe fn mem_set_size(new_size_bytes: u64) -> Result<u64, u64> {
-    syscall!(SyscallNumber::mem_set_size; new_size_bytes)
-}
-
-pub fn sched_yield() {
-    let _ = unsafe { syscall!(SyscallNumber::sched_yield) };
-}
-
-/// Max sleep time is 2**64 ns, about 584 years.
-pub fn clock_sleep_ns(ns: u64) -> Result<(), u64> {
-    unsafe { syscall!(SyscallNumber::clock_sleep_ns; ns).map(|_| ()) }
+    /// Next file descriptor
+    pub unsafe fn next(self) -> Self {
+        Self(self.0 + 1)
+    }
 }

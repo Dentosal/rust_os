@@ -38,27 +38,23 @@ pub extern "C" fn _start() {
 #[no_mangle]
 extern "C" fn panic(info: &PanicInfo) -> ! {
     use self::syscall::debug_print;
-    unsafe {
-        if let Some(location) = info.location() {
-            let _ = debug_print(&format!(
-                "Error: file '{}', line {}",
-                location.file(),
-                location.line()
-            ));
-        } else {
-            let _ = debug_print("Error: (location unavailable)");
-        }
-
-        if let Some(msg) = info.message() {
-            let _ = debug_print(&format!("  {:?}", msg));
-        } else {
-            let _ = debug_print("  Info unavailable");
-        }
-
-        asm!("cli"::::"intel","volatile");
-        asm!("hlt"::::"intel","volatile");
+    if let Some(location) = info.location() {
+        let _ = debug_print(&format!(
+            "Error: file '{}', line {}",
+            location.file(),
+            location.line()
+        ));
+    } else {
+        let _ = debug_print("Error: (location unavailable)");
     }
-    loop {}
+
+    if let Some(msg) = info.message() {
+        let _ = debug_print(&format!("  {:?}", msg));
+    } else {
+        let _ = debug_print("  Info unavailable");
+    }
+
+    syscall::exit(1)
 }
 
 #[global_allocator]
@@ -68,6 +64,7 @@ static HEAP_ALLOCATOR: allocator::GlobAlloc =
 #[alloc_error_handler]
 fn out_of_memory(_: Layout) -> ! {
     unsafe {
+        asm!("xchg bx, bx"::::"intel","volatile");
         asm!("cli"::::"intel","volatile");
         asm!("hlt"::::"intel","volatile");
     }

@@ -96,6 +96,7 @@ switch_to:
 %define kernel_syscall_stack_size 0x200_00
 %define kernel_syscall_stack_end (kernel_syscall_stack + kernel_syscall_stack_size)
 
+
 ;# Description
 ; Process an interrupt from the user code.
 ; 1. Switch to kernel page tables and stack
@@ -208,15 +209,6 @@ process_interrupt:
 .return_normal:
     ; rax and rdx correct from kernel interrupt handler
     jmp switch_to
-
-.return_syscall:
-    ; The kernel will jump here when returning from a system call
-    ; TODO
-
-.return_page_fault:
-    ; The kernel will jump here when returning from a page fault,
-    ; i.e. after loading a swapped-out page from disk
-    ; TODO
 
 
 ;# Description

@@ -31,9 +31,15 @@ fn main() -> u64 {
     let count = syscall::fd_read(fd, &mut buffer).unwrap();
     syscall::debug_print(&format!("/dev/null : {:?}", &buffer[..count]));
 
-    for i in 0..2 {
-        syscall::debug_print(&format!("iter = {}", i));
-        syscall::sched_sleep_ns(100_000_000 * (1 + pid)).unwrap();
+    if pid == 0 {
+        let fd = syscall::fs_open("/dev/test").unwrap();
+        let count = syscall::fd_read(fd, &mut buffer).unwrap();
+        syscall::debug_print(&format!("/dev/test : {:?}", &buffer[..count]));
+    } else {
+        for i in 0..10 {
+            syscall::debug_print(&format!("iter = {}", i));
+            syscall::sched_sleep_ns(500_000_000).unwrap();
+        }
     }
 
     pid

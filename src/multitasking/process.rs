@@ -15,6 +15,7 @@ use crate::memory::prelude::*;
 use crate::memory::process_common_code as pcc;
 use crate::memory::MemoryController;
 use crate::memory::{PROCESS_COMMON_CODE, PROCESS_STACK};
+use crate::syscall::RawSyscall;
 use crate::util::elf_parser::{self, ELFData};
 
 use super::loader::ElfImage;
@@ -43,7 +44,6 @@ impl fmt::Display for ProcessId {
 #[derive(Debug, Clone)]
 pub struct ProcessMetadata {
     pub id: ProcessId,
-    pub parent: Option<ProcessId>,
     pub status: Status,
 }
 
@@ -92,23 +92,23 @@ pub struct Process {
     pub stack_frames: Vec<PhysFrame>,
     /// Dynamic memory frames
     pub dynamic_memory_frames: Vec<PhysFrame>,
+    /// Pending system call for repeating IO operations after waking up
+    pub repeat_syscall: Option<RawSyscall>,
     /// Metadata used for scheduling etc.
     metadata: ProcessMetadata,
 }
 impl Process {
     pub const fn new(
-        id: ProcessId, parent: Option<ProcessId>, page_table: PageMap, stack_pointer: VirtAddr,
-        stack_frames: Vec<PhysFrame>,
-    ) -> Self
-    {
+        id: ProcessId, page_table: PageMap, stack_pointer: VirtAddr, stack_frames: Vec<PhysFrame>,
+    ) -> Self {
         Self {
             page_table,
             stack_pointer,
             stack_frames,
             dynamic_memory_frames: Vec::new(),
+            repeat_syscall: None,
             metadata: ProcessMetadata {
                 id,
-                parent,
                 status: Status::Running,
             },
         }
@@ -123,10 +123,8 @@ impl Process {
     }
 
     /// Creates a new process
-    pub unsafe fn create(
-        mm: &mut MemoryController, pid: ProcessId, parent: Option<ProcessId>, elf: ElfImage,
-    ) -> Self {
-        create_process(mm, pid, parent, elf)
+    pub unsafe fn create(mm: &mut MemoryController, pid: ProcessId, elf: ElfImage) -> Self {
+        create_process(mm, pid, elf)
     }
 }
 
@@ -137,9 +135,7 @@ impl Process {
 /// * Loads executable from an ELF image
 /// Requires that the kernel page table is active.
 /// Returns ProcessId and PageMap for the process.
-unsafe fn create_process(
-    mm: &mut MemoryController, pid: ProcessId, parent: Option<ProcessId>, elf: ElfImage,
-) -> Process {
+unsafe fn create_process(mm: &mut MemoryController, pid: ProcessId, elf: ElfImage) -> Process {
     // Allocate a stack for the process
     let stack_frames = mm.alloc_frames(PROCESS_STACK_SIZE_PAGES as usize);
     let stack_area = mm.alloc_virtual_area(PROCESS_STACK_SIZE_PAGES);
@@ -295,5 +291,5 @@ unsafe fn create_process(
     // TODO: Unmap process structures from kernel page map
     // ^ at least the process page table is not unmapped yet
 
-    Process::new(pid, parent, pm, rsp, stack_frames)
+    Process::new(pid, pm, rsp, stack_frames)
 }

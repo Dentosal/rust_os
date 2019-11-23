@@ -15,7 +15,7 @@ pub mod special_files;
 pub mod staticfs;
 pub mod tree;
 
-use self::error::{FsError, FsResult};
+use self::error::{ErrorCode, IoError, IoResult};
 use self::file::FileOps;
 use self::path::{Path, PathBuf};
 use self::special_files::*;
@@ -64,7 +64,7 @@ impl VirtualFS {
     }
 
     /// Traverse tree and return NodeId
-    pub fn resolve(&self, path: Path) -> FsResult<NodeId> {
+    pub fn resolve(&self, path: Path) -> IoResult<NodeId> {
         assert!(path.is_absolute());
         let mut cursor = ROOT_ID;
         for c in path.components() {
@@ -82,13 +82,13 @@ impl VirtualFS {
     }
 
     /// Returns None if the node desn't exist
-    pub fn list_directory(&mut self, path: Path) -> FsResult<Vec<String>> {
+    pub fn list_directory(&mut self, path: Path) -> IoResult<Vec<String>> {
         let id = self.resolve(path)?;
         unimplemented!("LIST DIR")
     }
 
     /// Create a new node
-    pub fn create(&mut self, path: Path, new_node: Node) -> FsResult<NodeId> {
+    pub fn create(&mut self, path: Path, new_node: Node) -> IoResult<NodeId> {
         assert!(!path.is_root());
         assert!(path.is_absolute());
 
@@ -98,7 +98,7 @@ impl VirtualFS {
         let id = self.next_nodeid;
         let p = self.node_mut(parent_node);
         if p.has_child(&(*file_name).to_owned())? {
-            Err(FsError::NodeExists)
+            Err(IoError::Code(ErrorCode::fs_node_exists))
         } else {
             p.add_child(id, file_name)?;
             self.nodes.insert(id, new_node);
@@ -108,17 +108,17 @@ impl VirtualFS {
     }
 
     /// Create a new node
-    pub fn create_branch(&mut self, path: Path) -> FsResult<NodeId> {
+    pub fn create_branch(&mut self, path: Path) -> IoResult<NodeId> {
         self.create(path, Node::new_branch())
     }
 
     /// Mount a special device
-    fn create_special(&mut self, path: Path, dev: Box<dyn FileOps>) -> FsResult<NodeId> {
+    fn create_special(&mut self, path: Path, dev: Box<dyn FileOps>) -> IoResult<NodeId> {
         self.create(path.clone(), Node::new_special(dev))
     }
 
     /// File info (system call)
-    pub fn fileinfo(&mut self, path: &str) -> FsResult<d7abi::FileInfo> {
+    pub fn fileinfo(&mut self, path: &str) -> IoResult<d7abi::FileInfo> {
         let path = Path::new(path);
         Ok(self.node(self.resolve(path)?).fileinfo())
     }
@@ -139,7 +139,7 @@ impl VirtualFS {
     }
 
     /// Open a file (system call)
-    pub fn open(&mut self, path: &str, pid: ProcessId) -> FsResult<FileDescriptor> {
+    pub fn open(&mut self, path: &str, pid: ProcessId) -> IoResult<FileDescriptor> {
         let path = Path::new(path);
         let node_id = self.resolve(path)?;
         self.node_mut(node_id).open()?;
@@ -148,7 +148,7 @@ impl VirtualFS {
     }
 
     /// Resolves file descriptor for a process
-    pub fn resolve_fd(&mut self, fd: FileDescriptor, pid: ProcessId) -> FsResult<NodeId> {
+    pub fn resolve_fd(&mut self, fd: FileDescriptor, pid: ProcessId) -> IoResult<NodeId> {
         Ok(self
             .process(pid)
             .resolve(fd)
@@ -156,9 +156,20 @@ impl VirtualFS {
     }
 
     /// Read from file (system call)
-    pub fn read(&mut self, fd: FileDescriptor, pid: ProcessId, buf: &mut [u8]) -> FsResult<usize> {
+    pub fn read(&mut self, fd: FileDescriptor, pid: ProcessId, buf: &mut [u8]) -> IoResult<usize> {
         let node_id = self.resolve_fd(fd, pid)?;
         self.node_mut(node_id).read(fd, buf)
+    }
+
+    /// Update when a process completes.
+    /// Closes all files opened by the process
+    /// TODO: flush/synchronize buffers?
+    pub fn on_process_over(&mut self, completed: ProcessId) {
+        if let Some(pd) = self.descriptors.remove(&completed) {
+            for node_id in pd.descriptors.values() {
+                self.node_mut(*node_id).close();
+            }
+        }
     }
 }
 
@@ -166,7 +177,7 @@ lazy_static! {
     pub static ref FILESYSTEM: Mutex<VirtualFS> = Mutex::new(VirtualFS::new());
 }
 
-fn create_fs(fs: &mut VirtualFS) -> FsResult<()> {
+fn create_fs(fs: &mut VirtualFS) -> IoResult<()> {
     // Create top-level fs hierarchy
     fs.create_branch(Path::new("/bin"))?;
     fs.create_branch(Path::new("/cfg"))?;
@@ -176,6 +187,7 @@ fn create_fs(fs: &mut VirtualFS) -> FsResult<()> {
     // Insert special files
     fs.create_special(Path::new("/dev/null"), Box::new(NullDevice))?;
     fs.create_special(Path::new("/dev/zero"), Box::new(ZeroDevice))?;
+    fs.create_special(Path::new("/dev/test"), Box::new(TestDevice { rounds: 3 }))?;
 
     Ok(())
 }

@@ -45,6 +45,7 @@
 #![feature(ptr_internals)]
 #![feature(stmt_expr_attributes)]
 #![feature(trait_alias)]
+#![feature(try_trait)]
 
 use core::alloc::Layout;
 use core::panic::PanicInfo;
@@ -159,14 +160,14 @@ pub extern "C" fn rust_main() -> ! {
         let pid = SCHEDULER.try_lock().unwrap().spawn(mod_test);
         rprintln!("Spawned process: pid = {}", pid);
     }
-    // {
-    //     let pid = SCHEDULER.try_lock().unwrap().spawn(mod_test);
-    //     rprintln!("Spawned process: pid = {}", pid);
-    // }
-    // {
-    //     let pid = SCHEDULER.try_lock().unwrap().spawn(mod_test);
-    //     rprintln!("Spawned process: pid = {}", pid);
-    // }
+    {
+        let pid = SCHEDULER.try_lock().unwrap().spawn(mod_test);
+        rprintln!("Spawned process: pid = {}", pid);
+    }
+    {
+        let pid = SCHEDULER.try_lock().unwrap().spawn(mod_test);
+        rprintln!("Spawned process: pid = {}", pid);
+    }
 
     // Wait until the next clock tick interrupt,
     // after that the process scheduler takes over

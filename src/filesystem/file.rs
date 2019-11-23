@@ -1,18 +1,18 @@
 use d7abi::FileDescriptor;
 
 use super::path::Path;
-use super::FsResult;
+use super::IoResult;
 
 /// Operations on an opened file from mount owners perspective
 pub trait FileOps: Send {
     /// Pull some bytes from this source into the buffer, returning how many bytes were read
-    fn read(&mut self, fd: FileDescriptor, buf: &mut [u8]) -> FsResult<usize>;
+    fn read(&mut self, fd: FileDescriptor, buf: &mut [u8]) -> IoResult<usize>;
 
     /// Write a buffer into file, returning how many bytes were written
-    fn write(&mut self, fd: FileDescriptor, buf: &[u8]) -> FsResult<usize>;
+    fn write(&mut self, fd: FileDescriptor, buf: &[u8]) -> IoResult<usize>;
 
     /// Verify that all writes have reached their destination
-    fn synchronize(&mut self, fd: FileDescriptor) -> FsResult<()>;
+    fn synchronize(&mut self, fd: FileDescriptor) -> IoResult<()>;
 
     /// Request device-specific control information transfer.
     /// The device can decide whether this "selects a channel",
@@ -27,5 +27,5 @@ pub trait FileOps: Send {
     /// file.write(b"321")?;
     /// // File now contains 1321
     /// ```
-    fn control(&mut self, fd: FileDescriptor, function: u64) -> FsResult<()>;
+    fn control(&mut self, fd: FileDescriptor, function: u64) -> IoResult<()>;
 }

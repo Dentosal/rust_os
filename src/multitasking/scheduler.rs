@@ -9,23 +9,27 @@ use d7time::{Duration, Instant};
 
 use crate::memory;
 use crate::multitasking::loader::ElfImage;
+use crate::syscall::RawSyscall;
 
 use super::process::{self, Process, ProcessMetadata, ProcessResult};
-use super::queues::{Queues, Schedule};
+use super::queues::{Queues, WaitFor};
 use super::ProcessId;
 
 const TIME_SLICE: Duration = Duration::from_millis(1); // run task 1 millisecond and switch
-// const TIME_SLICE: Duration = Duration::from_millis(1_000); // XXX: testing with 1 sec slices
 
 /// Process switch an related alternatives
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum ProcessSwitch {
-    /// Switch to a different process
-    Switch(Process),
     /// Keep the same process
     Continue,
     /// Go to idle state
     Idle,
+    /// Switch to a different process
+    Switch(Process),
+    /// Switch to a new process, by repeating
+    /// a system call, and continuing after that
+    RepeatSyscall(Process, RawSyscall),
 }
 
 pub struct Scheduler {
@@ -75,42 +79,50 @@ impl Scheduler {
     }
 
     /// Creates a new process, and returns its pid
-    unsafe fn create_process(&mut self, parent: Option<ProcessId>, elf: ElfImage) -> ProcessId {
+    unsafe fn create_process(&mut self, elf: ElfImage) -> ProcessId {
         let pid = self.next_pid;
         self.next_pid = self.next_pid.next();
-        let process = memory::configure(|mm| Process::create(mm, pid, parent, elf));
+        let process = memory::configure(|mm| Process::create(mm, pid, elf));
         self.processes.insert(pid, process);
-        self.queues.give(pid, Schedule::Running);
+        self.queues.give(pid, WaitFor::None);
         pid
     }
 
     /// Creates a new process without a parent process
     pub fn spawn(&mut self, elf_image: ElfImage) -> ProcessId {
-        unsafe { self.create_process(None, elf_image) }
+        unsafe { self.create_process(elf_image) }
     }
 
     /// Terminates process if it's alive.
-    /// Returns whether the process existed at all.
-    /// Note that `self.running` must be updated manually if changed
-    fn terminate(&mut self, target: ProcessId, status: ProcessResult) -> bool {
+    /// Returns the data for the process to switch to, if any.
+    /// Will never return `ProcessSwitch::Continue`.
+    pub fn terminate_and_switch(
+        &mut self, target: ProcessId, status: ProcessResult,
+    ) -> ProcessSwitch {
+        use crate::filesystem::FILESYSTEM;
+
         if let Some(process) = self.processes.remove(&target) {
             rprintln!("Stopping pid {} with status {:?}", target, status);
-            // TODO: Send return code to subscribed processes
-            // TODO: remove process data: free stack frames, etc.
-            true
-        } else {
-            false
-        }
-    }
+            // Schedule processes waiting for the termination
+            self.queues.on_process_over(process.id());
+            // Close open file pointers
+            FILESYSTEM
+                .try_lock()
+                .expect("FILESYSTEM LOCKED")
+                .on_process_over(process.id());
 
-    /// Terminate the current process, and switch to the next one immediately.
-    /// Returns the data for the process to switch to.
-    /// If there are no processes left, panics as there is nothing to do.
-    pub unsafe fn terminate_current(&mut self, status: process::ProcessResult) -> ProcessSwitch {
-        let pid = self.get_running_pid().expect("No process running");
-        self.running = None;
-        self.terminate(pid, status);
-        self.switch(None)
+            // TODO: Remove process data:
+            // * Free stack frames, etc.
+
+            if self.running == Some(process.id()) {
+                self.running = None;
+                unsafe { self.switch(None) }
+            } else {
+                unsafe { self.switch_current() }
+            }
+        } else {
+            ProcessSwitch::Idle
+        }
     }
 
     /// Store process information before switching to other process.
@@ -127,34 +139,51 @@ impl Scheduler {
 
     /// Prepare switch to the next process
     /// Returns the data for the process to switch to, if any.
-    /// If `schedule` is None, the process will not be scheduled again.
-    pub unsafe fn switch(&mut self, schedule: Option<Schedule>) -> ProcessSwitch {
+    /// If `schedule` is None, the current process will not be scheduled again.
+    pub unsafe fn switch(&mut self, schedule: Option<WaitFor>) -> ProcessSwitch {
+        if let Some(s) = schedule {
+            if let Some(running_pid) = self.running {
+                self.queues.give(running_pid, s);
+            }
+        }
+
         if let Some(pid) = self.queues.take() {
-            if let Some(s) = schedule {
-                if let Some(running_pid) = self.running {
-                    self.queues.give(running_pid, s);
-                }
-            }
             self.running = Some(pid);
-            ProcessSwitch::Switch(self.processes.get(&pid).unwrap().clone())
-        } else {
-            if let Some(s) = schedule {
-                if let Some(running_pid) = self.running {
-                    self.queues.give(running_pid, s);
-                }
+            let process = self.processes.get_mut(&pid).unwrap();
+            if let Some(raw_syscall) = process.repeat_syscall.take() {
+                ProcessSwitch::RepeatSyscall(process.clone(), raw_syscall)
+            } else {
+                ProcessSwitch::Switch(process.clone())
             }
+        } else {
             self.running = None;
             ProcessSwitch::Idle
         }
     }
 
+    /// Prepare switch to the current process if any.
+    /// This is used when a concrete switch to current process is required.
+    /// If there is no active process, simply idles.
+    pub unsafe fn switch_current(&mut self) -> ProcessSwitch {
+        if let Some(pid) = self.running {
+            let process = self.processes.get_mut(&pid).unwrap();
+            if let Some(raw_syscall) = process.repeat_syscall.take() {
+                ProcessSwitch::RepeatSyscall(process.clone(), raw_syscall)
+            } else {
+                ProcessSwitch::Switch(process.clone())
+            }
+        } else {
+            ProcessSwitch::Idle
+        }
+    }
+
     pub fn tick(&mut self, now: Instant) -> ProcessSwitch {
-        self.queues.tick(&now);
+        self.queues.on_tick(&now);
         match self.next_switch {
             Some(s) => {
                 if now >= s {
                     self.next_switch = Some(now + TIME_SLICE);
-                    unsafe { self.switch(Some(Schedule::Running)) }
+                    unsafe { self.switch(Some(WaitFor::None)) }
                 } else {
                     ProcessSwitch::Continue
                 }

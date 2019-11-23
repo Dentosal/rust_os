@@ -5,5 +5,5 @@ mod scheduler;
 
 pub use self::loader::{load_module, ElfImage};
 pub use self::process::{Process, ProcessId};
-pub use self::queues::Schedule;
+pub use self::queues::WaitFor;
 pub use self::scheduler::{ProcessSwitch, Scheduler, SCHEDULER};

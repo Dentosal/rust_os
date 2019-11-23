@@ -3,7 +3,8 @@ use x86_64::{PhysAddr, VirtAddr};
 
 use crate::driver::keyboard;
 use crate::driver::pic;
-use crate::multitasking::{process, ProcessId, ProcessSwitch, SCHEDULER};
+use crate::multitasking::{process, Process, ProcessId, ProcessSwitch, SCHEDULER};
+use crate::syscall::RawSyscall;
 use crate::time;
 
 /// Breakpoint handler
@@ -93,9 +94,13 @@ pub(super) unsafe extern "C" fn exception_irq0() -> u128 {
     let next_process = time::SYSCLOCK.tick();
     pic::PICS.lock().notify_eoi(0x20);
     match next_process {
-        ProcessSwitch::Switch(process) => {
-            ((process.stack_pointer.as_u64() as u128) << 64)
-                | (process.page_table.p4_addr().as_u64() as u128)
+        ProcessSwitch::Switch(p) => return_process(p),
+        ProcessSwitch::RepeatSyscall(p, rsc) => {
+            if let Some(rp) = handle_repeat_syscall(p, rsc) {
+                return_process(rp)
+            } else {
+                0
+            }
         },
         ProcessSwitch::Continue => 0,
         ProcessSwitch::Idle => 0,
@@ -190,21 +195,43 @@ unsafe extern "C" fn process_interrupt_inner(
 {
     use x86_64::registers::control::Cr2;
 
-    let pid = SCHEDULER
-        .try_lock()
-        .unwrap()
-        .get_running_pid()
-        .expect("No process running?");
-
     let stack_frame: InterruptStackFrameValue = (*stack_frame_ptr).clone();
     let page_table = PhysAddr::new_unchecked(page_table);
     let process_stack = VirtAddr::new_unchecked(process_stack);
 
+    let pid = {
+        let mut sched = SCHEDULER.try_lock().unwrap();
+        let pid = sched.get_running_pid().expect("No process running?");
+        sched.store_state(pid, page_table, process_stack);
+        pid
+    };
+
+    /// If returns `None`, the current process should continue.
+    /// On `Some` the result should be returned immediately.
+    macro_rules! handle_switch {
+        ($next_process:expr) => {{
+            match $next_process {
+                ProcessSwitch::Continue => {},
+                ProcessSwitch::Idle => {
+                    idle();
+                },
+                ProcessSwitch::Switch(process) => {
+                    return return_process(process);
+                },
+                ProcessSwitch::RepeatSyscall(process, raw_syscall) => {
+                    if let Some(inner_process) = handle_repeat_syscall(process, raw_syscall) {
+                        return return_process(inner_process);
+                    }
+                },
+            }
+        }};
+    }
+
     match interrupt {
         0xd7 => {
             use crate::syscall::{handle_syscall, SyscallResult, SyscallResultAction};
-            match handle_syscall(pid, page_table, process_stack, stack_frame) {
-                SyscallResultAction::Terminate(status) => terminate(status),
+            match handle_syscall(pid, page_table, process_stack) {
+                SyscallResultAction::Terminate(status) => terminate(pid, status),
                 SyscallResultAction::Continue => {},
                 SyscallResultAction::Switch(schedule) => {
                     // get the next process
@@ -212,28 +239,7 @@ unsafe extern "C" fn process_interrupt_inner(
                         let mut sched = SCHEDULER.try_lock().unwrap();
                         sched.switch(Some(schedule))
                     };
-                    match next_process {
-                        ProcessSwitch::Switch(process) => {
-                            // Store old process details
-                            {
-                                let mut sched = SCHEDULER.try_lock().unwrap();
-                                sched.store_state(pid, page_table, process_stack);
-                            }
-                            // Switch to other process after returning
-                            return ((process.stack_pointer.as_u64() as u128) << 64)
-                                | (process.page_table.p4_addr().as_u64() as u128);
-                        },
-                        ProcessSwitch::Continue => {},
-                        ProcessSwitch::Idle => {
-                            // Store old process details
-                            {
-                                let mut sched = SCHEDULER.try_lock().unwrap();
-                                sched.store_state(pid, page_table, process_stack);
-                            }
-                            // Switch to idle state
-                            idle();
-                        },
-                    }
+                    handle_switch!(next_process);
                 },
             }
         },
@@ -241,26 +247,7 @@ unsafe extern "C" fn process_interrupt_inner(
             // PIT timer ticked
             let next_process = time::SYSCLOCK.tick();
             pic::PICS.lock().notify_eoi(interrupt);
-            match next_process {
-                ProcessSwitch::Continue => {},
-                ProcessSwitch::Idle => {
-                    SCHEDULER
-                        .try_lock()
-                        .unwrap()
-                        .store_state(pid, page_table, process_stack);
-                    idle();
-                },
-                ProcessSwitch::Switch(process) => {
-                    // Store old process details
-                    SCHEDULER
-                        .try_lock()
-                        .unwrap()
-                        .store_state(pid, page_table, process_stack);
-                    // Switch to other process after returning
-                    return ((process.stack_pointer.as_u64() as u128) << 64)
-                        | (process.page_table.p4_addr().as_u64() as u128);
-                },
-            }
+            handle_switch!(next_process);
         },
         0x21..=0x2f => {
             // TODO: Handle keyboard input
@@ -269,42 +256,40 @@ unsafe extern "C" fn process_interrupt_inner(
             // pic::PICS.lock().notify_eoi(interrupt);
             panic!("Unhandled interrupt: {}", interrupt);
         },
-        0x00 => fail(process::Error::DivideByZero(stack_frame)),
+        0x00 => fail(pid, process::Error::DivideByZero(stack_frame)),
         0x0e => {
             // TODO:
             // * Error code, if any, must be removed from the stack before returning
-            fail(process::Error::PageFault(
-                stack_frame,
-                Cr2::read(),
-                PageFaultErrorCode::from_bits(error_code as u64)
-                    .expect("Invalid page fault error code"),
-            ))
+            fail(
+                pid,
+                process::Error::PageFault(
+                    stack_frame,
+                    Cr2::read(),
+                    PageFaultErrorCode::from_bits(error_code as u64)
+                        .expect("Invalid page fault error code"),
+                ),
+            )
         },
-        0x08 | 0x0a | 0x0b | 0x0c | 0x0d | 0x11 | 0x1e => fail(process::Error::InterruptWithCode(
-            interrupt,
-            stack_frame,
-            error_code,
-        )),
-        _ => fail(process::Error::Interrupt(interrupt, stack_frame)),
+        0x08 | 0x0a | 0x0b | 0x0c | 0x0d | 0x11 | 0x1e => fail(
+            pid,
+            process::Error::InterruptWithCode(interrupt, stack_frame, error_code),
+        ),
+        _ => fail(pid, process::Error::Interrupt(interrupt, stack_frame)),
     }
 
     // Continue current process
-    ((process_stack.as_u64() as u128) << 64) | (page_table.as_u64() as u128)
+    process_pair_to_u128(process_stack, page_table)
 }
 
-fn fail(error: process::Error) -> ! {
-    terminate(process::ProcessResult::Failed(error))
+fn fail(pid: ProcessId, error: process::Error) -> ! {
+    terminate(pid, process::ProcessResult::Failed(error))
 }
 
-fn terminate(result: process::ProcessResult) -> ! {
-    use crate::memory::process_common_code::COMMON_ADDRESS_VIRT;
-
-    // Terminate current process
+/// Terminate the give process and switch to the next one
+fn terminate(pid: ProcessId, result: process::ProcessResult) -> ! {
     let next_process = unsafe {
-        SCHEDULER
-            .try_lock()
-            .expect("Sched unlock")
-            .terminate_current(result)
+        let mut sched = SCHEDULER.try_lock().expect("Sched unlock");
+        sched.terminate_and_switch(pid, result)
     };
 
     match next_process {
@@ -312,22 +297,12 @@ fn terminate(result: process::ProcessResult) -> ! {
         ProcessSwitch::Idle => {
             idle();
         },
-        ProcessSwitch::Switch(process) => {
-            // Jump to next process immediately
-            unsafe {
-                asm!("
-                        mov rcx, [rcx]  // Get procedure offset
-                        jmp rcx         // Jump into the procedure
-                        "
-                    :
-                    :
-                        "{rcx}"(COMMON_ADDRESS_VIRT as *const u8 as u64), // switch_to
-                        "{rdx}"(process.stack_pointer.as_u64()),
-                        "{rax}"(process.page_table.p4_addr().as_u64())
-                    :
-                    : "intel"
-                );
-                ::core::hint::unreachable_unchecked();
+        ProcessSwitch::Switch(p) => immediate_switch_to(p),
+        ProcessSwitch::RepeatSyscall(p, rsc) => {
+            if let Some(rp) = unsafe { handle_repeat_syscall(p, rsc) } {
+                immediate_switch_to(rp)
+            } else {
+                idle()
             }
         },
     }
@@ -347,4 +322,65 @@ fn idle() -> ! {
         );
         ::core::hint::unreachable_unchecked();
     }
+}
+
+/// Jump to next process immediately
+fn immediate_switch_to(process: Process) -> ! {
+    use crate::memory::process_common_code::COMMON_ADDRESS_VIRT;
+
+    unsafe {
+        asm!("
+            mov rcx, [rcx]  // Get procedure offset
+            jmp rcx         // Jump into the procedure
+            "
+            :
+            :
+                "{rcx}"(COMMON_ADDRESS_VIRT as *const u8 as u64), // switch_to
+                "{rdx}"(process.stack_pointer.as_u64()),
+                "{rax}"(process.page_table.p4_addr().as_u64())
+            :
+            : "intel"
+        );
+        ::core::hint::unreachable_unchecked();
+    }
+}
+
+/// Returns process to switch to, if any.
+/// On `None` the system should switch to idle state.
+#[must_use]
+unsafe fn handle_repeat_syscall(p: Process, raw_syscall: RawSyscall) -> Option<Process> {
+    use crate::syscall::{handle_syscall, SyscallResult, SyscallResultAction};
+    match handle_syscall(p.id(), p.page_table.p4_addr(), p.stack_pointer) {
+        SyscallResultAction::Terminate(status) => terminate(p.id(), status),
+        SyscallResultAction::Continue => Some(p),
+        SyscallResultAction::Switch(schedule) => {
+            let next_process = { SCHEDULER.try_lock().unwrap().switch(Some(schedule)) };
+            match next_process {
+                ProcessSwitch::Continue => None,
+                ProcessSwitch::Idle => None,
+                ProcessSwitch::Switch(inner_p) => Some(inner_p),
+                ProcessSwitch::RepeatSyscall(inner_p, inner_rsc) => {
+                    handle_repeat_syscall(inner_p, inner_rsc)
+                },
+            }
+        },
+    }
+}
+
+/// Constructs a u128 from two integers for returning
+/// process stack pointer and page table.
+/// When this integer is returned from `extern "C"` works like this:
+///
+/// `(u64, u64)` (encoded as u128) in `(rax, rdx)`, per System V ABI:
+/// https://en.wikipedia.org/wiki/X86_calling_conventions#System_V_AMD64_ABI
+/// If process switch is required, then the returned pair of u64 should be
+/// (p4_physical_address, stack_pointer)
+/// If no switch should be done then function must return `(0, 0)`.
+#[inline]
+fn return_process(p: Process) -> u128 {
+    process_pair_to_u128(p.stack_pointer, p.page_table.p4_addr())
+}
+
+fn process_pair_to_u128(stack_pointer: VirtAddr, page_table: PhysAddr) -> u128 {
+    ((stack_pointer.as_u64() as u128) << 64) | (page_table.as_u64() as u128)
 }

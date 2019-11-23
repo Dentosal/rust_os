@@ -1,15 +1,17 @@
-use core::fmt;
-
 use alloc::prelude::v1::*;
+use core::fmt;
 use hashbrown::HashMap;
 
-use d7abi::FileDescriptor;
+use d7abi::{FileDescriptor, FileInfo};
 
-use crate::multitasking::ProcessId;
+use crate::multitasking::{
+    process::{ProcessId, ProcessResult},
+    WaitFor,
+};
 
+use super::error::*;
 use super::file::FileOps;
 use super::path::Path;
-use super::{FsError, FsResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(transparent)]
@@ -48,69 +50,70 @@ impl Node {
         }
     }
 
-    pub fn fileinfo(&self) -> d7abi::FileInfo {
+    pub fn fileinfo(&self) -> FileInfo {
         match &self.data {
-            NodeData::Branch(_) => d7abi::FileInfo {
-                is_special: false,
-                mount_id: None,
-            },
-            NodeData::Special(_) => d7abi::FileInfo {
-                is_special: true,
-                mount_id: None,
-            },
-            NodeData::Mount(target) => d7abi::FileInfo {
-                is_special: false,
-                mount_id: Some(target.mount_id),
+            NodeData::Branch(_) => FileInfo { is_leaf: false },
+            NodeData::Special(_) => FileInfo { is_leaf: true },
+            NodeData::Process(_) => FileInfo { is_leaf: true },
+            NodeData::Mount(mt) => FileInfo {
+                is_leaf: mt.is_leaf,
             },
         }
     }
 
-    pub fn get_child(&self, name: &str) -> FsResult<NodeId> {
+    pub fn get_child(&self, name: &str) -> IoResult<NodeId> {
         match &self.data {
-            NodeData::Branch(b) => b.children.get(name).copied().ok_or(FsError::NodeNotFound),
-            NodeData::Special(_) => Err(FsError::NodeNotFound),
+            NodeData::Branch(b) => b
+                .children
+                .get(name)
+                .copied()
+                .ok_or(IoError::Code(ErrorCode::fs_node_not_found)),
+            NodeData::Special(_) => Err(IoError::Code(ErrorCode::fs_node_is_leaf)),
+            NodeData::Process(_) => Err(IoError::Code(ErrorCode::fs_node_is_leaf)),
             NodeData::Mount(_) => unimplemented!("Mount"),
         }
     }
 
-    pub fn has_child(&self, name: &str) -> FsResult<bool> {
+    pub fn has_child(&self, name: &str) -> IoResult<bool> {
         match &self.data {
             NodeData::Branch(b) => Ok(b.children.contains_key(name)),
-            NodeData::Special(_) => Ok(false),
+            NodeData::Special(_) => Err(IoError::Code(ErrorCode::fs_node_is_leaf)),
+            NodeData::Process(_) => Err(IoError::Code(ErrorCode::fs_node_is_leaf)),
             NodeData::Mount(_) => unimplemented!("Mount"),
         }
     }
 
-    pub fn add_child(&mut self, id: NodeId, name: &str) -> FsResult<()> {
+    pub fn add_child(&mut self, id: NodeId, name: &str) -> IoResult<()> {
         match &mut self.data {
             NodeData::Branch(b) => {
                 b.children.insert(name.to_owned(), id);
                 Ok(())
             },
-            NodeData::Special(_) => Err(FsError::NodeCreation),
+            NodeData::Special(_) => Err(IoError::Code(ErrorCode::fs_node_is_leaf)),
+            NodeData::Process(_) => Err(IoError::Code(ErrorCode::fs_node_is_leaf)),
             NodeData::Mount(_) => unimplemented!("Mount"),
         }
     }
 
     /// Increases reference count
-    pub fn open(&mut self) -> FsResult<()> {
+    pub fn open(&mut self) -> IoResult<()> {
         self.fd_refcount += 1;
         Ok(())
     }
 
-    /// Decreases reference count
-    pub fn close(&mut self) -> FsResult<()> {
+    /// Decreases reference count. Always succeeds.
+    pub fn close(&mut self) {
         assert_ne!(self.fd_refcount, 0, "close: fd refcount zero");
         self.fd_refcount -= 1;
-        Ok(())
     }
 
     /// Reads slice of data from this node,
     /// and returns how many bytes were read
-    pub fn read(&mut self, fd: FileDescriptor, buf: &mut [u8]) -> FsResult<usize> {
+    pub fn read(&mut self, fd: FileDescriptor, buf: &mut [u8]) -> IoResult<usize> {
         match &mut self.data {
             NodeData::Branch(b) => b.read(fd, buf),
             NodeData::Special(s) => (*s).read(fd, buf),
+            NodeData::Process(p) => p.read(fd, buf),
             NodeData::Mount(m) => unimplemented!("READ MOUNT"),
         }
     }
@@ -121,7 +124,16 @@ pub enum NodeData {
     /// Chilren for this node
     Branch(VirtualBranch),
     /// Special files only implemented in the kernel.
+    /// These are always leaf nodes.
     Special(Box<dyn FileOps>),
+    /// # Process
+    /// Reading a process blocks until the process is
+    /// completed, and then returns its exit status.
+    ///
+    /// Writing to a process is currently not implmented,
+    /// but it could be purposed to sending signals, or
+    /// just simply terminating the process.
+    Process(ProcessFile),
     /// # Mount point
     /// This node and its contents are managed by a driver
     /// software. On branch nodes, the driver can provide
@@ -147,6 +159,37 @@ impl fmt::Debug for NodeData {
             NodeData::Special(_) => write!(f, "Special"),
             other => write!(f, "{:?}", other),
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ProcessFile {
+    /// Id of the process
+    pid: ProcessId,
+    /// Result of the process, if it's completed
+    result: Option<ProcessResult>,
+}
+impl FileOps for ProcessFile {
+    /// Blocks until the process is complete, and the returns the result
+    fn read(&mut self, _fd: FileDescriptor, _buf: &mut [u8]) -> IoResult<usize> {
+        if let Some(result) = &self.result {
+            unimplemented!("Process {} read: Write to buffer {:?}", self.pid, result);
+        } else {
+            rprintln!("PROC WAIT {}", self.pid);
+            Err(IoError::RepeatAfter(WaitFor::Process(self.pid)))
+        }
+    }
+
+    fn write(&mut self, _fd: FileDescriptor, buf: &[u8]) -> IoResult<usize> {
+        unimplemented!("Process write") // TODO
+    }
+
+    fn synchronize(&mut self, _fd: FileDescriptor) -> IoResult<()> {
+        unimplemented!("Process sync") // TODO
+    }
+
+    fn control(&mut self, _fd: FileDescriptor, _: u64) -> IoResult<()> {
+        unimplemented!("Process ctrl") // TODO
     }
 }
 
@@ -188,7 +231,7 @@ impl VirtualBranch {
 impl FileOps for VirtualBranch {
     /// Provides next bytes from reader buffer.
     /// See `format_contents` for explanation of the format.
-    fn read(&mut self, fd: FileDescriptor, buf: &mut [u8]) -> FsResult<usize> {
+    fn read(&mut self, fd: FileDescriptor, buf: &mut [u8]) -> IoResult<usize> {
         if !self.readers.contains_key(&fd) {
             let content = self.format_contents();
             self.readers.insert(fd, content);
@@ -206,18 +249,19 @@ impl FileOps for VirtualBranch {
         Ok(count)
     }
 
-    fn write(&mut self, _fd: FileDescriptor, buf: &[u8]) -> FsResult<usize> {
+    fn write(&mut self, _fd: FileDescriptor, buf: &[u8]) -> IoResult<usize> {
         unimplemented!("VB write") // TODO
     }
 
-    fn synchronize(&mut self, _fd: FileDescriptor) -> FsResult<()> {
+    fn synchronize(&mut self, _fd: FileDescriptor) -> IoResult<()> {
         unimplemented!("VB sync") // TODO
     }
 
-    fn control(&mut self, _fd: FileDescriptor, _: u64) -> FsResult<()> {
+    fn control(&mut self, _fd: FileDescriptor, _: u64) -> IoResult<()> {
         unimplemented!("VB ctrl") // TODO
     }
 }
+
 #[derive(Debug, Clone)]
 pub struct MountTarget {
     /// Identifier of this mount point.
@@ -226,4 +270,7 @@ pub struct MountTarget {
     mount_id: u64,
     /// Process managing the mount point
     process_id: ProcessId,
+    /// Leafness is a static property of a mount,
+    /// the controlling process cannot change this
+    is_leaf: bool,
 }

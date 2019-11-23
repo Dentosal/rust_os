@@ -1,5 +1,6 @@
 use alloc::collections::VecDeque;
 use alloc::prelude::v1::*;
+use hashbrown::HashMap;
 
 use d7time::Instant;
 
@@ -7,11 +8,13 @@ use crate::multitasking::ProcessId;
 
 /// Instructions for scheduling a process
 #[derive(Debug, Clone)]
-pub enum Schedule {
+pub enum WaitFor {
     /// Run again on the next free slot
-    Running,
+    None,
     /// Run after specified moment
-    Sleeping(Instant),
+    Time(Instant),
+    /// Process completed
+    Process(ProcessId),
 }
 
 #[derive(Debug)]
@@ -22,12 +25,15 @@ pub struct Queues {
     /// Must be kept sorted by the wake-up time
     /// TODO: Switch to a proper priority queue for faster insert time
     pub sleeping: VecDeque<(Instant, ProcessId)>,
+    /// Waiting for a process to complete.
+    pub process: HashMap<ProcessId, Vec<ProcessId>>,
 }
 impl Queues {
     pub fn new() -> Self {
         Self {
             running: VecDeque::new(),
             sleeping: VecDeque::new(),
+            process: HashMap::new(),
         }
     }
 
@@ -35,14 +41,17 @@ impl Queues {
         self.running.is_empty() && self.sleeping.is_empty()
     }
 
-    pub fn give(&mut self, pid: ProcessId, s: Schedule) {
+    pub fn give(&mut self, pid: ProcessId, s: WaitFor) {
         match s {
-            Schedule::Running => {
+            WaitFor::None => {
                 self.running.push_back(pid);
             },
-            Schedule::Sleeping(instant) => {
+            WaitFor::Time(instant) => {
                 let i = p_index_vecdeque(&self.sleeping, &instant);
                 self.sleeping.insert(i, (instant, pid));
+            },
+            WaitFor::Process(wait_for_pid) => {
+                self.process.entry(wait_for_pid).or_default().push(pid);
             },
         }
     }
@@ -51,15 +60,8 @@ impl Queues {
         self.running.pop_front()
     }
 
-    /// Update by when clock ticks
-    pub fn tick(&mut self, now: &Instant) {
-        if self.sleeping.len() >= 2 {
-            assert!(self.sleeping[0].0 < self.sleeping[1].0, "SLORD1");
-            if self.sleeping.len() >= 3 {
-                assert!(self.sleeping[1].0 < self.sleeping[2].0, "SLORD2");
-            }
-        }
-
+    /// Update when clock ticks
+    pub fn on_tick(&mut self, now: &Instant) {
         while let Some((wakeup, _)) = self.sleeping.front() {
             if now >= wakeup {
                 let (_, pid) = self.sleeping.pop_front().unwrap();
@@ -67,6 +69,16 @@ impl Queues {
                 self.running.push_back(pid);
             } else {
                 break;
+            }
+        }
+    }
+
+    /// Update when a process completes
+    pub fn on_process_over(&mut self, completed: ProcessId) {
+        if let Some(pids) = self.process.remove(&completed) {
+            for pid in pids {
+                // FIXME: push_front to schedule immediately?
+                self.running.push_back(pid);
             }
         }
     }

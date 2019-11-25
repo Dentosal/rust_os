@@ -11,8 +11,8 @@ extern crate spin;
 use core::alloc::{Alloc, AllocErr, GlobalAlloc, Layout};
 use core::ptr::NonNull;
 
-pub const HEAP_START: u64 = 0x40_000_000; // At 1 GiB
-pub const HEAP_SIZE: u64 = 0x1_000_000;
+pub const HEAP_START: u64 = 0x4000_0000; // At 1 GiB
+pub const HEAP_SIZE: u64 = 0x640_0000; // 100 MiB heap
 
 use spin::Mutex;
 

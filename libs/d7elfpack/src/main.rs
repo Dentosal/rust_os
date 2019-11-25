@@ -5,6 +5,8 @@
 #![deny(overflowing_literals)]
 #![deny(safe_packed_borrows)]
 #![deny(unused_must_use)]
+// Features
+#![feature(maybe_uninit_extra)]
 
 use std::collections::HashMap;
 use std::env;
@@ -12,6 +14,7 @@ use std::fs::File;
 use std::io::{prelude::*, BufReader, SeekFrom};
 use std::iter::FromIterator;
 use std::mem::size_of;
+use std::mem::MaybeUninit;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use huffman_compress::CodeBuilder;
@@ -26,14 +29,15 @@ use rayon::prelude::*;
 
 use d7elfpack::*;
 
+/// https://doc.rust-lang.org/core/mem/union.MaybeUninit.html#initializing-an-array-element-by-element
 macro_rules! init_array(
     ($ty:ty : $val:expr; $len:expr) => (
-        {
-            let mut array: [$ty; $len] = unsafe { std::mem::uninitialized() };
-            for i in array.iter_mut() {
-                unsafe { ::std::ptr::write(i, $val); }
+        unsafe {
+            let mut array: [MaybeUninit<$ty>; $len] = MaybeUninit::uninit().assume_init();
+            for v in array.iter_mut() {
+                v.write($val);
             }
-            array
+            ::std::mem::transmute::<_, [$ty; $len]>(array)
         }
     )
 );
@@ -97,7 +101,7 @@ struct ProgramHeader {
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
 
-    if args.is_empty() {
+    if args.len() != 2 {
         println!("usage: in_elf out_elf");
         return;
     }
@@ -218,8 +222,8 @@ fn main() {
         0x3e, 0x00,
         // Version: 1
         1, 0, 0, 0,
-        // Entry point: 0x100_000
-        0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00,
+        // Entry point: 0x100_0000
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
         // Program header offset: 0x40 (Just after the file header)
         0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         // Section header offset: 0x00 (unused)

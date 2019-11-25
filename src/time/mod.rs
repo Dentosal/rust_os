@@ -36,9 +36,9 @@ impl SystemClock {
         let inc: u32 = (TIME_BETWEEN_E_12 / 1_000) as u32;
 
         // The lock is only held for clock updates
-        let mut uc_lock = self.lock.get();
-        let mut uc_sec = self.sec.get();
-        let mut uc_nsec = self.nsec.get();
+        let uc_lock = self.lock.get();
+        let uc_sec = self.sec.get();
+        let uc_nsec = self.nsec.get();
 
         // Aquire lock
         if (*uc_lock).compare_and_swap(false, true, SeqCst) {
@@ -71,8 +71,8 @@ impl SystemClock {
     /// Gets current time
     pub fn now(&self) -> Instant {
         unsafe {
-            let mut uc_sec = self.sec.get();
-            let mut uc_nsec = self.nsec.get();
+            let uc_sec = self.sec.get();
+            let uc_nsec = self.nsec.get();
 
             let mut prev_sec = (*uc_sec).load(SeqCst);
             let mut prev_nsec = (*uc_nsec).load(SeqCst);

@@ -1,7 +1,7 @@
 use alloc::prelude::v1::*;
 use hashbrown::HashMap;
 
-use d7abi::fs::{protocol, FileInfo};
+use d7abi::fs::protocol;
 
 use super::super::{error::IoResult, node::NodeId, FileClientId};
 use super::{FileOps, Leafness};

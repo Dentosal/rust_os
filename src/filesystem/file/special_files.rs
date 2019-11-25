@@ -52,7 +52,7 @@ impl FileOps for TestDevice {
         Leafness::Leaf
     }
 
-    fn read(&mut self, _fd: FileClientId, buf: &mut [u8]) -> IoResult<usize> {
+    fn read(&mut self, _fd: FileClientId, _buf: &mut [u8]) -> IoResult<usize> {
         use crate::multitasking::WaitFor;
         use crate::time::SYSCLOCK;
         use core::time::Duration;

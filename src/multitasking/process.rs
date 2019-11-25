@@ -1,24 +1,18 @@
 use alloc::prelude::v1::*;
-use core::cell::UnsafeCell;
 use core::fmt;
-use core::mem::MaybeUninit;
 use core::num::NonZeroU64;
-use core::ops::{Deref, DerefMut};
 use core::ptr;
 use core::u64;
-use spin::Mutex;
 use x86_64::structures::idt::{InterruptStackFrameValue, PageFaultErrorCode};
 use x86_64::structures::paging::PageTableFlags as Flags;
 use x86_64::{PhysAddr, VirtAddr};
 
-use crate::memory;
 use crate::memory::paging::PageMap;
 use crate::memory::prelude::*;
 use crate::memory::process_common_code as pcc;
 use crate::memory::MemoryController;
 use crate::memory::{PROCESS_COMMON_CODE, PROCESS_STACK};
-use crate::syscall::RawSyscall;
-use crate::util::elf_parser::{self, ELFData};
+use crate::util::elf_parser;
 
 use super::loader::ElfImage;
 
@@ -100,7 +94,7 @@ pub struct Process {
     /// Dynamic memory frames
     pub dynamic_memory_frames: Vec<PhysFrame>,
     /// Pending system call for repeating IO operations after waking up
-    pub repeat_syscall: Option<RawSyscall>,
+    pub repeat_syscall: bool,
     /// Metadata used for scheduling etc.
     metadata: ProcessMetadata,
 }
@@ -113,7 +107,7 @@ impl Process {
             stack_pointer,
             stack_frames,
             dynamic_memory_frames: Vec::new(),
-            repeat_syscall: None,
+            repeat_syscall: false,
             metadata: ProcessMetadata {
                 id,
                 status: Status::Running,

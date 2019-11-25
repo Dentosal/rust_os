@@ -2,11 +2,7 @@
 //! https://wiki.osdev.org/Virtio (Uses legacy pre-1.0 spec, not nice)
 //! http://docs.oasis-open.org/virtio/virtio/v1.0/cs04/virtio-v1.0-cs04.html
 
-use core::mem;
 use core::ptr;
-use cpuio::UnsafePort;
-use volatile;
-use x86_64::structures::paging::Mapper;
 
 use alloc::prelude::v1::Vec;
 

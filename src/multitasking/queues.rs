@@ -82,7 +82,7 @@ impl Queues {
         }
     }
 
-    fn give_inner(&mut self, pid: ProcessId, s: WaitFor, wait_id: WaitId) {
+    fn give_inner(&mut self, s: WaitFor, wait_id: WaitId) {
         match s {
             WaitFor::Time(instant) => {
                 let i = p_index_vecdeque(&self.wait_sleeping, &instant);
@@ -114,10 +114,10 @@ impl Queues {
         let wait_id = self.create_wait(pid);
         if let WaitFor::FirstOf(targets) = s {
             for target in targets {
-                self.give_inner(pid, target, wait_id);
+                self.give_inner(target, wait_id);
             }
         } else {
-            self.give_inner(pid, s, wait_id);
+            self.give_inner(s, wait_id);
         }
     }
 

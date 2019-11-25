@@ -2,7 +2,7 @@ use core::cell::UnsafeCell;
 use core::intrinsics::likely;
 use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering::SeqCst};
 
-use crate::multitasking::{Process, ProcessSwitch, SCHEDULER};
+use crate::multitasking::{ProcessSwitch, SCHEDULER};
 
 use d7time::{Duration, Instant, TimeSpec};
 

@@ -1,6 +1,5 @@
 //! Kernel stack for system calls
 
-use core::ptr;
 use x86_64::structures::paging::PageTableFlags as Flags;
 
 use crate::memory::{self, prelude::*};

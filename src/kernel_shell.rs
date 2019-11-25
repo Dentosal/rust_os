@@ -1,5 +1,4 @@
-use alloc::borrow::ToOwned;
-use alloc::string::String;
+use alloc::prelude::v1::*;
 
 use crate::driver::keyboard;
 

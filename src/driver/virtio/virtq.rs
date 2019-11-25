@@ -1,10 +1,7 @@
 use alloc::vec::Vec;
 use core::mem;
 use core::ptr;
-use cpuio::UnsafePort;
 
-use crate::driver::pci;
-use crate::memory::prelude::PhysAddr;
 use crate::memory::Page;
 
 /// Align upwards to page size

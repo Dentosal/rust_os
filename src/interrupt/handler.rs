@@ -95,8 +95,8 @@ pub(super) unsafe extern "C" fn exception_irq0() -> u128 {
     pic::PICS.lock().notify_eoi(0x20);
     match next_process {
         ProcessSwitch::Switch(p) => return_process(p),
-        ProcessSwitch::RepeatSyscall(p, rsc) => {
-            if let Some(rp) = handle_repeat_syscall(p, rsc) {
+        ProcessSwitch::RepeatSyscall(p) => {
+            if let Some(rp) = handle_repeat_syscall(p) {
                 return_process(rp)
             } else {
                 0
@@ -218,8 +218,8 @@ unsafe extern "C" fn process_interrupt_inner(
                 ProcessSwitch::Switch(process) => {
                     return return_process(process);
                 },
-                ProcessSwitch::RepeatSyscall(process, raw_syscall) => {
-                    if let Some(inner_process) = handle_repeat_syscall(process, raw_syscall) {
+                ProcessSwitch::RepeatSyscall(process) => {
+                    if let Some(inner_process) = handle_repeat_syscall(process) {
                         return return_process(inner_process);
                     }
                 },
@@ -229,7 +229,7 @@ unsafe extern "C" fn process_interrupt_inner(
 
     match interrupt {
         0xd7 => {
-            use crate::syscall::{handle_syscall, SyscallResult, SyscallResultAction};
+            use crate::syscall::{handle_syscall, SyscallResultAction};
             match handle_syscall(pid, page_table, process_stack) {
                 SyscallResultAction::Terminate(status) => terminate(pid, status),
                 SyscallResultAction::Continue => {},
@@ -298,8 +298,8 @@ fn terminate(pid: ProcessId, result: process::ProcessResult) -> ! {
             idle();
         },
         ProcessSwitch::Switch(p) => immediate_switch_to(p),
-        ProcessSwitch::RepeatSyscall(p, rsc) => {
-            if let Some(rp) = unsafe { handle_repeat_syscall(p, rsc) } {
+        ProcessSwitch::RepeatSyscall(p) => {
+            if let Some(rp) = unsafe { handle_repeat_syscall(p) } {
                 immediate_switch_to(rp)
             } else {
                 idle()
@@ -348,7 +348,7 @@ fn immediate_switch_to(process: Process) -> ! {
 /// Returns process to switch to, if any.
 /// On `None` the system should switch to idle state.
 #[must_use]
-unsafe fn handle_repeat_syscall(p: Process, raw_syscall: RawSyscall) -> Option<Process> {
+unsafe fn handle_repeat_syscall(p: Process) -> Option<Process> {
     use crate::syscall::{handle_syscall, SyscallResult, SyscallResultAction};
     match handle_syscall(p.id(), p.page_table.p4_addr(), p.stack_pointer) {
         SyscallResultAction::Terminate(status) => terminate(p.id(), status),
@@ -359,9 +359,7 @@ unsafe fn handle_repeat_syscall(p: Process, raw_syscall: RawSyscall) -> Option<P
                 ProcessSwitch::Continue => None,
                 ProcessSwitch::Idle => None,
                 ProcessSwitch::Switch(inner_p) => Some(inner_p),
-                ProcessSwitch::RepeatSyscall(inner_p, inner_rsc) => {
-                    handle_repeat_syscall(inner_p, inner_rsc)
-                },
+                ProcessSwitch::RepeatSyscall(inner_p) => handle_repeat_syscall(inner_p),
             }
         },
     }

@@ -4,7 +4,6 @@ use lazy_static::lazy_static;
 use spin::Mutex;
 
 use d7abi::fs::{FileDescriptor, FileInfo};
-use d7ramfs;
 
 use crate::multitasking::process::ProcessId;
 

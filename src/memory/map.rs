@@ -1,5 +1,3 @@
-use core::cell::UnsafeCell;
-use core::num::NonZeroUsize;
 use core::ptr;
 
 use d7alloc::{HEAP_SIZE, HEAP_START};
@@ -29,7 +27,6 @@ pub(crate) fn load_memory_map() -> [Option<PhysMemoryRange>; MAX_OK_ENTRIES] {
     let mut ok_entries: [Option<PhysMemoryRange>; MAX_OK_ENTRIES] = [None; MAX_OK_ENTRIES];
 
     let mut out_entry_index: usize = 0;
-    let mut current_area: Option<PhysMemoryRange> = None;
 
     {
         let mut write_entry = |entry| {
@@ -47,7 +44,7 @@ pub(crate) fn load_memory_map() -> [Option<PhysMemoryRange>; MAX_OK_ENTRIES] {
             out_entry_index += 1;
         };
 
-        let mut split_and_write_entry = |mut entry: PhysMemoryRange| {
+        let mut split_and_write_entry = |entry: PhysMemoryRange| {
             // These are permanently reserved for the kernel
             if let Some(ok) = entry.above(MEMORY_RESERVED_BELOW) {
                 // These are permanently reserved for the heap

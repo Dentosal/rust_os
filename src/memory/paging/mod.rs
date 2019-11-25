@@ -2,22 +2,18 @@ mod mapper;
 
 pub use self::mapper::PageMap;
 
-use core::mem;
-use x86_64::registers::control::{Cr0, Cr0Flags, Cr3};
+use x86_64::registers::control::{Cr0, Cr0Flags};
 use x86_64::registers::model_specific::{Efer, EferFlags};
 use x86_64::structures::paging as pg;
-use x86_64::structures::paging::PageTable;
 use x86_64::structures::paging::PageTableFlags as Flags;
-use x86_64::{PhysAddr, VirtAddr};
-
-use d7alloc;
+use x86_64::PhysAddr;
 
 use crate::driver::vga_buffer::VGA_BUFFER_PHYSADDR;
 use crate::interrupt::idt;
 use crate::util::elf_parser::ELFData;
 
 use super::prelude::*;
-use super::{Mapper, Page, PhysFrame};
+use super::{Page, PhysFrame};
 
 pub unsafe fn enable_nxe() {
     Efer::update(|flags| flags.set(EferFlags::NO_EXECUTE_ENABLE, true))

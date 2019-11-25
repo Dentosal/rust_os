@@ -3,10 +3,8 @@
 //!
 //! Uses only 2MiB huge pages.
 
-use core::mem;
-use core::ptr;
 use x86_64::structures::paging as pg;
-use x86_64::structures::paging::page_table::{PageTable, PageTableEntry, PageTableFlags as Flags};
+use x86_64::structures::paging::page_table::{PageTable, PageTableFlags as Flags};
 use x86_64::PhysAddr;
 
 use crate::multitasking::ElfImage;
@@ -88,9 +86,9 @@ impl PageMap {
     #[must_use]
     pub unsafe fn init(curr_addr: VirtAddr, phys_addr: PhysAddr, virt_addr: VirtAddr) -> Self {
         // We need to create and map one table for each level
-        let mut p4_table: &mut PageTable = unsafe { &mut *frame_addr!(curr_addr, 0).as_mut_ptr() };
-        let mut p3_table: &mut PageTable = unsafe { &mut *frame_addr!(curr_addr, 1).as_mut_ptr() };
-        let mut p2_table: &mut PageTable = unsafe { &mut *frame_addr!(curr_addr, 2).as_mut_ptr() };
+        let p4_table: &mut PageTable = unsafe { &mut *frame_addr!(curr_addr, 0).as_mut_ptr() };
+        let p3_table: &mut PageTable = unsafe { &mut *frame_addr!(curr_addr, 1).as_mut_ptr() };
+        let p2_table: &mut PageTable = unsafe { &mut *frame_addr!(curr_addr, 2).as_mut_ptr() };
 
         // Zero the tables
         p4_table.zero();
@@ -199,7 +197,7 @@ impl PageMap {
             let addr = frame_addr!(self.phys_addr, self.table_count);
             self.table_count += 1;
             p4[i4].set_addr(addr, pt_flags!(3));
-            let mut table: &mut PageTable =
+            let table: &mut PageTable =
                 unsafe { &mut *((addr.as_u64() as isize + offset) as *mut PageTable) };
             table.zero();
             table
@@ -212,7 +210,7 @@ impl PageMap {
             let addr = frame_addr!(self.phys_addr, self.table_count);
             self.table_count += 1;
             p3[i3].set_addr(addr, pt_flags!(3));
-            let mut table: &mut PageTable =
+            let table: &mut PageTable =
                 unsafe { &mut *((addr.as_u64() as isize + offset) as *mut PageTable) };
             table.zero();
             table

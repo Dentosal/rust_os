@@ -1,8 +1,5 @@
-use alloc::prelude::v1::String;
-use core::convert::{From, TryFrom};
-use core::mem;
+use core::convert::TryFrom;
 use core::ptr;
-use x86_64::structures::idt::{InterruptStackFrame, InterruptStackFrameValue, PageFaultErrorCode};
 use x86_64::structures::paging::PageTableFlags as Flags;
 use x86_64::{PhysAddr, VirtAddr};
 
@@ -10,10 +7,7 @@ use d7abi::fs::{FileDescriptor, FileInfo};
 
 use crate::filesystem::{error::*, FILESYSTEM};
 use crate::memory;
-use crate::memory::paging::PageMap;
 use crate::memory::prelude::*;
-use crate::memory::Area;
-use crate::memory::PROCESS_STACK;
 use crate::multitasking::{process, Process, ProcessId, WaitFor, SCHEDULER};
 
 #[derive(Debug, Clone)]
@@ -48,7 +42,6 @@ impl core::ops::Try for SyscallResult {
     }
 
     fn from_error(error: Self::Error) -> Self {
-        use crate::multitasking::process::Error::SyscallNumber;
         match error {
             IoError::RepeatAfter(waitfor) => Self::RepeatAfter(waitfor),
             IoError::Code(code) => Self::Continue(Err(code.into())),
@@ -153,7 +146,7 @@ pub fn syscall(
                 }
             },
             SC::sched_yield => {
-                let (time_ns, _, _, _) = rsc.args;
+                let (_, _, _, _) = rsc.args;
                 SyscallResult::Switch(Ok(0), WaitFor::None)
             },
             SC::sched_sleep_ns => {
@@ -250,7 +243,7 @@ pub fn handle_syscall(
             SyscallResult::Switch(_, s) => SyscallResultAction::Switch(s),
             SyscallResult::Terminate(r) => SyscallResultAction::Terminate(r),
             SyscallResult::RepeatAfter(s) => {
-                process.repeat_syscall = Some(rsc);
+                process.repeat_syscall = true;
                 SyscallResultAction::Switch(s)
             },
         };

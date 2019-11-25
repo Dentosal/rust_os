@@ -2,9 +2,10 @@
 #![forbid(private_in_public)]
 #![forbid(tyvar_behind_raw_pointer)]
 #![deny(unused_assignments)]
-#![allow(clippy::inconsistent_digit_grouping)]
-#![allow(clippy::needless_range_loop)]
-#![allow(clippy::empty_loop)]
+// Safety
+#![deny(overflowing_literals)]
+#![deny(safe_packed_borrows)]
+#![deny(unused_must_use)]
 // Code style (development time)
 #![allow(unused_macros)]
 #![allow(dead_code)]
@@ -15,14 +16,14 @@
 #![allow(unused_mut)]
 #![allow(unused_unsafe)]
 #![allow(unreachable_code)]
-#![allow(clippy::missing_safety_doc)]
-#![allow(clippy::unreadable_literal)]
+// Disable some clippy lints
 #![allow(clippy::cast_ptr_alignment)]
+#![allow(clippy::empty_loop)]
 #![allow(clippy::identity_op)]
-// Safety
-#![deny(overflowing_literals)]
-#![deny(safe_packed_borrows)]
-#![deny(unused_must_use)]
+#![allow(clippy::inconsistent_digit_grouping)]
+#![allow(clippy::missing_safety_doc)]
+#![allow(clippy::needless_range_loop)]
+#![allow(clippy::unreadable_literal)]
 // No-std
 #![no_std]
 // Unstable features
@@ -49,21 +50,8 @@
 use core::alloc::Layout;
 use core::panic::PanicInfo;
 
-extern crate cpuio;
-extern crate rlibc;
-extern crate spin;
-extern crate volatile;
-extern crate x86_64;
 #[macro_use]
 extern crate bitflags;
-extern crate bit_field;
-#[macro_use]
-extern crate static_assertions;
-
-extern crate d7alloc;
-extern crate d7ramfs;
-extern crate d7staticfs;
-extern crate d7time;
 
 #[macro_use]
 extern crate alloc;

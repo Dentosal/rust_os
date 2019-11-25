@@ -1,13 +1,10 @@
 use core::ptr;
-use x86_64::structures::paging::{FrameAllocator, PageTableFlags as Flags};
+use x86_64::structures::paging::PageTableFlags as Flags;
 
-use crate::filesystem::staticfs;
 use crate::memory::prelude::*;
 use crate::memory::Area;
-use crate::memory::{self, MemoryController, Page, PhysFrame};
+use crate::memory::{self, Page};
 use crate::util::elf_parser::*;
-
-use alloc::prelude::v1::Vec;
 
 /// Contains a "pointer" to loaded elf image
 /// Validity of the elf image must be verified when creating this structure

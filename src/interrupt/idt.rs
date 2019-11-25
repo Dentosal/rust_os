@@ -1,6 +1,3 @@
-use core::mem;
-use core::ptr;
-
 use x86_64::PrivilegeLevel::{self, Ring0};
 
 // These constants MUST have defined with same values as those in src/asm_routines/constants.asm

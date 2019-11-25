@@ -165,7 +165,7 @@ pub fn init_after_memory() {
         load_tss(tss_selector.assume_init());
         // Write syscall address
         ptr::write(
-            (0x2000u64 as *mut u64),
+            0x2000u64 as *mut u64,
             handler::process_interrupt as *const u64 as u64,
         );
     }

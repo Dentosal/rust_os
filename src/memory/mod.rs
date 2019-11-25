@@ -4,8 +4,8 @@ use core::ptr;
 use core::slice;
 use spin::Mutex;
 use x86_64::structures::paging as pg;
+use x86_64::structures::paging::Mapper;
 use x86_64::structures::paging::PageTableFlags as Flags;
-use x86_64::structures::paging::{Mapper, PageTable};
 
 mod allocators;
 mod area;

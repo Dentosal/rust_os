@@ -1,6 +1,4 @@
 use alloc::prelude::v1::*;
-use core::cell::UnsafeCell;
-use core::ops::{Deref, DerefMut};
 use hashbrown::HashMap;
 use spin::Mutex;
 use x86_64::{PhysAddr, VirtAddr};
@@ -9,9 +7,8 @@ use d7time::{Duration, Instant};
 
 use crate::memory;
 use crate::multitasking::loader::ElfImage;
-use crate::syscall::RawSyscall;
 
-use super::process::{self, Process, ProcessMetadata, ProcessResult};
+use super::process::{Process, ProcessResult};
 use super::queues::{Queues, WaitFor};
 use super::ProcessId;
 
@@ -28,8 +25,9 @@ pub enum ProcessSwitch {
     /// Switch to a different process
     Switch(Process),
     /// Switch to a new process, by repeating
-    /// a system call, and continuing after that
-    RepeatSyscall(Process, RawSyscall),
+    /// a system call, and continuing after that.
+    /// Syscall number and arguments must be stored in the process
+    RepeatSyscall(Process),
 }
 
 pub struct Scheduler {
@@ -150,8 +148,8 @@ impl Scheduler {
         if let Some(pid) = self.queues.take() {
             self.running = Some(pid);
             let process = self.processes.get_mut(&pid).unwrap();
-            if let Some(raw_syscall) = process.repeat_syscall.take() {
-                ProcessSwitch::RepeatSyscall(process.clone(), raw_syscall)
+            if process.repeat_syscall {
+                ProcessSwitch::RepeatSyscall(process.clone())
             } else {
                 ProcessSwitch::Switch(process.clone())
             }
@@ -167,8 +165,8 @@ impl Scheduler {
     pub unsafe fn switch_current(&mut self) -> ProcessSwitch {
         if let Some(pid) = self.running {
             let process = self.processes.get_mut(&pid).unwrap();
-            if let Some(raw_syscall) = process.repeat_syscall.take() {
-                ProcessSwitch::RepeatSyscall(process.clone(), raw_syscall)
+            if process.repeat_syscall {
+                ProcessSwitch::RepeatSyscall(process.clone())
             } else {
                 ProcessSwitch::Switch(process.clone())
             }

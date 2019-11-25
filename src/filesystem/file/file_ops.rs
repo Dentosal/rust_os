@@ -14,7 +14,8 @@ pub enum Leafness {
     InternalBranch,
 }
 
-/// Operations on an opened file from mount owners perspective
+/// Operations on an opened file (from perspective of the owner)
+#[allow(unused_variables)]
 pub trait FileOps: Send {
     /// Can this file has children in the filesystem.
     /// This check must not fail.
@@ -22,32 +23,32 @@ pub trait FileOps: Send {
     fn leafness(&self) -> Leafness;
 
     /// Pull some bytes from this source into the buffer, returning how many bytes were read.
-    fn read(&mut self, fd: FileClientId, buf: &mut [u8]) -> IoResult<usize>;
+    fn read(&mut self, fc: FileClientId, buf: &mut [u8]) -> IoResult<usize>;
 
     /// Write a buffer into file, returning how many bytes were written
     ///
     /// If not implemented, causes `fs_readonly` error.
-    fn write(&mut self, fd: FileClientId, buf: &[u8]) -> IoResult<usize> {
+    fn write(&mut self, fc: FileClientId, buf: &[u8]) -> IoResult<usize> {
         Err(IoError::Code(ErrorCode::fs_readonly))
     }
 
-    /// Allows device to perform some initialization when a new fd is opened.
+    /// Allows device to perform some initialization when a new fc is opened.
     ///
     /// If not implemented, does nothing.
-    fn open(&mut self, fd: FileClientId) -> IoResult<()> {
+    fn open(&mut self, fc: FileClientId) -> IoResult<()> {
         Ok(())
     }
 
-    /// Allows releasing resources when a fd is closed.
+    /// Allows releasing resources when a fc is closed.
     /// This function must not fail.
     ///
     /// If not implemented, does nothing.
-    fn close(&mut self, fd: FileClientId) {}
+    fn close(&mut self, fc: FileClientId) {}
 
     /// Verify that all writes have reached their destination.
     ///
     /// If not implemented, does nothing.
-    fn synchronize(&mut self, fd: FileClientId) -> IoResult<()> {
+    fn synchronize(&mut self, fc: FileClientId) -> IoResult<()> {
         Ok(())
     }
 
@@ -66,7 +67,7 @@ pub trait FileOps: Send {
     /// file.write(b"321")?;
     /// // File now contains 1321
     /// ```
-    fn control(&mut self, fd: FileClientId, function: u64) -> IoResult<()> {
+    fn control(&mut self, fc: FileClientId, function: u64) -> IoResult<()> {
         Err(IoError::Code(ErrorCode::fs_unknown_control_function))
     }
 }

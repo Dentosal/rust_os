@@ -1,7 +1,6 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use cpuio::UnsafePort;
-use spin::Mutex;
 
 use super::BlockDevice;
 

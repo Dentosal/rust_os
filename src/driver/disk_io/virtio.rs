@@ -2,8 +2,6 @@
 // https://wiki.osdev.org/Virtio
 
 use alloc::prelude::v1::*;
-use core::mem;
-use core::ptr;
 use volatile;
 
 use crate::driver::virtio;

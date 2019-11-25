@@ -1,7 +1,7 @@
 use core::ptr;
 use x86_64::structures::paging::PageTableFlags as Flags;
 
-use crate::filesystem::staticfs::read_file;
+use crate::filesystem::FILESYSTEM;
 use crate::memory::{self, prelude::*};
 
 use super::super::MemoryController;
@@ -14,7 +14,10 @@ pub static mut PROCESS_IDT_PHYS_ADDR: u64 = 0;
 unsafe fn load_common_code(mem_ctrl: &mut MemoryController) {
     let common_addr = VirtAddr::new_unchecked(COMMON_ADDRESS_VIRT);
 
-    let bytes = read_file("p_commoncode").expect("p_commoncode file missing");
+    let bytes = FILESYSTEM
+        .lock()
+        .read_file("/mnt/staticfs/p_commoncode")
+        .expect("p_commoncode: file unavailable");
     assert!(bytes.len() <= (PAGE_SIZE_BYTES as usize));
 
     let frame = mem_ctrl

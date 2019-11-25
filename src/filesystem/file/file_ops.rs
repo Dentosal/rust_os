@@ -25,7 +25,11 @@ pub trait FileOps: Send {
     fn read(&mut self, fd: FileClientId, buf: &mut [u8]) -> IoResult<usize>;
 
     /// Write a buffer into file, returning how many bytes were written
-    fn write(&mut self, fd: FileClientId, buf: &[u8]) -> IoResult<usize>;
+    ///
+    /// If not implemented, causes `fs_readonly` error.
+    fn write(&mut self, fd: FileClientId, buf: &[u8]) -> IoResult<usize> {
+        Err(IoError::Code(ErrorCode::fs_readonly))
+    }
 
     /// Allows device to perform some initialization when a new fd is opened.
     ///

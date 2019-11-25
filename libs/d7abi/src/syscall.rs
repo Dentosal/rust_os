@@ -35,4 +35,6 @@ pub enum SyscallErrorCode {
     fs_node_is_leaf,
     /// Invalid control function
     fs_unknown_control_function,
+    /// File does not support writing
+    fs_readonly,
 }

@@ -128,16 +128,23 @@ pub extern "C" fn rust_main() -> ! {
     driver::disk_io::init();
     interrupt::disable_external_interrupts();
 
+    // StaticFS retuires disk drivers for now
+    filesystem::staticfs::init();
+
     // Memory init late phase
     memory::init_late();
 
     rreset!();
     rprintln!("Kernel initialized.\n");
 
-    // Load modules
-    if let Some(bytes) = filesystem::staticfs::read_file("README.md") {
+    {
+        use crate::filesystem::FILESYSTEM;
+        let readme_bytes = FILESYSTEM
+            .lock()
+            .read_file("/mnt/staticfs/README.md")
+            .unwrap();
         let mut lines = 3;
-        for b in bytes {
+        for b in readme_bytes {
             if b == 0x0a {
                 lines -= 1;
                 if lines == 0 {
@@ -148,8 +155,6 @@ pub extern "C" fn rust_main() -> ! {
                 rprint!("{}", b as char);
             }
         }
-    } else {
-        rprintln!("File not found");
     }
 
     use crate::multitasking::SCHEDULER;

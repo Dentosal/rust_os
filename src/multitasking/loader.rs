@@ -37,7 +37,13 @@ impl ElfImage {
 
 /// Loads elf image from staticfs to ram and returns
 pub fn load_module(path: &str) -> Option<ElfImage> {
-    let bytes = staticfs::read_file(path)?;
+    let bytes = {
+        use crate::filesystem::FILESYSTEM;
+        FILESYSTEM
+            .lock()
+            .read_file(&format!("/mnt/staticfs/{}", path))
+            .expect("module not available")
+    };
 
     let size_pages =
         memory::page_align(PhysAddr::new(bytes.len() as u64), true).as_u64() / Page::SIZE;

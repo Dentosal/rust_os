@@ -3,7 +3,6 @@
 use core::ptr;
 use x86_64::structures::paging::PageTableFlags as Flags;
 
-use crate::filesystem::staticfs::read_file;
 use crate::memory::{self, prelude::*};
 
 use super::super::MemoryController;

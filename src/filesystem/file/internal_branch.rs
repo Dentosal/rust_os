@@ -83,4 +83,9 @@ impl FileOps for InternalBranch {
             unimplemented!("Syscall::write node creation") // TODO
         }
     }
+
+    /// Remove buffers when closing
+    fn close(&mut self, fd: FileClientId) {
+        self.readers.remove(&fd);
+    }
 }

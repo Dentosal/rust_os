@@ -1,12 +1,72 @@
-/// D7_StaticFS Driver
+//! `/dev/staticfs`
+//! Static filesystem built into the kernel image
+//! TODO: temporarily implemented with a disk driver
+
 use d7staticfs::*;
 
-use crate::driver::disk_io::DISK_IO;
-
 use alloc::prelude::v1::*;
+use hashbrown::HashMap;
+
+use crate::driver::disk_io::DISK_IO;
+use crate::filesystem::{error::*, FileClientId, FileOps, Leafness, Path, FILESYSTEM};
 
 fn round_up_sector(p: u64) -> u64 {
     (p + SECTOR_SIZE - 1) / SECTOR_SIZE
+}
+
+pub struct StaticFSLeaf {
+    /// Sector on disk
+    start_sector: u32,
+    /// Size on disk, in sectors
+    size_sectors: u32,
+    /// Data, loaded when requested for the first time
+    data: Option<Vec<u8>>,
+    /// Readers and offsets to the data
+    readers: HashMap<FileClientId, usize>,
+}
+impl StaticFSLeaf {
+    fn new(start_sector: u32, size_sectors: u32) -> Self {
+        Self {
+            start_sector,
+            size_sectors,
+            data: None,
+            readers: HashMap::new(),
+        }
+    }
+
+    fn ensure_loaded(&mut self) {
+        if self.data.is_none() {
+            let mut dc = DISK_IO.lock();
+            self.data = Some(
+                dc.read(self.start_sector as u64, self.size_sectors as u64)
+                    .iter()
+                    .flatten()
+                    .cloned()
+                    .collect(),
+            );
+        }
+    }
+}
+impl FileOps for StaticFSLeaf {
+    fn leafness(&self) -> Leafness {
+        Leafness::Leaf
+    }
+
+    fn read(&mut self, fc: FileClientId, buf: &mut [u8]) -> IoResult<usize> {
+        self.ensure_loaded();
+        let data = self.data.as_ref().unwrap();
+        let offset = self.readers.get(&fc).copied().unwrap_or(0);
+        let count = (data.len() - offset).min(buf.len());
+        buf[..count].copy_from_slice(&data[offset..offset + count]);
+        self.readers.insert(fc, offset + count);
+        Ok(count)
+    }
+
+    /// Remove reader when closing
+    fn close(&mut self, fc: FileClientId) {
+        rprintln!("CLOSE");
+        self.readers.remove(&fc);
+    }
 }
 
 /// Returns file list start sector
@@ -77,30 +137,24 @@ fn load_file_entries() -> Vec<(FileEntry, u32)> {
     result
 }
 
-/// Returns (sector, size)
-fn find_file(name: &str) -> Option<(u32, u32)> {
+pub fn init() {
+    let mut fs = FILESYSTEM.lock();
+    let _ = fs
+        .create_branch(Path::new("/mnt/staticfs"))
+        .expect("Could not create /dev/staticfs");
+
     for (file_entry, pos) in load_file_entries() {
-        if file_entry.name_matches(name) {
-            return Some((pos, file_entry.size));
+        let mut name_bytes = file_entry.name.to_vec();
+        while name_bytes.last() == Some(&0) {
+            let _ = name_bytes.pop();
         }
+        assert!(!name_bytes.is_empty());
+        let name = String::from_utf8(name_bytes).expect("StaticFS: mon-UTF-8 filename");
+        let leaf = StaticFSLeaf::new(pos, file_entry.size);
+        fs.create(
+            Path::new(&format!("/mnt/staticfs/{}", name)),
+            Box::new(leaf),
+        )
+        .expect("Could not create file under /mnt/staticfs");
     }
-    None
-}
-
-/// File size in sectors
-pub fn file_size_sectors(name: &str) -> Option<u64> {
-    Some(find_file(name)?.1 as u64)
-}
-
-/// Reads file to buffer, if possible
-pub fn read_file(name: &str) -> Option<Vec<u8>> {
-    let (p, s) = find_file(name)?;
-    let mut dc = DISK_IO.lock();
-    Some(
-        dc.read(p as u64, s as u64)
-            .iter()
-            .flatten()
-            .cloned()
-            .collect(),
-    )
 }

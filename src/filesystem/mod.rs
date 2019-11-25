@@ -126,7 +126,6 @@ impl VirtualFS {
         }
     }
 
-    /// Traverse tree and return NodeId
     pub fn take_kernel_fc(&mut self) -> FileClientId {
         let fd = self.next_kernel_fd;
         self.next_kernel_fd = unsafe { self.next_kernel_fd.next() };
@@ -291,6 +290,18 @@ impl VirtualFS {
     pub fn write(&mut self, fc: FileClientId, buf: &mut [u8]) -> IoResult<usize> {
         let node_id = self.resolve_fc(fc)?;
         self.node_mut(node_id).read(fc, buf)
+    }
+
+    /// Read a file for other kernel component
+    /// Discards data on error.
+    pub fn read_file(&mut self, path: &str) -> IoResult<Vec<u8>> {
+        let node_id = self.resolve(Path::new(path))?;
+        let fc = self.take_kernel_fc();
+        let node = self.node_mut(node_id);
+        node.open(fc)?;
+        let result = unsafe { read_to_end(&mut *node.data, fc) };
+        node.close(fc);
+        result
     }
 
     /// Update when a process completes.

@@ -2,8 +2,10 @@ use alloc::prelude::v1::*;
 use core::cell::UnsafeCell;
 use core::fmt;
 use core::mem::MaybeUninit;
+use core::num::NonZeroU64;
 use core::ops::{Deref, DerefMut};
 use core::ptr;
+use core::u64;
 use spin::Mutex;
 use x86_64::structures::idt::{InterruptStackFrameValue, PageFaultErrorCode};
 use x86_64::structures::paging::PageTableFlags as Flags;
@@ -20,19 +22,24 @@ use crate::util::elf_parser::{self, ELFData};
 
 use super::loader::ElfImage;
 
+/// ProcessId is stores as `NonZeroU64`, so that `Option<ProcessId>`
+/// still has uses only `size_of<Processid>` bytes
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ProcessId(u64);
+pub struct ProcessId(NonZeroU64);
 impl ProcessId {
-    pub(super) fn first() -> Self {
-        Self(0)
+    /// # Safety
+    /// Must be called only once
+    pub(super) const unsafe fn first() -> Self {
+        Self(NonZeroU64::new_unchecked(1))
     }
 
     pub(super) fn next(self) -> Self {
-        Self(self.0.wrapping_add(1))
+        assert_ne!(self.0.get(), u64::MAX, "Kernel process id has no successor");
+        Self(NonZeroU64::new(self.0.get() + 1).expect("Overflow"))
     }
 
-    pub fn as_u64(self) -> u64 {
-        self.0
+    pub const fn as_u64(self) -> u64 {
+        self.0.get()
     }
 }
 impl fmt::Display for ProcessId {

@@ -1,7 +1,10 @@
+use serde::{Deserialize, Serialize};
+
+pub mod protocol;
 
 /// VFS node metadata.
 /// `Copy` is required here as kernel copies it into the process memory.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[repr(C)]
 pub struct FileInfo {
     /// Leaf nodes cannot have children.
@@ -9,11 +12,11 @@ pub struct FileInfo {
     pub is_leaf: bool,
 }
 
-/// VFS file descriptor
+/// VFS process-unique file descriptor
 /// # Safety
 /// Almost all operations on file descriptors are unsafe,
 /// as they can be used to obtain invalid file descriptors
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(transparent)]
 pub struct FileDescriptor(u64);
 impl FileDescriptor {

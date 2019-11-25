@@ -1,6 +1,5 @@
 // Code style
 #![forbid(private_in_public)]
-#![forbid(bare_trait_objects)]
 #![forbid(tyvar_behind_raw_pointer)]
 #![deny(unused_assignments)]
 #![allow(clippy::inconsistent_digit_grouping)]
@@ -156,15 +155,7 @@ pub extern "C" fn rust_main() -> ! {
     use crate::multitasking::SCHEDULER;
     let mod_test = multitasking::load_module("mod_test").expect("Module not found");
 
-    {
-        let pid = SCHEDULER.try_lock().unwrap().spawn(mod_test);
-        rprintln!("Spawned process: pid = {}", pid);
-    }
-    {
-        let pid = SCHEDULER.try_lock().unwrap().spawn(mod_test);
-        rprintln!("Spawned process: pid = {}", pid);
-    }
-    {
+    for _ in 0..1 {
         let pid = SCHEDULER.try_lock().unwrap().spawn(mod_test);
         rprintln!("Spawned process: pid = {}", pid);
     }

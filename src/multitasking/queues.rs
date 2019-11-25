@@ -2,6 +2,7 @@ use alloc::collections::VecDeque;
 use alloc::prelude::v1::*;
 use hashbrown::HashMap;
 
+use d7abi::fs::FileDescriptor;
 use d7time::Instant;
 
 use crate::multitasking::ProcessId;
@@ -15,58 +16,125 @@ pub enum WaitFor {
     Time(Instant),
     /// Process completed
     Process(ProcessId),
+    /// First of multiple wait conditions.
+    /// Should never contain `None`.
+    FirstOf(Vec<WaitFor>),
+}
+
+/// Internal wait id for scheduler queues.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
+struct WaitId(u64);
+impl WaitId {
+    /// Next file descriptor
+    fn take(&mut self) -> Self {
+        let old = *self;
+        self.0 += 1;
+        old
+    }
 }
 
 #[derive(Debug)]
 pub struct Queues {
     /// Processes currently in the running queue
-    pub running: VecDeque<ProcessId>,
+    running: VecDeque<ProcessId>,
+    /// Processes waiting for some trigger. Target for items in wait_*` queues.
+    ///
+    /// When a trigger has been reached once, the WaitId is consumed,
+    /// and further times when the same WaitId is triggered are ignored.
+    /// This allows multiple triggers for a process to be inserted,
+    /// as only the first one actually triggers an event.
+    /// This ensures that a process will never be returned twice to the schduler.
+    waiting: HashMap<WaitId, ProcessId>,
+    /// Next available WaitId
+    next_waitid: WaitId,
     /// Processes which are sleeping until specified time
     /// Must be kept sorted by the wake-up time
     /// TODO: Switch to a proper priority queue for faster insert time
-    pub sleeping: VecDeque<(Instant, ProcessId)>,
+    wait_sleeping: VecDeque<(Instant, WaitId)>,
     /// Waiting for a process to complete.
-    pub process: HashMap<ProcessId, Vec<ProcessId>>,
+    wait_process: HashMap<ProcessId, Vec<WaitId>>,
 }
 impl Queues {
     pub fn new() -> Self {
         Self {
             running: VecDeque::new(),
-            sleeping: VecDeque::new(),
-            process: HashMap::new(),
+            waiting: HashMap::new(),
+            next_waitid: WaitId(0),
+            wait_sleeping: VecDeque::new(),
+            wait_process: HashMap::new(),
         }
     }
 
-    pub fn all_completed(&self) -> bool {
-        self.running.is_empty() && self.sleeping.is_empty()
+    fn create_wait(&mut self, pid: ProcessId) -> WaitId {
+        let wait_id = self.next_waitid.take();
+        self.waiting.insert(wait_id, pid);
+        wait_id
+    }
+
+    /// If wait_id has benn consumed, ignores it.
+    /// Otherwise the wait_id is consumed, and
+    /// the associated process is scheduled for running.
+    fn trigger_wait(&mut self, wait_id: WaitId) {
+        if let Some(pid) = self.waiting.remove(&wait_id) {
+            // FIXME: push_front to schedule immediately?
+            self.running.push_back(pid);
+        }
+    }
+
+    fn give_inner(&mut self, pid: ProcessId, s: WaitFor, wait_id: WaitId) {
+        match s {
+            WaitFor::Time(instant) => {
+                let i = p_index_vecdeque(&self.wait_sleeping, &instant);
+                self.wait_sleeping.insert(i, (instant, wait_id));
+            },
+            WaitFor::Process(wait_for_pid) => {
+                self.wait_process
+                    .entry(wait_for_pid)
+                    .or_default()
+                    .push(wait_id);
+            },
+            WaitFor::None => {
+                panic!("WaitFor::None inside of WaitFor::FirstOf");
+            },
+            WaitFor::FirstOf(targets) => {
+                // Possible to support (simply recurse), but these
+                // imply ineffiency or more serious issues elsewhere
+                panic!("Nested WaitFor::FirstOf");
+            },
+        }
     }
 
     pub fn give(&mut self, pid: ProcessId, s: WaitFor) {
-        match s {
-            WaitFor::None => {
-                self.running.push_back(pid);
-            },
-            WaitFor::Time(instant) => {
-                let i = p_index_vecdeque(&self.sleeping, &instant);
-                self.sleeping.insert(i, (instant, pid));
-            },
-            WaitFor::Process(wait_for_pid) => {
-                self.process.entry(wait_for_pid).or_default().push(pid);
-            },
+        if let WaitFor::None = s {
+            self.running.push_back(pid);
+            return;
+        }
+
+        let wait_id = self.create_wait(pid);
+        if let WaitFor::FirstOf(targets) = s {
+            for target in targets {
+                self.give_inner(pid, target, wait_id);
+            }
+        } else {
+            self.give_inner(pid, s, wait_id);
         }
     }
 
+    /// Returns the process to run next, if any.
+    /// The process is removed from all queues,
+    /// and will not be returned again unless
+    /// added using one of the give calls.
     pub fn take(&mut self) -> Option<ProcessId> {
         self.running.pop_front()
     }
 
     /// Update when clock ticks
     pub fn on_tick(&mut self, now: &Instant) {
-        while let Some((wakeup, _)) = self.sleeping.front() {
+        while let Some((wakeup, _)) = self.wait_sleeping.front() {
             if now >= wakeup {
-                let (_, pid) = self.sleeping.pop_front().unwrap();
-                // FIXME: push_front to schedule immediately?
-                self.running.push_back(pid);
+                let (_, wait_id) = self.wait_sleeping.pop_front().unwrap();
+                self.trigger_wait(wait_id);
             } else {
                 break;
             }
@@ -75,10 +143,9 @@ impl Queues {
 
     /// Update when a process completes
     pub fn on_process_over(&mut self, completed: ProcessId) {
-        if let Some(pids) = self.process.remove(&completed) {
-            for pid in pids {
-                // FIXME: push_front to schedule immediately?
-                self.running.push_back(pid);
+        if let Some(wait_ids) = self.wait_process.remove(&completed) {
+            for wait_id in wait_ids {
+                self.trigger_wait(wait_id);
             }
         }
     }

@@ -11,9 +11,17 @@ panic = "abort"
 [profile.release]
 panic = "abort"
 
+[dependencies.serde]
+version = "1.0.102"
+default-features = false
+features = ["alloc", "derive"]
+
+[dependencies.hashbrown]
+version = "0.6.3"
+features = ["nightly", "inline-more", "serde"]
+
 [dependencies.num_enum]
-version = "0.4.2"
-default_features = false
+git = "https://github.com/Dentosal/num_enum_simplified"
 
 [dependencies.x86_64]
 git = "https://github.com/Dentosal/x86_64"

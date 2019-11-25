@@ -6,7 +6,7 @@ use x86_64::structures::idt::{InterruptStackFrame, InterruptStackFrameValue, Pag
 use x86_64::structures::paging::PageTableFlags as Flags;
 use x86_64::{PhysAddr, VirtAddr};
 
-use d7abi::FileDescriptor;
+use d7abi::fs::{FileDescriptor, FileInfo};
 
 use crate::filesystem::{error::*, FILESYSTEM};
 use crate::memory;
@@ -67,6 +67,8 @@ pub fn syscall(
 ) -> SyscallResult {
     use d7abi::SyscallNumber as SC;
 
+    use crate::filesystem::FileClientId;
+
     if let Ok(sc) = SC::try_from(rsc.routine) {
         match sc {
             SC::exit => SyscallResult::Terminate(process::ProcessResult::Completed(rsc.args.0)),
@@ -105,7 +107,7 @@ pub fn syscall(
                     let path =
                         core::str::from_utf8(slice).expect("TODO: fs_fileinfo: Invalid UTF-8");
                     let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
-                    let fileinfo: d7abi::FileInfo = fs.fileinfo(path)?;
+                    let fileinfo: FileInfo = fs.fileinfo(path)?;
                     unsafe {
                         m.process_write_value(process, fileinfo, dst_ptr);
                     }
@@ -125,9 +127,9 @@ pub fn syscall(
                     let path =
                         core::str::from_utf8(slice).expect("TODO: fs_fileinfo: Invalid UTF-8");
                     let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
-                    let fd = fs.open(path, process.id())?;
+                    let fc = fs.open(path, process.id())?;
                     unsafe { m.unmap_area(area) };
-                    SyscallResult::Continue(Ok(unsafe { fd.as_u64() }))
+                    SyscallResult::Continue(Ok(unsafe { fc.fd.as_u64() }))
                 } else {
                     SyscallResult::Terminate(process::ProcessResult::Failed(
                         process::Error::Pointer(path_ptr),
@@ -140,7 +142,8 @@ pub fn syscall(
                 let buf = VirtAddr::new(buf);
                 let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
                 if let Some((area, slice)) = unsafe { m.process_slice_mut(process, count, buf) } {
-                    let read_count = fs.read(fd, process.id(), slice)?;
+                    let fc = FileClientId::process(process.id(), fd);
+                    let read_count = fs.read(fc, slice)?;
                     unsafe { m.unmap_area(area) };
                     SyscallResult::Continue(Ok(read_count as u64))
                 } else {

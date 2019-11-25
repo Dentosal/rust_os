@@ -15,17 +15,23 @@ panic = "abort"
 panic = "abort"
 
 [dependencies]
-rlibc = "*"                     # raw libc
-spin = "0.5"                    # spinlocks
-cpuio = "0.2.0"                 # cpu port IO
-bitflags = "1.2"                # bitflags
-bit_field = "0.10.0"            # bit fields
-volatile = "0.2.6"              # volatile read and write functions
-static_assertions = "1.0"       # compile time assertions
+rlibc = "*"                     # Raw libc
+spin = "0.5"                    # Spinlocks
+cpuio = "0.2.0"                 # Cpu port IO
+bitflags = "1.2"                # Bitflags
+bit_field = "0.10.0"            # Bit fields
+volatile = "0.2.6"              # Volatile read and write functions
+static_assertions = "1.0"       # Compile time assertions
+pinecone = "0.2"                # Message format for process IO
 
 [dependencies.hashbrown]        # HashMap for no_std contexts
 version = "0.6.3"
-features = ["nightly", "inline-more"]
+features = ["nightly", "inline-more", "serde"]
+
+[dependencies.serde]            # Serde
+version = "1.0.102"
+default-features = false
+features = ["alloc", "derive"]
 
 [dependencies.lazy_static]      # Non-const_fn static intialization
 version = "1.4"

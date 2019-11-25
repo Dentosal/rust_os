@@ -1,5 +1,6 @@
 # Dimension 7 - An operating system
-Dimension 7 is a simple x86-64 operating system written in Rust. It is in fairly early stage, and is developed by fearlessly breaking things, trying new stuff before older stubs are even working and most importantly experimenting with weird ideas.
+
+Dimension 7 is an operating system microkernel written in Rust. It runs only on x86-64. It is in fairly early stage, and is developed by fearlessly breaking things, trying new stuff before older stubs are even working and most importantly experimenting with weird ideas.
 
 ## Development
 
@@ -15,21 +16,14 @@ Main branch should always contain a working build, that can be compiled and it b
 Feature development is done in separate branches. Rebase workflow is used to combine branches.
 
 ## Current features:
-* Proper x86-64 long mode
-* Text mode terminal
-* Physical memory manager
-* Paging (and PTI!)
-* Interrupts
-* Time handling
+* Multitasking: round-robin scheduler
+* Executable programs, in ELF format
+* Virtual filesystem, following everything-is-a-file principle
 * Keyboard input
 * Disk IO:
     * ATA PIO (Read only)
     * VirtIO-blk (Read only)
-* Kernel image compression
 * Simple RamFS
-* Simple StaticFS
-* Executable programs, in ELF format
-* Multitasking
 
 ## Planned in near future:
 * A shell (with virtual TTYs!)

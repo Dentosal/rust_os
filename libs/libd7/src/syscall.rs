@@ -2,7 +2,7 @@ use core::convert::TryFrom;
 use core::hint::unreachable_unchecked;
 use core::mem::MaybeUninit;
 
-use d7abi::{FileDescriptor, FileInfo, SyscallErrorCode, SyscallNumber};
+use d7abi::{fs::{FileDescriptor, FileInfo}, SyscallErrorCode, SyscallNumber};
 
 macro_rules! syscall {
     ($n:expr; $a0:expr, $a1:expr, $a2:expr, $a3:expr) => {

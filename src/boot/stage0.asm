@@ -7,7 +7,7 @@
 %define stage1_loadpoint 0x7e00
 
 ; kernel size in sectors
-%define kernel_size_sectors 500
+%define kernel_size_sectors 0x400
 
 ; 0x7f is max for most platforms, including Qemu
 %define sectors_per_operation 0x20
@@ -190,7 +190,7 @@ enable_A20:
     ret
 
 ; disk address packet
-ALIGN 2
+ALIGN 4
 da_packet:
     db 16               ; size of this packet (constant)
     db 0                ; reserved (always zero)

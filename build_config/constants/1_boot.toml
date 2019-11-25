@@ -1,7 +1,7 @@
 [[constant]]
 name = "BOOT_KERNEL_LOADPOINT"
 type = "PhysAddr"
-value = "0x10000"
+value = "0x1_0000"
 
 [[constant]]
 name = "BOOT_TMP_MMAP_BUFFER"
@@ -21,14 +21,9 @@ type = "u64"
 value = "0x200"
 
 [[constant]]
-name = "BOOT_TMP_PAGE_TABLE_P4"
-type = "PhysAddr"
-value = "0x6_0000"
-
-[[constant]]
 name = "BOOT_PAGE_TABLE_SECTION_START"
 type = "PhysAddr"
-value = "0x6_0000"
+value = "0x20_0000"
 
 [[constant]]
 name = "BOOT_PAGE_TABLE_P4"

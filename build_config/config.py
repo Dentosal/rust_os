@@ -128,15 +128,13 @@ class CargoPackage:
         )
 
 
-def cmd_cargo_build(pdir: Path, target=None) -> Cmd:
+def cmd_cargo_build_bin(pdir: Path, binary: str) -> Cmd:
     package = CargoPackage.load(pdir)
-    out_path = pdir / "target" / "release"
-    if target:
-        out_path /= target
+    out_path = pdir / "target" / "release" / binary
     return Cmd(
         inputs=package.sources,
         output=out_path,
-        cmd=["cargo", "build", "--release", "--color=always"],
+        cmd=["cargo", "build", "--bin", binary, "--release", "--color=always"],
         cwd=pdir,
     )
 
@@ -258,6 +256,16 @@ def step_boot_stage1(root_dir) -> Step:
     )
 
 
+# def step_boot_stage2(root_dir) -> Step:
+#     return Step(
+#         requires={step_codegen},
+#         cmd=cmd_nasm(
+#             root_dir / "src/boot/stage2.asm",
+#             root_dir / "build/boot/stage2.bin",
+#             format="bin",
+#         ),
+#     )
+
 def step_boot_stage2(root_dir) -> Tuple[Union[Step, Set[Step]]]:
     return (
         {
@@ -377,11 +385,11 @@ def step_process_common(root_dir) -> Step:
 
 def step_cli_tools(root_dir) -> Set[Step]:
     return {
-        Step(cmd=cmd_cargo_build(pdir=pdir, target=target))
+        Step(cmd=cmd_cargo_build_bin(pdir=pdir, binary=target))
         for (pdir, target) in [
             (root_dir / "libs/d7staticfs/", "mkimg"),
             (root_dir / "libs/d7elfpack/", "d7elfpack"),
-            (root_dir / "libs/elf2bin/", "elfbin"),
+            (root_dir / "libs/elf2bin/", "elf2bin"),
         ]
     }
 
@@ -541,7 +549,7 @@ def init(cfg):
     cfg["TARGET"] = "d7os"
     cfg["DISK_SIZE_BYTES"] = DISK_SIZE_BYTES
     cfg["DISK_SIZE_SECTORS"] = DISK_SIZE_SECTORS
-    cfg["IMAGE_MAX_SIZE_SECTORS"] = 0x500
+    cfg["IMAGE_MAX_SIZE_SECTORS"] = 0x400
 
 
 def init_fs(root_dir, cfg):

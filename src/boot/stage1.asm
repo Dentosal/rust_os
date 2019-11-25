@@ -18,9 +18,6 @@ stage1:
     ; set up stack
     mov esp, 0x7c00 ; stack grows downwards
 
-    ; SCREEN: top left: "00"
-    mov dword [0xb8000], 0x2f302f30
-
     ; SCREEN: clear screen
     mov ecx, (25 * 80 * 2) ; / 4
 .clear_screen_lp:

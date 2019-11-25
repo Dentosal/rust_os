@@ -114,8 +114,8 @@ unsafe fn check_elf() {
         error('M');
     }
 
-    // Check that the kernel entry point is correct (0x_00000000_00100000, 1MiB)
-    if unlikely(ptr::read((ELF_LOADPOINT + 0x18) as *const u64) != 0x100_000) {
+    // Check that the kernel entry point is correct (0x_100_0000, 1MiB)
+    if unlikely(ptr::read((ELF_LOADPOINT + 0x18) as *const u64) != 0x100_0000) {
         error('P');
     }
 }
@@ -127,8 +127,8 @@ unsafe fn load_decompression_table(sym_tree: &mut SymTree, start: *const u8) {
 
     // Read bitstream tree
     let tree_bits = start.offset(0x100);
-    let mut offset = 0;
-    let mut bit_sc = 7;
+    let mut offset = 0; // Offset in the input stream
+    let mut bit_sc = 7; // Counter until a bit is fully read
 
     let mut value: u32 = 0;
     let mut length: u8 = 0;
@@ -182,6 +182,9 @@ unsafe fn load_decompression_table(sym_tree: &mut SymTree, start: *const u8) {
                 return;
             }
         }
+        if EXTRA_CHECKS && (value & 1 != 0) {
+            error('b');
+        }
         // Then go right (replace the last bit (zero) with one)
         value |= 1;
     }
@@ -195,15 +198,25 @@ unsafe fn load_decompression_table(sym_tree: &mut SymTree, start: *const u8) {
 unsafe fn decompress(
     sym_tree: &SymTree, frq_table: *const u8, src: *const u8, dst: *mut u8, count: usize,
 ) {
+    if EXTRA_CHECKS && count == 0 {
+        error('c');
+    }
+
     let mut out_offset = 0;
 
-    // Read bitstream tree
-    let mut offset = 0usize;
-    let mut bit_sc = 7;
+    // Number of bits used in the last byte of input
+    let last_byte_bits = ptr::read(src.add(count - 1));
+    let src_byte_count = count - 1;
+
+    // Read input bitstream
+    let mut offset = 0usize; // Offset in the input stream
+    let mut bit_sc = 7; // Counter until a bit is fully read
 
     let mut length: u8 = 0;
     let mut buffer: u32 = 0;
-    while offset < count {
+    while offset < src_byte_count
+        && ((offset != src_byte_count - 1) || last_byte_bits == 8 || (7 - bit_sc) < last_byte_bits)
+    {
         progress_indicator((if offset % 2 == 0 { 0x23 } else { 0x20 }) as u8); // blink #
 
         let next_bit = {
@@ -278,7 +291,7 @@ pub unsafe extern "C" fn d7boot(a: u8) {
             frq_table_addr = ELF_LOADPOINT + p_offset as usize;
 
             // Loading decompression table
-            progress_indicator('?' as u8);
+            progress_indicator(b'?');
 
             load_decompression_table(&mut sym_tree, frq_table_addr as *const u8);
             break;
@@ -317,8 +330,8 @@ pub unsafe extern "C" fn d7boot(a: u8) {
         }
     }
 
-    progress_indicator('K' as u8);
-    asm!(concat!("push ", 0x1_000_000, "; ret") :::: "volatile", "intel");
+    progress_indicator(b'K');
+    asm!(concat!("push ", 0x100_0000, "; ret") :::: "volatile", "intel");
     core::hint::unreachable_unchecked();
 }
 
@@ -408,7 +421,7 @@ mod test {
         // Bits here in are written as in symbol table, i.e. bits in correct order
         // However, they are bit-flipped for the decoder
         #[rustfmt::skip]
-        let mut src_table: [u8; 8] = [
+        let mut src_table: [u8; 9] = [
             !0b_10000111, // 8
             !0b_000_10011, // 0, 0, 0, 24
             !0b_000_10011, // 0, 0, 0, 24
@@ -417,6 +430,8 @@ mod test {
             !0b_10000111, // 8
             !0b_000_10011, // 0, 0, 0, 24
             !0b_000_10011, // 0, 0, 0, 24
+            // And last_byte_bits
+            8, // fully used
         ];
 
         let mut dst_table = [0x01u8; 0x10000]; // use ones and not zeros for error detection
@@ -440,6 +455,45 @@ mod test {
         assert_eq!(dst_table[11], 8);
         assert_eq!(dst_table[12..=15], [0, 0, 0, 24]);
         assert_eq!(dst_table[16..=19], [0, 0, 0, 24]);
+    }
+
+    /// Decompression where all bits of the last byte of input are not used
+    #[test]
+    fn test_decompress_partial() {
+        let mut frq_table = [0u8; 0x100];
+        for i in 0..=0xff {
+            frq_table[i] = i as u8;
+        }
+
+        let sym_value: u8 = 6;
+        let sym_bits_len = 7;
+        let sym_bits: u8 = 0b1000010;
+
+        // Bits here in are written as in symbol table, i.e. bits in correct order
+        // However, they are bit-flipped for the decoder
+        #[rustfmt::skip]
+        let mut src_table: [u8; 3] = [
+            !0b_10000101, // 6, 6[0]
+            !0b_000010_00,  // 6[1:], zeroes
+            // And last_byte_bits
+            ((2*sym_bits_len) % 8),
+        ];
+
+        let mut dst_table = [0x01u8; 0x100]; // use ones and not zeros for error detection
+        let mut sym_tree = mock_symtree();
+
+        unsafe {
+            decompress(
+                &mut sym_tree,
+                (&frq_table) as *const _,
+                (&mut src_table) as *mut _ as usize as *mut u8,
+                (&mut dst_table) as *mut _ as usize as *mut u8,
+                src_table.len(),
+            );
+        }
+
+        // Left index: decompressed data, right index: from symbol table
+        assert_eq!(dst_table[..2], [sym_value; 2][..]);
     }
 
     #[test]

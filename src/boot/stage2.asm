@@ -10,7 +10,7 @@ stage2:
     cli
 
     ; update segments
-    mov dx, gdt_selector_data
+    mov dx, GDT_SELECTOR_DATA
     mov ss, dx  ; stack segment
     mov ds, dx  ; data segment
     mov es, dx  ; extra segment
@@ -29,32 +29,32 @@ stage2:
     ; magic number 0x7f+'ELF'
     ; if not elf show error message "E!"
     mov ah, '!'
-    cmp dword [loadpoint], 0x464c457f
+    cmp dword [BOOT_KERNEL_LOADPOINT], 0x464c457f
     jne error
 
     ; bitness and instruction set (must be 64, so values must be 2 and 0x3e) (error code: "EB")
     mov ah, 'B'
-    cmp byte [loadpoint + 4], 0x2
+    cmp byte [BOOT_KERNEL_LOADPOINT + 4], 0x2
     jne error
-    cmp word [loadpoint + 18], 0x3e
+    cmp word [BOOT_KERNEL_LOADPOINT + 18], 0x3e
     jne error
 
     ; endianess (must be little endian, so value must be 1) (error code: "EE")
     mov ah, 'E'
-    cmp byte [loadpoint + 5], 0x1
+    cmp byte [BOOT_KERNEL_LOADPOINT + 5], 0x1
     jne error
 
     ; elf version (must be 1) (error code: "EV")
     mov ah, 'V'
-    cmp byte [loadpoint + 0x0006], 0x1
+    cmp byte [BOOT_KERNEL_LOADPOINT + 0x0006], 0x1
     jne error
 
     ; Now lets trust it's actually real and valid elf file
 
-    ; kernel entry position must be 0x_00000000_01000000, 10MiB
-    ; (error code : "EP")
-    mov ah, 'P'
-    cmp qword [loadpoint + 24], 0x1000000
+    ; kernel entry position must be correct
+    ; (error code : "Ep")
+    mov ah, 'p'
+    cmp qword [BOOT_KERNEL_LOADPOINT + 24], KERNEL_LOCATION
     jne error
 
     ; load point is correct, great. print green OK
@@ -67,17 +67,17 @@ stage2:
 
     ; We know that program header size is 56 (=0x38) bytes
     ; still, lets check it:
-    cmp word [loadpoint + 54], 0x38
+    cmp word [BOOT_KERNEL_LOADPOINT + 54], 0x38
     jne error
 
 
     ; program header table position
-    mov rbx, qword [loadpoint + 32]
-    add rbx, loadpoint ; now rbx points to first program header
+    mov rbx, qword [BOOT_KERNEL_LOADPOINT + 32]
+    add rbx, BOOT_KERNEL_LOADPOINT ; now rbx points to first program header
 
     ; length of program header table
     mov rcx, 0
-    mov cx, [loadpoint + 56]
+    mov cx, [BOOT_KERNEL_LOADPOINT + 56]
 
     mov ah, '_'
     ; loop through headers
@@ -92,7 +92,7 @@ stage2:
 
     ; esi = p_offset
     mov rsi, [rbx + 8]
-    add rsi, loadpoint  ; now points to begin of buffer we must copy
+    add rsi, BOOT_KERNEL_LOADPOINT  ; now points to begin of buffer we must copy
 
     ; rdi = p_vaddr
     mov rdi, [rbx + 16]
@@ -132,7 +132,7 @@ stage2:
     ; prints green "JK" for "Jump to Kernel"
     mov dword [0xb8000 + 80*4], 0x2f6b2f6a
 
-    jmp 0x100000 ; jump to kernel
+    jmp KERNEL_LOCATION ; jump to kernel
 
 ; Prints `ERR: ` and the given 2-character error code to screen (TL) and hangs.
 ; args: ax=(al,ah)=error_code (2 characters)

@@ -24,8 +24,8 @@ Begin    | Size  | Content
      4000|   1000| Bootloader ELF decompression tables (about 0x500 used, and after that reserved)
      8000|    400| Stage 2 bootloader (two sectors atm)
      A000|   4000| Disk load buffer
-    10000|      ?| Kernel ELF image (Boot stage only) (size proabably around 0x40000)
-    60000|   3000| Page tables (Boot stage only)
+   1_0000|      ?| Kernel ELF image (Boot stage only) (size proabably around 0x10_0000)
+  20_0000|   3000| Page tables (Boot stage only)
 1_000_000|      ?| Relocated and expanded kernel from ELF image (will be huge)
 
 ## Final layout

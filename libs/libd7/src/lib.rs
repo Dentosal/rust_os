@@ -8,16 +8,18 @@
 // no_std
 #![no_std]
 // Unstable features
-#![feature(asm)]
+#![feature(alloc_error_handler)]
+#![feature(alloc_prelude)]
 #![feature(allocator_api)]
+#![feature(asm)]
 #![feature(const_fn)]
 #![feature(integer_atomics)]
-#![feature(alloc_error_handler)]
 #![feature(panic_info_message)]
 
 mod allocator;
 pub mod syscall;
 pub mod process;
+pub mod fs;
 
 use core::alloc::Layout;
 use core::panic::PanicInfo;

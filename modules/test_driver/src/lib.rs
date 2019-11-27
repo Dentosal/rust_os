@@ -4,22 +4,17 @@
 #![feature(allocator_api)]
 #![deny(unused_must_use)]
 
-use libd7::{syscall, process::Process};
+use libd7::{fs, syscall, process::Process};
 
 #[macro_use]
 extern crate alloc;
 
 #[no_mangle]
 fn main() -> u64 {
-    // Test: get pid and use it as exit code
     let pid = syscall::get_pid();
 
-    // let fileinfo = syscall::fs_fileinfo("/").unwrap();
-    // syscall::debug_print(&format!("Fileinfo / : {:?}", fileinfo));
-
-    // let fd = syscall::fs_open("/dev/zero").unwrap();
-    // let count = syscall::fd_read(fd, &mut buffer).unwrap();
-    // syscall::debug_print(&format!("/dev/zero : {:?}", &buffer[..count]));
+    // List processes
+    syscall::debug_print(&format!("{:?}", fs::list_dir("/prc").unwrap()));
 
     if pid < 5 {
         let p = Process::spawn("/mnt/staticfs/mod_test").unwrap();
@@ -28,5 +23,5 @@ fn main() -> u64 {
         syscall::sched_sleep_ns(500_000_000).unwrap();
     }
 
-    pid * 2
+    pid
 }

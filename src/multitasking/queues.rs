@@ -7,19 +7,7 @@ use d7time::Instant;
 
 use crate::multitasking::ProcessId;
 
-/// Instructions for scheduling a process
-#[derive(Debug, Clone)]
-pub enum WaitFor {
-    /// Run again on the next free slot
-    None,
-    /// Run after specified moment
-    Time(Instant),
-    /// Process completed
-    Process(ProcessId),
-    /// First of multiple wait conditions.
-    /// Should never contain `None`.
-    FirstOf(Vec<WaitFor>),
-}
+use super::WaitFor;
 
 /// Internal wait id for scheduler queues.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -66,6 +54,11 @@ impl Queues {
         }
     }
 
+    /// Is there a process with this in any queue
+    pub fn process_exists(&self, pid: ProcessId) -> bool {
+        self.running.contains(&pid) || self.waiting.values().any(|p| p == &pid)
+    }
+
     fn create_wait(&mut self, pid: ProcessId) -> WaitId {
         let wait_id = self.next_waitid.take();
         self.waiting.insert(wait_id, pid);
@@ -77,8 +70,8 @@ impl Queues {
     /// the associated process is scheduled for running.
     fn trigger_wait(&mut self, wait_id: WaitId) {
         if let Some(pid) = self.waiting.remove(&wait_id) {
-            // FIXME: push_front to schedule immediately?
-            self.running.push_back(pid);
+            // TODO: can this cause starvation?
+            self.running.push_front(pid);
         }
     }
 
@@ -105,7 +98,8 @@ impl Queues {
         }
     }
 
-    pub fn give(&mut self, pid: ProcessId, s: WaitFor) {
+    pub fn give(&mut self, pid: ProcessId, mut s: WaitFor) {
+        s = s.reduce(&self, pid);
         if let WaitFor::None = s {
             self.running.push_back(pid);
             return;

@@ -8,14 +8,15 @@ pub enum SyscallNumber {
     get_pid = 0x01,
     debug_print = 0x02,
     mem_set_size = 0x03,
-    fs_fileinfo = 0x30,
-    fs_create = 0x31,
-    fs_open = 0x32,
+    fs_open = 0x30,
+    fs_exec = 0x31,
+    fs_fileinfo = 0x32,
     fd_close = 0x40,
     fd_read = 0x41,
     fd_write = 0x42,
     fd_synchronize = 0x43,
     fd_control = 0x44,
+    fd_select = 0x45,
     sched_yield = 0x50,
     sched_sleep_ns = 0x51,
 }
@@ -37,4 +38,6 @@ pub enum SyscallErrorCode {
     fs_unknown_control_function,
     /// File does not support writing
     fs_readonly,
+    /// Invalid UTF-8
+    invalid_utf8,
 }

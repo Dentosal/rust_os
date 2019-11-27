@@ -3,9 +3,12 @@ use core::fmt;
 use core::num::NonZeroU64;
 use core::ptr;
 use core::u64;
+use serde::{Deserialize, Serialize};
 use x86_64::structures::idt::{InterruptStackFrameValue, PageFaultErrorCode};
 use x86_64::structures::paging::PageTableFlags as Flags;
 use x86_64::{PhysAddr, VirtAddr};
+
+pub use d7abi::process::{Error, ProcessResult};
 
 use crate::memory::paging::PageMap;
 use crate::memory::prelude::*;
@@ -18,7 +21,7 @@ use super::loader::ElfImage;
 
 /// ProcessId is stores as `NonZeroU64`, so that `Option<ProcessId>`
 /// still has uses only `size_of<Processid>` bytes
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
 pub struct ProcessId(NonZeroU64);
 impl ProcessId {
     /// # Safety
@@ -54,30 +57,6 @@ pub enum Status {
     Running,
     /// The process was terminated
     Terminated(ProcessResult),
-}
-
-#[derive(Debug, Clone)]
-pub enum ProcessResult {
-    /// The process exited with a return code
-    Completed(u64),
-    /// The process was terminated because an error occurred
-    Failed(Error),
-}
-
-#[derive(Debug, Clone)]
-pub enum Error {
-    /// Division by zero
-    DivideByZero(InterruptStackFrameValue),
-    /// Page fault
-    PageFault(InterruptStackFrameValue, VirtAddr, PageFaultErrorCode),
-    /// Unhandled interrupt without an error code
-    Interrupt(u8, InterruptStackFrameValue),
-    /// Unhandled interrupt with an error code
-    InterruptWithCode(u8, InterruptStackFrameValue, u32),
-    /// Invalid system call number
-    SyscallNumber(u64),
-    /// Invalid pointer passed to system call
-    Pointer(VirtAddr),
 }
 
 /// # A suspeneded process

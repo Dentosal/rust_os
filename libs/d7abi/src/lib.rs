@@ -17,6 +17,7 @@ extern crate alloc;
 mod kernel_constants;
 mod syscall;
 pub mod fs;
+pub mod process;
 
 pub use self::kernel_constants::PROCESS_DYNAMIC_MEMORY;
 pub use self::syscall::*;

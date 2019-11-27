@@ -6,9 +6,9 @@ use x86_64::{PhysAddr, VirtAddr};
 use d7abi::fs::{FileDescriptor, FileInfo};
 
 use crate::filesystem::{error::*, FILESYSTEM};
-use crate::memory;
 use crate::memory::prelude::*;
-use crate::multitasking::{process, Process, ProcessId, WaitFor, SCHEDULER};
+use crate::memory::{self, MemoryController};
+use crate::multitasking::{process, Process, ProcessId, Scheduler, WaitFor, SCHEDULER};
 
 #[derive(Debug, Clone)]
 #[must_use]
@@ -49,6 +49,12 @@ impl core::ops::Try for SyscallResult {
     }
 }
 
+macro_rules! try_str {
+    ($slice:expr) => {
+        ::core::str::from_utf8($slice).map_err(|_| IoError::Code(ErrorCode::invalid_utf8))?
+    };
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RawSyscall {
     pub routine: u64,
@@ -56,11 +62,13 @@ pub struct RawSyscall {
 }
 
 pub fn syscall(
-    m: &mut memory::MemoryController, process: &mut Process, rsc: RawSyscall,
+    m: &mut MemoryController, sched: &mut Scheduler, pid: ProcessId, rsc: RawSyscall,
 ) -> SyscallResult {
     use d7abi::SyscallNumber as SC;
 
     use crate::filesystem::FileClientId;
+
+    let process = sched.process_by_id_mut(pid).expect("Process not found");
 
     if let Ok(sc) = SC::try_from(rsc.routine) {
         match sc {
@@ -79,7 +87,7 @@ pub fn syscall(
                         },
                     }
                 };
-                let string = core::str::from_utf8(slice).expect("TODO: debug_print: Invalid UTF-8");
+                let string = try_str!(slice);
                 rprintln!("[pid={}] {}", process.id().as_u64(), string);
                 unsafe { m.unmap_area(area) };
                 SyscallResult::Continue(Ok(0))
@@ -91,14 +99,45 @@ pub fn syscall(
                     _ => unimplemented!("OutOfMemory case not implmented yet"),
                 }
             },
+            SC::fs_open => {
+                let (path_len, path_ptr, _, _) = rsc.args;
+                let path_ptr = VirtAddr::new(path_ptr);
+                if let Some((area, slice)) = unsafe { m.process_slice(process, path_len, path_ptr) }
+                {
+                    let path = try_str!(slice);
+                    let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
+                    let fc = fs.open(path, process.id())?;
+                    unsafe { m.unmap_area(area) };
+                    SyscallResult::Continue(Ok(unsafe { fc.fd.as_u64() }))
+                } else {
+                    SyscallResult::Terminate(process::ProcessResult::Failed(
+                        process::Error::Pointer(path_ptr),
+                    ))
+                }
+            },
+            SC::fs_exec => {
+                let (path_len, path_ptr, _, _) = rsc.args;
+                let path_ptr = VirtAddr::new(path_ptr);
+                if let Some((area, slice)) = unsafe { m.process_slice(process, path_len, path_ptr) }
+                {
+                    let path = try_str!(slice);
+                    let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
+                    let fc = fs.exec(m, sched, path, pid).expect("EXEC FAILED");
+                    unsafe { m.unmap_area(area) };
+                    SyscallResult::Continue(Ok(unsafe { fc.fd.as_u64() }))
+                } else {
+                    SyscallResult::Terminate(process::ProcessResult::Failed(
+                        process::Error::Pointer(path_ptr),
+                    ))
+                }
+            },
             SC::fs_fileinfo => {
                 let (path_len, path_ptr, dst_ptr, _) = rsc.args;
                 let path_ptr = VirtAddr::new(path_ptr);
                 let dst_ptr = VirtAddr::new(dst_ptr);
                 if let Some((area, slice)) = unsafe { m.process_slice(process, path_len, path_ptr) }
                 {
-                    let path =
-                        core::str::from_utf8(slice).expect("TODO: fs_fileinfo: Invalid UTF-8");
+                    let path = try_str!(slice);
                     let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
                     let fileinfo: FileInfo = fs.fileinfo(path)?;
                     unsafe {
@@ -106,23 +145,6 @@ pub fn syscall(
                     }
                     unsafe { m.unmap_area(area) };
                     SyscallResult::Continue(Ok(0))
-                } else {
-                    SyscallResult::Terminate(process::ProcessResult::Failed(
-                        process::Error::Pointer(path_ptr),
-                    ))
-                }
-            },
-            SC::fs_open => {
-                let (path_len, path_ptr, _, _) = rsc.args;
-                let path_ptr = VirtAddr::new(path_ptr);
-                if let Some((area, slice)) = unsafe { m.process_slice(process, path_len, path_ptr) }
-                {
-                    let path =
-                        core::str::from_utf8(slice).expect("TODO: fs_fileinfo: Invalid UTF-8");
-                    let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
-                    let fc = fs.open(path, process.id())?;
-                    unsafe { m.unmap_area(area) };
-                    SyscallResult::Continue(Ok(unsafe { fc.fd.as_u64() }))
                 } else {
                     SyscallResult::Terminate(process::ProcessResult::Failed(
                         process::Error::Pointer(path_ptr),
@@ -184,12 +206,14 @@ pub enum SyscallResultAction {
 pub fn handle_syscall(
     pid: ProcessId, page_table: PhysAddr, process_stack: VirtAddr,
 ) -> SyscallResultAction {
-    let mut sched = SCHEDULER.try_lock().unwrap();
-    let process = sched.process_by_id_mut(pid).expect("Process not found");
-
     // Map process stack
     memory::configure(|mm| {
+        let mut sched = SCHEDULER
+            .try_lock()
+            .expect("SCHEDULER LOCKED at start of handle_syscall");
+
         let stack_area = mm.alloc_virtual_area(PROCESS_STACK_SIZE_PAGES);
+        let process = sched.process_by_id(pid).expect("Process not found");
 
         // Map the process stack frames to the kernel page tables
         for (page_index, frame) in process.stack_frames.iter().enumerate() {
@@ -220,7 +244,7 @@ pub fn handle_syscall(
             routine: reg_rax,
             args: (reg_rdi, reg_rsi, reg_rdx, reg_rcx),
         };
-        let res = syscall(mm, process, rsc);
+        let res = syscall(mm, &mut sched, pid, rsc);
 
         // Write result register values into the process stack
         if let SyscallResult::Continue(r) | SyscallResult::Switch(r, _) = res {
@@ -238,6 +262,8 @@ pub fn handle_syscall(
             }
         }
 
+        let process = sched.process_by_id_mut(pid).expect("Process not found");
+        process.repeat_syscall = false;
         let action = match res {
             SyscallResult::Continue(_) => SyscallResultAction::Continue,
             SyscallResult::Switch(_, s) => SyscallResultAction::Switch(s),

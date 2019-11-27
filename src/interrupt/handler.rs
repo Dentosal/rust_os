@@ -206,8 +206,6 @@ unsafe extern "C" fn process_interrupt_inner(
         pid
     };
 
-    /// If returns `None`, the current process should continue.
-    /// On `Some` the result should be returned immediately.
     macro_rules! handle_switch {
         ($next_process:expr) => {{
             match $next_process {
@@ -359,7 +357,10 @@ unsafe fn handle_repeat_syscall(p: Process) -> Option<Process> {
                 ProcessSwitch::Continue => None,
                 ProcessSwitch::Idle => None,
                 ProcessSwitch::Switch(inner_p) => Some(inner_p),
-                ProcessSwitch::RepeatSyscall(inner_p) => handle_repeat_syscall(inner_p),
+                ProcessSwitch::RepeatSyscall(inner_p) => {
+                    panic!("INNER REPEAT");
+                    handle_repeat_syscall(inner_p)
+                },
             }
         },
     }

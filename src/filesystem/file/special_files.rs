@@ -66,6 +66,7 @@ impl FileOps for TestDevice {
         let after1 = SYSCLOCK.now() + Duration::from_millis(1000);
         let after2 = SYSCLOCK.now() + Duration::from_millis(1000);
         self.rounds -= 1;
+        panic!("TESTDEV");
         Err(IoError::RepeatAfter(WaitFor::FirstOf(vec![
             WaitFor::Time(after1),
             WaitFor::Time(after2),

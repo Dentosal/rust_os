@@ -73,6 +73,30 @@ pub unsafe fn mem_set_size(new_size_bytes: u64) -> SyscallResult<u64> {
     syscall!(SyscallNumber::mem_set_size; new_size_bytes)
 }
 
+
+pub fn fs_open(path: &str) -> SyscallResult<FileDescriptor> {
+    let len = path.len() as u64;
+    let slice = path.as_ptr() as u64;
+
+    unsafe {
+        Ok(FileDescriptor::from_u64(
+            syscall!(SyscallNumber::fs_open; len, slice)?,
+        ))
+    }
+}
+
+/// Like fs_open, but executes the file instead
+pub fn fs_exec(path: &str) -> SyscallResult<FileDescriptor> {
+    let len = path.len() as u64;
+    let slice = path.as_ptr() as u64;
+
+    unsafe {
+        Ok(FileDescriptor::from_u64(
+            syscall!(SyscallNumber::fs_exec; len, slice)?,
+        ))
+    }
+}
+
 pub fn fs_fileinfo(path: &str) -> SyscallResult<FileInfo> {
     let len = path.len() as u64;
     let slice = path.as_ptr() as u64;
@@ -85,16 +109,6 @@ pub fn fs_fileinfo(path: &str) -> SyscallResult<FileInfo> {
     }
 }
 
-pub fn fs_open(path: &str) -> SyscallResult<FileDescriptor> {
-    let len = path.len() as u64;
-    let slice = path.as_ptr() as u64;
-
-    unsafe {
-        Ok(FileDescriptor::from_u64(
-            syscall!(SyscallNumber::fs_open; len, slice)?,
-        ))
-    }
-}
 
 pub fn fd_read(fd: FileDescriptor, buf: &mut [u8]) -> SyscallResult<usize> {
     unsafe {

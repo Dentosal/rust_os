@@ -145,13 +145,16 @@ pub extern "C" fn rust_main() -> ! {
         }
     }
 
-    use crate::multitasking::SCHEDULER;
-    let mod_test = multitasking::load_module("mod_test").expect("Module not found");
+    crate::memory::configure(|mut mem_ctrl| {
+        use crate::filesystem::FILESYSTEM;
+        use crate::multitasking::SCHEDULER;
 
-    for _ in 0..1 {
-        let pid = SCHEDULER.try_lock().unwrap().spawn(mod_test);
-        rprintln!("Spawned process: pid = {}", pid);
-    }
+        let mut fs = FILESYSTEM.lock();
+        let mut sched = SCHEDULER.lock();
+
+        fs.kernel_exec(&mut mem_ctrl, &mut sched, "/mnt/staticfs/mod_test")
+            .expect("Could not spawn");
+    });
 
     // Wait until the next clock tick interrupt,
     // after that the process scheduler takes over

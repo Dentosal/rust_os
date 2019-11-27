@@ -39,6 +39,7 @@ features = ["spin_no_std"]
 
 [dependencies.x86_64]           # x86-64 instructions and data structures
 git = "https://github.com/Dentosal/x86_64"
+features = ["use-serde"]
 
 [dependencies.d7abi]
 version = "*"

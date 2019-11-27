@@ -64,7 +64,6 @@ impl FileOps for StaticFSLeaf {
 
     /// Remove reader when closing
     fn close(&mut self, fc: FileClientId) {
-        rprintln!("CLOSE");
         self.readers.remove(&fc);
     }
 }
@@ -140,7 +139,7 @@ fn load_file_entries() -> Vec<(FileEntry, u32)> {
 pub fn init() {
     let mut fs = FILESYSTEM.lock();
     let _ = fs
-        .create_branch(Path::new("/mnt/staticfs"))
+        .create_static_branch(Path::new("/mnt/staticfs"))
         .expect("Could not create /dev/staticfs");
 
     for (file_entry, pos) in load_file_entries() {
@@ -151,7 +150,7 @@ pub fn init() {
         assert!(!name_bytes.is_empty());
         let name = String::from_utf8(name_bytes).expect("StaticFS: mon-UTF-8 filename");
         let leaf = StaticFSLeaf::new(pos, file_entry.size);
-        fs.create(
+        fs.create_static(
             Path::new(&format!("/mnt/staticfs/{}", name)),
             Box::new(leaf),
         )

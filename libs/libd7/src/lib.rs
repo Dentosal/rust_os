@@ -17,6 +17,7 @@
 
 mod allocator;
 pub mod syscall;
+pub mod process;
 
 use core::alloc::Layout;
 use core::panic::PanicInfo;

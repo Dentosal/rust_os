@@ -54,15 +54,34 @@ impl Node {
     /// Calls handler and (on success) increases reference count
     pub fn open(&mut self, fd: FileClientId) -> IoResult<()> {
         self.data.open(fd)?;
-        self.fd_refcount += 1;
+        self.inc_ref();
         Ok(())
     }
 
-    /// Calls handler and decreases reference count. Always succeeds.
-    pub fn close(&mut self, fd: FileClientId) {
+    /// Calls handler that always always succeeds, amd then
+    /// decreases reference count. If refcount hits zero,
+    /// returns `false` to inform the caller that this node
+    /// should be deleted
+    #[must_use]
+    pub fn close(&mut self, fd: FileClientId) -> bool {
+        assert_ne!(self.fd_refcount, 0, "close: fd refcount zero");
+        self.data.close(fd);
+        self.dec_ref()
+    }
+
+    /// Increases reference count
+    pub fn inc_ref(&mut self) {
+        self.fd_refcount += 1;
+    }
+
+    /// Decreases reference count. If refcount hits zero,
+    /// returns `false` to inform the caller that this node
+    /// should be deleted
+    #[must_use]
+    pub fn dec_ref(&mut self) -> bool {
         assert_ne!(self.fd_refcount, 0, "close: fd refcount zero");
         self.fd_refcount -= 1;
-        self.data.close(fd);
+        self.fd_refcount > 0
     }
 
     /// Reads slice of data from this node,

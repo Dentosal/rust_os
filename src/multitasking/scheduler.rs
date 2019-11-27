@@ -6,11 +6,12 @@ use x86_64::{PhysAddr, VirtAddr};
 use d7time::{Duration, Instant};
 
 use crate::memory;
+use crate::memory::MemoryController;
 use crate::multitasking::loader::ElfImage;
 
 use super::process::{Process, ProcessResult};
-use super::queues::{Queues, WaitFor};
-use super::ProcessId;
+use super::queues::Queues;
+use super::{ProcessId, WaitFor};
 
 const TIME_SLICE: Duration = Duration::from_millis(1); // run task 1 millisecond and switch
 
@@ -77,18 +78,16 @@ impl Scheduler {
     }
 
     /// Creates a new process, and returns its pid
-    unsafe fn create_process(&mut self, elf: ElfImage) -> ProcessId {
+    /// # Safety
+    /// This should only be called by the filesystem,
+    /// as it handles the new process creation process
+    pub unsafe fn spawn(&mut self, m: &mut MemoryController, elf: ElfImage) -> ProcessId {
         let pid = self.next_pid;
         self.next_pid = self.next_pid.next();
-        let process = memory::configure(|mm| Process::create(mm, pid, elf));
+        let process = unsafe { Process::create(m, pid, elf) };
         self.processes.insert(pid, process);
         self.queues.give(pid, WaitFor::None);
         pid
-    }
-
-    /// Creates a new process without a parent process
-    pub fn spawn(&mut self, elf_image: ElfImage) -> ProcessId {
-        unsafe { self.create_process(elf_image) }
     }
 
     /// Terminates process if it's alive.
@@ -101,13 +100,14 @@ impl Scheduler {
 
         if let Some(process) = self.processes.remove(&target) {
             rprintln!("Stopping pid {} with status {:?}", target, status);
+            assert!(!process.repeat_syscall);
             // Schedule processes waiting for the termination
             self.queues.on_process_over(process.id());
             // Close open file pointers
             FILESYSTEM
                 .try_lock()
                 .expect("FILESYSTEM LOCKED")
-                .on_process_over(process.id());
+                .on_process_over(process.id(), status);
 
             // TODO: Remove process data:
             // * Free stack frames, etc.

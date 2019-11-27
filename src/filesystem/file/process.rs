@@ -18,8 +18,19 @@ use super::{FileOps, Leafness};
 pub struct ProcessFile {
     /// Id of the process
     pid: ProcessId,
+    /// File descriptor for the file
+    file_fc: FileClientId,
     /// Result of the process, if it's completed
     result: Option<ProcessResult>,
+}
+impl ProcessFile {
+    pub fn new(pid: ProcessId, file_fc: FileClientId) -> Self {
+        Self {
+            pid,
+            file_fc,
+            result: None,
+        }
+    }
 }
 impl FileOps for ProcessFile {
     fn leafness(&self) -> Leafness {
@@ -27,24 +38,31 @@ impl FileOps for ProcessFile {
     }
 
     /// Blocks until the process is complete, and the returns the result
-    fn read(&mut self, _fd: FileClientId, _buf: &mut [u8]) -> IoResult<usize> {
+    fn read(&mut self, fc: FileClientId, buf: &mut [u8]) -> IoResult<usize> {
+        assert_ne!(fc.process, Some(self.pid), "Process read self");
         if let Some(result) = &self.result {
-            unimplemented!("Process {} read: Write to buffer {:?}", self.pid, result);
+            let data = pinecone::to_vec(&result).unwrap();
+            assert!(
+                data.len() <= buf.len(),
+                "Read process: buffer not large enough (required: {} <= {})",
+                data.len(),
+                buf.len()
+            );
+            buf[..data.len()].copy_from_slice(&data);
+            Ok(data.len())
         } else {
-            rprintln!("PROC WAIT {}", self.pid);
             Err(IoError::RepeatAfter(WaitFor::Process(self.pid)))
         }
     }
 
-    fn write(&mut self, _fd: FileClientId, buf: &[u8]) -> IoResult<usize> {
-        unimplemented!("Process write") // TODO
-    }
-
-    fn synchronize(&mut self, _fd: FileClientId) -> IoResult<()> {
-        unimplemented!("Process sync") // TODO
-    }
-
-    fn control(&mut self, _fd: FileClientId, _: u64) -> IoResult<()> {
-        unimplemented!("Process ctrl") // TODO
+    fn write(&mut self, fc: FileClientId, buf: &[u8]) -> IoResult<usize> {
+        if fc.is_kernel() {
+            // Kernel writes set result code
+            self.result = Some(pinecone::from_bytes(buf).unwrap());
+            Ok(buf.len())
+        } else {
+            // Process writes are not allowed yet
+            Err(IoError::Code(ErrorCode::fs_readonly))
+        }
     }
 }

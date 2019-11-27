@@ -1,11 +1,16 @@
 use alloc::prelude::v1::*;
 use hashbrown::HashMap;
 use lazy_static::lazy_static;
+use serde::Serialize;
 use spin::Mutex;
 
 use d7abi::fs::{FileDescriptor, FileInfo};
 
-use crate::multitasking::process::ProcessId;
+use crate::memory::MemoryController;
+use crate::multitasking::{
+    process::{ProcessId, ProcessResult},
+    ElfImage, Scheduler,
+};
 
 pub mod error;
 pub mod file;
@@ -47,13 +52,19 @@ impl FileClientId {
     }
 }
 
+/// NodeId and descriptors for a process
 struct ProcessDescriptors {
+    /// Node id of the process
+    node_id: NodeId,
+    /// Descriptors owned by the process
     descriptors: HashMap<FileDescriptor, NodeId>,
+    /// Next available file descriptor
     next_fd: FileDescriptor,
 }
 impl ProcessDescriptors {
-    fn new() -> Self {
+    fn new(node_id: NodeId) -> Self {
         Self {
+            node_id,
             descriptors: HashMap::new(),
             next_fd: unsafe { FileDescriptor::from_u64(0) },
         }
@@ -63,7 +74,7 @@ impl ProcessDescriptors {
         self.descriptors.get(&fd).copied()
     }
 
-    fn create(&mut self, node_id: NodeId) -> FileDescriptor {
+    fn create_id(&mut self, node_id: NodeId) -> FileDescriptor {
         let fd = self.next_fd;
         self.descriptors.insert(fd, node_id);
         self.next_fd = unsafe { self.next_fd.next() };
@@ -74,13 +85,13 @@ impl ProcessDescriptors {
 /// Read all bytes. Used when the kernel needs to read all data.
 /// # Safety
 /// This is marked unsafe, as it discards data if an io error occurs during it.
-unsafe fn read_to_end(file: &mut dyn FileOps, fd: FileClientId) -> IoResult<Vec<u8>> {
+unsafe fn read_to_end(file: &mut dyn FileOps, fc: FileClientId) -> IoResult<Vec<u8>> {
     const IO_BUFFER_SIZE: usize = 1024;
 
     let mut result = Vec::new();
     let mut buffer = [0u8; IO_BUFFER_SIZE];
     loop {
-        let count = file.read(fd, &mut buffer)?;
+        let count = file.read(fc, &mut buffer)?;
         if count == 0 {
             // EOF
             break;
@@ -93,12 +104,12 @@ unsafe fn read_to_end(file: &mut dyn FileOps, fd: FileClientId) -> IoResult<Vec<
 /// Write all bytes. Used when the kernel needs to write a fixed amount of data.
 /// # Safety
 /// This is marked unsafe, as it discards data if an io error occurs during it.
-unsafe fn write_all(file: &mut dyn FileOps, fd: FileClientId, data: &[u8]) -> IoResult<()> {
+unsafe fn write_all(file: &mut dyn FileOps, fc: FileClientId, data: &[u8]) -> IoResult<()> {
     const IO_BUFFER_SIZE: usize = 1024;
 
     let mut offset: usize = 0;
     while offset < data.len() {
-        let count = file.write(fd, &data[offset..])?;
+        let count = file.write(fc, &data[offset..])?;
         offset += count;
         if count == 0 {
             panic!("Write failed");
@@ -107,20 +118,30 @@ unsafe fn write_all(file: &mut dyn FileOps, fd: FileClientId, data: &[u8]) -> Io
     Ok(())
 }
 
+/// Serialize with Pinecone, and write all bytes
+unsafe fn write_all_ser<T: Serialize>(
+    file: &mut dyn FileOps, fc: FileClientId, data: &T,
+) -> IoResult<()> {
+    let data = pinecone::to_vec(data).unwrap();
+    write_all(file, fc, &data)
+}
+
 pub struct VirtualFS {
     nodes: HashMap<NodeId, Node>,
     descriptors: HashMap<ProcessId, ProcessDescriptors>,
-    next_nodeid: NodeId,
+    next_node_id: NodeId,
     next_kernel_fd: FileDescriptor,
 }
 impl VirtualFS {
     pub fn new() -> Self {
         let mut nodes = HashMap::new();
-        nodes.insert(ROOT_ID, Node::new(Box::new(InternalBranch::new())));
+        let mut root_node = Node::new(Box::new(InternalBranch::new()));
+        root_node.inc_ref(); // Root node refers to "itself", and will not be removed
+        nodes.insert(ROOT_ID, root_node);
         Self {
             nodes,
             descriptors: HashMap::new(),
-            next_nodeid: ROOT_ID.next(),
+            next_node_id: ROOT_ID.next(),
             next_kernel_fd: unsafe { FileDescriptor::from_u64(0) },
         }
     }
@@ -157,7 +178,7 @@ impl VirtualFS {
         let file_name = path.file_name().expect("File name missing");
         let parent = path.parent().expect("Parent missing");
         let parent_node_id = self.resolve(parent)?;
-        let new_node_id = self.next_nodeid;
+        let new_node_id = self.next_node_id;
         if self.has_child(parent_node_id, &(*file_name).to_owned())? {
             Err(IoError::Code(ErrorCode::fs_node_exists))
         } else if self.node(parent_node_id).leafness() == Leafness::Leaf {
@@ -165,19 +186,23 @@ impl VirtualFS {
         } else {
             self.add_child(parent_node_id, file_name, new_node_id)?;
             self.nodes.insert(new_node_id, new_node);
-            self.next_nodeid = new_node_id.next();
+            self.next_node_id = new_node_id.next();
             Ok(new_node_id)
         }
     }
 
-    /// Mount a special device
-    fn create(&mut self, path: Path, dev: Box<dyn FileOps>) -> IoResult<NodeId> {
-        self.create_node(path.clone(), Node::new(dev))
+    /// Create a new node, and give it one initial reference so it
+    /// will not be removed automatically
+    fn create_static(&mut self, path: Path, dev: Box<dyn FileOps>) -> IoResult<NodeId> {
+        let id = self.create_node(path.clone(), Node::new(dev))?;
+        self.node_mut(id).inc_ref();
+        Ok(id)
     }
 
-    /// Create a new node
-    pub fn create_branch(&mut self, path: Path) -> IoResult<NodeId> {
-        self.create(path, Box::new(InternalBranch::new()))
+    /// Create a new branch node, and give it one initial reference so it
+    /// will not be removed automatically
+    pub fn create_static_branch(&mut self, path: Path) -> IoResult<NodeId> {
+        self.create_static(path, Box::new(InternalBranch::new()))
     }
 
     /// File info (system call)
@@ -203,9 +228,10 @@ impl VirtualFS {
                 let fc = self.take_kernel_fc();
                 let node = self.node_mut(node_id);
                 node.open(fc)?;
-                let bytes = unsafe { read_to_end(&mut *node.data, fc)? };
-                node.close(fc);
-                Ok(pinecone::from_bytes(&bytes).unwrap())
+                let result = unsafe { read_to_end(&mut *node.data, fc) };
+                let keep = node.close(fc);
+                assert!(keep, "Not possible");
+                Ok(pinecone::from_bytes(&result?).unwrap())
             },
         }
     }
@@ -237,27 +263,23 @@ impl VirtualFS {
                 let node = self.node_mut(parent_id);
                 node.open(fc)?;
                 let data = (child_name, child_id);
-                unsafe {
-                    write_all(&mut *node.data, fc, &pinecone::to_vec(&data).unwrap())?;
-                }
-                node.close(fc);
-                Ok(())
+                let result =
+                    unsafe { write_all(&mut *node.data, fc, &pinecone::to_vec(&data).unwrap()) };
+                let keep = node.close(fc);
+                assert!(keep, "Not possible");
+                result
             },
         }
     }
-    /// Get process descriptors
-    fn process(&self, pid: ProcessId) -> &ProcessDescriptors {
-        lazy_static! {
-            static ref EMPTY: ProcessDescriptors = ProcessDescriptors::new();
-        }
-        self.descriptors.get(&pid).unwrap_or_else(|| &EMPTY)
-    }
 
     /// Get process descriptors
+    fn process(&self, pid: ProcessId) -> &ProcessDescriptors {
+        self.descriptors.get(&pid).expect("No such process")
+    }
+
+    /// Get process descriptors mutably
     fn process_mut(&mut self, pid: ProcessId) -> &mut ProcessDescriptors {
-        self.descriptors
-            .entry(pid)
-            .or_insert_with(ProcessDescriptors::new)
+        self.descriptors.get_mut(&pid).expect("No such process")
     }
 
     /// Open a file (system call)
@@ -265,10 +287,109 @@ impl VirtualFS {
         let path = Path::new(path);
         let node_id = self.resolve(path)?;
         let process = self.process_mut(pid);
-        let fd = process.create(node_id);
+        let fd = process.create_id(node_id);
         let fc = FileClientId::process(pid, fd);
         self.node_mut(node_id).open(fc)?;
         Ok(fc)
+    }
+
+    /// Exec a file (system call)
+    pub fn exec(
+        &mut self, mem_ctrl: &mut MemoryController, sched: &mut Scheduler, path: &str,
+        owner_pid: ProcessId,
+    ) -> IoResult<FileClientId>
+    {
+        self.exec_optional_owner(mem_ctrl, sched, path, Some(owner_pid))
+    }
+
+    /// Exec a file without a parent process, i.e. init
+    pub fn kernel_exec(
+        &mut self, mem_ctrl: &mut MemoryController, sched: &mut Scheduler, path: &str,
+    ) -> IoResult<FileClientId> {
+        self.exec_optional_owner(mem_ctrl, sched, path, None)
+    }
+
+    fn exec_optional_owner(
+        &mut self, mem_ctrl: &mut MemoryController, sched: &mut Scheduler, path: &str,
+        owner_pid: Option<ProcessId>,
+    ) -> IoResult<FileClientId>
+    {
+        // Load elf image
+        let elfimage = self.load_module(mem_ctrl, path)?;
+
+        // Open the executable file for the owner of the process
+        let path = Path::new(path);
+        let owner_node_id = self.resolve(path)?;
+        let fc = {
+            if let Some(pid) = owner_pid {
+                let process = self.process_mut(pid);
+                let fd = process.create_id(owner_node_id);
+                FileClientId::process(pid, fd)
+            } else {
+                self.take_kernel_fc()
+            }
+        };
+        self.node_mut(owner_node_id).inc_ref();
+
+        // Spawn the new process
+        let new_pid = unsafe { sched.spawn(mem_ctrl, elfimage) };
+
+        // Create a node and descriptors for the process
+        let node_id = self.create_node(
+            Path::new(&format!("/prc/{}", new_pid)),
+            Node::new(Box::new(ProcessFile::new(new_pid, fc))),
+        )?;
+        self.descriptors
+            .insert(new_pid, ProcessDescriptors::new(node_id));
+
+        // Open a file descriptor to the process for the owner
+        let fc = {
+            if let Some(pid) = owner_pid {
+                let process = self.process_mut(pid);
+                let fd = process.create_id(node_id);
+                FileClientId::process(pid, fd)
+            } else {
+                self.take_kernel_fc()
+            }
+        };
+        self.node_mut(node_id).open(fc).unwrap();
+        Ok(fc)
+    }
+
+    /// Loads elf image to ram and returns it
+    pub fn load_module(
+        &mut self, mem_ctrl: &mut MemoryController, path: &str,
+    ) -> IoResult<ElfImage> {
+        use core::ptr;
+        use x86_64::structures::paging::PageTableFlags as Flags;
+
+        use crate::memory::prelude::*;
+        use crate::memory::Area;
+        use crate::memory::{self, Page};
+
+        let bytes = self.read_file(path)?;
+
+        let size_pages =
+            memory::page_align(PhysAddr::new(bytes.len() as u64), true).as_u64() / Page::SIZE;
+
+        // Allocate load buffer
+        let area = mem_ctrl.alloc_pages(size_pages as usize, Flags::PRESENT | Flags::WRITABLE);
+
+        // Store the file to buffer
+        let base: *mut u8 = area.start.as_mut_ptr();
+        let mut it = bytes.into_iter();
+        for page_offset in 0..size_pages {
+            for byte_offset in 0..PAGE_SIZE_BYTES {
+                let i = page_offset * PAGE_SIZE_BYTES + byte_offset;
+                unsafe {
+                    ptr::write(base.add(i as usize), it.next().unwrap_or(0));
+                }
+            }
+        }
+
+        let elf = unsafe { ElfImage::new(area) };
+        elf.verify();
+        Ok(elf)
     }
 
     /// Resolves file descriptor for a process
@@ -299,17 +420,37 @@ impl VirtualFS {
         let node = self.node_mut(node_id);
         node.open(fc)?;
         let result = unsafe { read_to_end(&mut *node.data, fc) };
-        node.close(fc);
+        let keep = node.close(fc);
+        assert!(keep, "Not possible");
         result
+    }
+
+    /// Remove a closed node
+    pub fn remove_node(&mut self, node_id: NodeId) {
+        self.nodes.remove(&node_id);
     }
 
     /// Update when a process completes.
     /// Closes all files opened by the process
     /// TODO: flush/synchronize buffers?
-    pub fn on_process_over(&mut self, pid: ProcessId) {
+    pub fn on_process_over(&mut self, pid: ProcessId, status: ProcessResult) {
         if let Some(pd) = self.descriptors.remove(&pid) {
+            // Inform process about its status
+            {
+                let fc = self.take_kernel_fc();
+                let node = self.node_mut(pd.node_id);
+                node.open(fc).unwrap();
+                unsafe { write_all_ser(&mut *node.data, fc, &status).expect("??") };
+                let keep = node.close(fc);
+                assert!(keep, "Not possible");
+            }
+            // Close files process was holding open
             for (fd, node_id) in pd.descriptors.into_iter() {
-                self.node_mut(node_id).close(FileClientId::process(pid, fd));
+                let fc = FileClientId::process(pid, fd);
+                let keep = self.node_mut(node_id).close(FileClientId::process(pid, fd));
+                if !keep {
+                    self.remove_node(node_id);
+                }
             }
         }
     }
@@ -321,15 +462,16 @@ lazy_static! {
 
 fn create_fs(fs: &mut VirtualFS) -> IoResult<()> {
     // Create top-level fs hierarchy
-    fs.create_branch(Path::new("/bin"))?;
-    fs.create_branch(Path::new("/cfg"))?;
-    fs.create_branch(Path::new("/dev"))?;
-    fs.create_branch(Path::new("/mnt"))?;
+    fs.create_static_branch(Path::new("/bin"))?;
+    fs.create_static_branch(Path::new("/cfg"))?;
+    fs.create_static_branch(Path::new("/dev"))?;
+    fs.create_static_branch(Path::new("/mnt"))?;
+    fs.create_static_branch(Path::new("/prc"))?;
 
     // Insert special files
-    fs.create(Path::new("/dev/null"), Box::new(NullDevice))?;
-    fs.create(Path::new("/dev/zero"), Box::new(ZeroDevice))?;
-    fs.create(Path::new("/dev/test"), Box::new(TestDevice { rounds: 3 }))?;
+    fs.create_static(Path::new("/dev/null"), Box::new(NullDevice))?;
+    fs.create_static(Path::new("/dev/zero"), Box::new(ZeroDevice))?;
+    fs.create_static(Path::new("/dev/test"), Box::new(TestDevice { rounds: 3 }))?;
 
     Ok(())
 }

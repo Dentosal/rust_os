@@ -481,7 +481,7 @@ static MEM_CTRL_CONTAINER: Mutex<Option<MemoryController>> = Mutex::new(None);
 
 pub fn configure<F, T>(mut f: F) -> T
 where F: FnMut(&mut MemoryController) -> T {
-    let mut guard = MEM_CTRL_CONTAINER.lock();
+    let mut guard = MEM_CTRL_CONTAINER.try_lock().expect("MEM_CTRL LOCKED");
     if let Some(ref mut mem_ctrl) = *guard {
         f(mem_ctrl)
     } else {

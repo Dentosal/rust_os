@@ -5,15 +5,7 @@ Dimension 7 is an operating system microkernel written in Rust. It runs only on 
 ## Development
 
 This is a learning project. Currently code contributions are not accepted, as I'd like to learn to fix the problems myself. Forking the project is of course possible, if you'd like to develop something based on this.
-
 Feel free to submit issues on GitHub if you find any bugs.
-
-Currently everything is subject to quick changes. Any module should be considered unstable.
-
-### Branches
-
-Main branch should always contain a working build, that can be compiled and it boots successfully.
-Feature development is done in separate branches. Rebase workflow is used to combine branches.
 
 ## Current features:
 * Multitasking: round-robin scheduler
@@ -73,4 +65,4 @@ cargo fmt && factory && ./autobuild.sh -r
 ```
 
 # License
-This project is licensed under the MIT license, that can be found in the file called LICENSE.
+This project is licensed under the MIT license, which can be found in the file called LICENSE.

@@ -180,6 +180,14 @@ fn syscall(
                     ))
                 }
             },
+            SC::fd_close => {
+                let (fd, _, _, _) = rsc.args;
+                let fd = unsafe { FileDescriptor::from_u64(fd) };
+                let fc = FileClientId::process(pid, fd);
+                let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
+                fs.close(sched, fc)?;
+                SyscallResult::Continue(Ok(0))
+            },
             SC::fd_read => {
                 let (fd, buf, count, _) = rsc.args;
                 let fd = unsafe { FileDescriptor::from_u64(fd) };

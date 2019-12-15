@@ -22,6 +22,8 @@ pub fn list_dir(path: &str) -> SyscallResult<Vec<String>> {
         result.extend(buffer.iter());
     }
 
+    syscall::fd_close(fd)?;
+
     let branch: protocol::ReadBranch = pinecone::from_bytes(&result).unwrap();
     Ok(branch.items)
 }

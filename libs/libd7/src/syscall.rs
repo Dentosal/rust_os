@@ -3,7 +3,10 @@ use core::hint::unreachable_unchecked;
 use core::mem::MaybeUninit;
 use core::time::Duration;
 
-use d7abi::{fs::{FileDescriptor, FileInfo}, SyscallErrorCode, SyscallNumber};
+use d7abi::{
+    fs::{FileDescriptor, FileInfo},
+    SyscallErrorCode, SyscallNumber,
+};
 
 macro_rules! syscall {
     ($n:expr; $a0:expr, $a1:expr, $a2:expr, $a3:expr) => {
@@ -74,7 +77,6 @@ pub unsafe fn mem_set_size(new_size_bytes: u64) -> SyscallResult<u64> {
     syscall!(SyscallNumber::mem_set_size; new_size_bytes)
 }
 
-
 pub fn fs_open(path: &str) -> SyscallResult<FileDescriptor> {
     let len = path.len() as u64;
     let slice = path.as_ptr() as u64;
@@ -122,6 +124,12 @@ pub fn fs_fileinfo(path: &str) -> SyscallResult<FileInfo> {
     }
 }
 
+pub fn fd_close(fd: FileDescriptor) -> SyscallResult<()> {
+    unsafe {
+        let _ = syscall!(SyscallNumber::fd_close; fd.as_u64())?;
+        Ok(())
+    }
+}
 
 pub fn fd_read(fd: FileDescriptor, buf: &mut [u8]) -> SyscallResult<usize> {
     unsafe {
@@ -141,7 +149,9 @@ pub fn fd_write(fd: FileDescriptor, buf: &[u8]) -> SyscallResult<usize> {
     }
 }
 
-pub fn fd_select(fds: &[FileDescriptor], timeout: Option<Duration>) -> SyscallResult<FileDescriptor> {
+pub fn fd_select(
+    fds: &[FileDescriptor], timeout: Option<Duration>,
+) -> SyscallResult<FileDescriptor> {
     unsafe {
         Ok(FileDescriptor::from_u64(syscall!(
             SyscallNumber::fd_select;

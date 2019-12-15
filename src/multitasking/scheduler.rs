@@ -101,7 +101,11 @@ impl Scheduler {
 
         if let Some(process) = self.processes.remove(&target) {
             rprintln!("Stopping pid {} with status {:?}", target, status);
-            assert!(!process.repeat_syscall);
+
+            if process.repeat_syscall {
+                rprintln!(" [system call was pending]");
+            }
+
             // Schedule processes waiting for the termination
             self.queues.on_process_over(process.id());
             // Close open file pointers

@@ -481,6 +481,19 @@ impl VirtualFS {
         IoResult::Success(fc)
     }
 
+    /// Close a file descriptor (system call)
+    pub fn close(&mut self, sched: &mut Scheduler, fc: FileClientId) -> IoResult<()> {
+        let node_id = self.resolve_fc(fc)?;
+        let node = self.nodes.get_mut(&node_id).expect("Close: no such file");
+        let destroy = !node.close(fc);
+        if destroy {
+            let mut node = self.remove_node(node_id);
+            let trigger = node.data.destroy();
+            trigger.run(sched, self);
+        }
+        IoResult::Success(())
+    }
+
     /// Read from file (system call)
     pub fn read(
         &mut self, sched: &mut Scheduler, fc: FileClientId, buf: &mut [u8],

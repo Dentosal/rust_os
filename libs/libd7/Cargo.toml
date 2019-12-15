@@ -20,3 +20,4 @@ path = "../d7abi"
 
 [dependencies.x86_64]
 git = "https://github.com/Dentosal/x86_64"
+features = ["use-serde"]

@@ -5,7 +5,6 @@
 #![feature(box_patterns)]
 #![feature(box_syntax)]
 #![feature(const_fn)]
-#![feature(never_type)]
 #![feature(nll)]
 #![feature(vec_remove_item)]
 #![no_std]

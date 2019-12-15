@@ -1,5 +1,9 @@
-use core::convert::TryFrom;
+use alloc::prelude::v1::*;
+use core::convert::{TryFrom, TryInto};
+use core::mem;
 use core::ptr;
+use core::time::Duration;
+use hashbrown::HashSet;
 use x86_64::structures::paging::PageTableFlags as Flags;
 use x86_64::{PhysAddr, VirtAddr};
 
@@ -9,6 +13,7 @@ use crate::filesystem::{error::*, FILESYSTEM};
 use crate::memory::prelude::*;
 use crate::memory::{self, MemoryController};
 use crate::multitasking::{process, Process, ProcessId, Scheduler, WaitFor, SCHEDULER};
+use crate::time::SYSCLOCK;
 
 #[derive(Debug, Clone)]
 #[must_use]
@@ -31,9 +36,9 @@ pub enum SyscallResult {
 
 impl core::ops::Try for SyscallResult {
     type Ok = Self;
-    type Error = IoError;
+    type Error = IoResult<Missing>;
 
-    fn into_result(self) -> Result<Self, IoError> {
+    fn into_result(self) -> Result<Self, Self::Error> {
         unimplemented!("??")
     }
 
@@ -43,15 +48,19 @@ impl core::ops::Try for SyscallResult {
 
     fn from_error(error: Self::Error) -> Self {
         match error {
-            IoError::RepeatAfter(waitfor) => Self::RepeatAfter(waitfor),
-            IoError::Code(code) => Self::Continue(Err(code.into())),
+            IoResult::Success(_missing) => unimplemented!("Success is not error"),
+            IoResult::RepeatAfter(waitfor) => Self::RepeatAfter(waitfor),
+            IoResult::TriggerEvent(_, _) => {
+                unreachable!("TriggerEvent should have been processed earlier")
+            },
+            IoResult::Code(code) => Self::Continue(Err(code.into())),
         }
     }
 }
 
 macro_rules! try_str {
     ($slice:expr) => {
-        ::core::str::from_utf8($slice).map_err(|_| IoError::Code(ErrorCode::invalid_utf8))?
+        ::core::str::from_utf8($slice).map_err(|_| IoResult::Code(ErrorCode::invalid_utf8))?
     };
 }
 
@@ -61,7 +70,7 @@ pub struct RawSyscall {
     args: (u64, u64, u64, u64),
 }
 
-pub fn syscall(
+fn syscall(
     m: &mut MemoryController, sched: &mut Scheduler, pid: ProcessId, rsc: RawSyscall,
 ) -> SyscallResult {
     use d7abi::SyscallNumber as SC;
@@ -69,11 +78,12 @@ pub fn syscall(
     use crate::filesystem::FileClientId;
 
     let process = sched.process_by_id_mut(pid).expect("Process not found");
+    let pid = process.id();
 
     if let Ok(sc) = SC::try_from(rsc.routine) {
         match sc {
             SC::exit => SyscallResult::Terminate(process::ProcessResult::Completed(rsc.args.0)),
-            SC::get_pid => SyscallResult::Continue(Ok(process.id().as_u64())),
+            SC::get_pid => SyscallResult::Continue(Ok(pid.as_u64())),
             SC::debug_print => {
                 let (str_len, str_ptr_u64, _, _) = rsc.args;
                 let str_ptr = VirtAddr::new(str_ptr_u64);
@@ -88,7 +98,7 @@ pub fn syscall(
                     }
                 };
                 let string = try_str!(slice);
-                rprintln!("[pid={}] {}", process.id().as_u64(), string);
+                rprintln!("[pid={}] {}", pid.as_u64(), string);
                 unsafe { m.unmap_area(area) };
                 SyscallResult::Continue(Ok(0))
             },
@@ -106,7 +116,7 @@ pub fn syscall(
                 {
                     let path = try_str!(slice);
                     let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
-                    let fc = fs.open(path, process.id())?;
+                    let fc = fs.open(sched, pid, path)?;
                     unsafe { m.unmap_area(area) };
                     SyscallResult::Continue(Ok(unsafe { fc.fd.as_u64() }))
                 } else {
@@ -122,7 +132,26 @@ pub fn syscall(
                 {
                     let path = try_str!(slice);
                     let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
-                    let fc = fs.exec(m, sched, path, pid).expect("EXEC FAILED");
+                    let fc = fs.exec(m, sched, pid, path).expect("EXEC FAILED");
+                    unsafe { m.unmap_area(area) };
+                    SyscallResult::Continue(Ok(unsafe { fc.fd.as_u64() }))
+                } else {
+                    SyscallResult::Terminate(process::ProcessResult::Failed(
+                        process::Error::Pointer(path_ptr),
+                    ))
+                }
+            },
+            SC::fs_attach => {
+                let (path_len, path_ptr, is_leaf, _) = rsc.args;
+                let path_ptr = VirtAddr::new(path_ptr);
+                if let Some((area, slice)) = unsafe { m.process_slice(process, path_len, path_ptr) }
+                {
+                    let path = try_str!(slice);
+                    let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
+                    // TODO: Proper conversion to boolean for is_leaf
+                    let fc = fs
+                        .attach(sched, pid, path, is_leaf != 0)
+                        .expect("ATTACH FAILED");
                     unsafe { m.unmap_area(area) };
                     SyscallResult::Continue(Ok(unsafe { fc.fd.as_u64() }))
                 } else {
@@ -157,8 +186,8 @@ pub fn syscall(
                 let buf = VirtAddr::new(buf);
                 let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
                 if let Some((area, slice)) = unsafe { m.process_slice_mut(process, count, buf) } {
-                    let fc = FileClientId::process(process.id(), fd);
-                    let read_count = fs.read(fc, slice)?;
+                    let fc = FileClientId::process(pid, fd);
+                    let read_count = fs.read(sched, fc, slice)?;
                     unsafe { m.unmap_area(area) };
                     SyscallResult::Continue(Ok(read_count as u64))
                 } else {
@@ -167,13 +196,75 @@ pub fn syscall(
                     ))
                 }
             },
+            SC::fd_write => {
+                let (fd, buf, count, _) = rsc.args;
+                let fd = unsafe { FileDescriptor::from_u64(fd) };
+                let buf = VirtAddr::new(buf);
+                let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
+                if let Some((area, slice)) = unsafe { m.process_slice(process, count, buf) } {
+                    let fc = FileClientId::process(pid, fd);
+                    let written_count = fs.write(sched, fc, slice)?;
+                    unsafe { m.unmap_area(area) };
+                    SyscallResult::Continue(Ok(written_count as u64))
+                } else {
+                    SyscallResult::Terminate(process::ProcessResult::Failed(
+                        process::Error::Pointer(buf),
+                    ))
+                }
+            },
+            SC::fd_select => {
+                let (fds_len, fds, timeout_ns, _) = rsc.args;
+
+                if fds_len == 0 {
+                    return SyscallResult::Continue(Err(ErrorCode::empty_list_argument.into()));
+                }
+
+                let fds = VirtAddr::new(fds);
+                let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
+                let size = mem::size_of::<FileDescriptor>() as u64;
+                if let Some((area, fds_slice)) =
+                    unsafe { m.process_slice_mut(process, fds_len * size, fds) }
+                {
+                    let mut conditions = Vec::new();
+                    for fd_bytes in fds_slice.chunks_exact(8) {
+                        let fd = unsafe {
+                            FileDescriptor::from_u64(u64::from_le_bytes(
+                                fd_bytes.try_into().unwrap(),
+                            ))
+                        };
+                        let fc = FileClientId::process(pid, fd);
+                        let condition = fs.read_waiting_for(sched, fc)?;
+                        if condition == WaitFor::None {
+                            unsafe { m.unmap_area(area) };
+                            return SyscallResult::Continue(Ok(unsafe { fd.as_u64() }));
+                        }
+                        conditions.push(condition);
+                    }
+                    unsafe { m.unmap_area(area) };
+
+                    if timeout_ns != 0 {
+                        let now = SYSCLOCK.now();
+                        conditions.push(WaitFor::Time(now + Duration::from_nanos(timeout_ns)));
+                    }
+
+                    match sched.try_resolve_waitfor(WaitFor::FirstOf(conditions.clone())) {
+                        Ok(pid) => {
+                            unimplemented!("Conditions {:?}", conditions)
+                            // SyscallResult::Continue(Ok(unsafe { fd.as_u64() }))
+                        },
+                        Err(waitfor) => SyscallResult::RepeatAfter(waitfor),
+                    }
+                } else {
+                    SyscallResult::Terminate(process::ProcessResult::Failed(
+                        process::Error::Pointer(fds),
+                    ))
+                }
+            },
             SC::sched_yield => {
                 let (_, _, _, _) = rsc.args;
                 SyscallResult::Switch(Ok(0), WaitFor::None)
             },
             SC::sched_sleep_ns => {
-                use crate::time::SYSCLOCK;
-                use core::time::Duration;
                 let (time_ns, _, _, _) = rsc.args;
                 let now = SYSCLOCK.now();
                 SyscallResult::Switch(Ok(0), WaitFor::Time(now + Duration::from_nanos(time_ns)))

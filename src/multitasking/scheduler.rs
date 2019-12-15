@@ -5,9 +5,10 @@ use x86_64::{PhysAddr, VirtAddr};
 
 use d7time::{Duration, Instant};
 
+use crate::filesystem::VirtualFS;
 use crate::memory;
 use crate::memory::MemoryController;
-use crate::multitasking::loader::ElfImage;
+use crate::multitasking::{loader::ElfImage, ExplicitEventId};
 
 use super::process::{Process, ProcessResult};
 use super::queues::Queues;
@@ -18,6 +19,7 @@ const TIME_SLICE: Duration = Duration::from_millis(1); // run task 1 millisecond
 /// Process switch an related alternatives
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
+#[must_use]
 pub enum ProcessSwitch {
     /// Keep the same process
     Continue,
@@ -31,6 +33,7 @@ pub enum ProcessSwitch {
     RepeatSyscall(Process),
 }
 
+#[derive(Debug)]
 pub struct Scheduler {
     /// Time of the next switch if set, otherwise immediately
     next_switch: Option<Instant>,
@@ -91,11 +94,9 @@ impl Scheduler {
     }
 
     /// Terminates process if it's alive.
-    /// Returns the data for the process to switch to, if any.
-    /// Will never return `ProcessSwitch::Continue`.
-    pub fn terminate_and_switch(
-        &mut self, target: ProcessId, status: ProcessResult,
-    ) -> ProcessSwitch {
+    /// Doesn't attempt to switch to a new process.
+    /// Used to terminate processes when e.g. their owner process dies.
+    pub fn terminate(&mut self, vfs: &mut VirtualFS, target: ProcessId, status: ProcessResult) {
         use crate::filesystem::FILESYSTEM;
 
         if let Some(process) = self.processes.remove(&target) {
@@ -104,22 +105,34 @@ impl Scheduler {
             // Schedule processes waiting for the termination
             self.queues.on_process_over(process.id());
             // Close open file pointers
-            FILESYSTEM
-                .try_lock()
-                .expect("FILESYSTEM LOCKED")
-                .on_process_over(process.id(), status);
+            vfs.on_process_over(self, process.id(), status);
 
             // TODO: Remove process data:
             // * Free stack frames, etc.
+        }
 
-            if self.running == Some(process.id()) {
-                self.running = None;
-                unsafe { self.switch(None) }
+        if self.running == Some(target) {
+            self.running = None;
+        }
+    }
+
+    /// Terminates process if it's alive.
+    /// Returns the data for the process to switch to, if any.
+    /// Will never return `ProcessSwitch::Continue`.
+    pub fn terminate_and_switch(
+        &mut self, vfs: &mut VirtualFS, target: ProcessId, status: ProcessResult,
+    ) -> ProcessSwitch {
+        use crate::filesystem::FILESYSTEM;
+
+        let is_current = self.running == Some(target);
+        self.terminate(vfs, target, status);
+
+        unsafe {
+            if is_current {
+                self.switch(None)
             } else {
-                unsafe { self.switch_current() }
+                self.switch_current()
             }
-        } else {
-            ProcessSwitch::Idle
         }
     }
 
@@ -147,7 +160,10 @@ impl Scheduler {
 
         if let Some(pid) = self.queues.take() {
             self.running = Some(pid);
-            let process = self.processes.get_mut(&pid).unwrap();
+            let process = self
+                .processes
+                .get_mut(&pid)
+                .expect("Process from queue not running");
             if process.repeat_syscall {
                 ProcessSwitch::RepeatSyscall(process.clone())
             } else {
@@ -164,7 +180,10 @@ impl Scheduler {
     /// If there is no active process, simply idles.
     pub unsafe fn switch_current(&mut self) -> ProcessSwitch {
         if let Some(pid) = self.running {
-            let process = self.processes.get_mut(&pid).unwrap();
+            let process = self
+                .processes
+                .get_mut(&pid)
+                .expect("self.running does not exist anymore");
             if process.repeat_syscall {
                 ProcessSwitch::RepeatSyscall(process.clone())
             } else {
@@ -192,6 +211,16 @@ impl Scheduler {
                 ProcessSwitch::Continue
             },
         }
+    }
+
+    /// Tries to resolve a WaitFor in the current context
+    pub fn try_resolve_waitfor(&self, waitfor: WaitFor) -> Result<ProcessId, WaitFor> {
+        waitfor.try_resolve_immediate(&self.queues, self.running.expect("No process running"))
+    }
+
+    /// Relay events to queues
+    pub fn on_explicit_event(&mut self, event_id: ExplicitEventId) {
+        self.queues.on_explicit_event(event_id);
     }
 }
 

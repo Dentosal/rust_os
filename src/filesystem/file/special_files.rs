@@ -1,5 +1,7 @@
 //! Special files implemented in the kernel VFS for performance and simplicity
 
+use crate::multitasking::WaitFor;
+
 use super::super::{error::*, path::Path, FileClientId};
 use super::{FileOps, Leafness};
 
@@ -12,12 +14,16 @@ impl FileOps for NullDevice {
 
     /// Immediately provides EOF
     fn read(&mut self, _fd: FileClientId, _buf: &mut [u8]) -> IoResult<usize> {
-        Ok(0)
+        IoResult::Success(0)
+    }
+
+    fn read_waiting_for(&mut self, fc: FileClientId) -> WaitFor {
+        WaitFor::None
     }
 
     /// Discards all data
     fn write(&mut self, _fd: FileClientId, buf: &[u8]) -> IoResult<usize> {
-        Ok(buf.len())
+        IoResult::Success(buf.len())
     }
 }
 
@@ -33,12 +39,16 @@ impl FileOps for ZeroDevice {
         for i in 0..buf.len() {
             buf[i] = 0;
         }
-        Ok(buf.len())
+        IoResult::Success(buf.len())
+    }
+
+    fn read_waiting_for(&mut self, fc: FileClientId) -> WaitFor {
+        WaitFor::None
     }
 
     /// No data will be written
     fn write(&mut self, _fd: FileClientId, _buf: &[u8]) -> IoResult<usize> {
-        Ok(0)
+        IoResult::Success(0)
     }
 }
 
@@ -60,20 +70,24 @@ impl FileOps for TestDevice {
         rprintln!("/dev/test: READ");
         if self.rounds == 0 {
             rprintln!("/dev/test: DONE!");
-            return Err(IoError::Code(ErrorCode::fs_unknown_control_function));
+            return IoResult::Code(ErrorCode::fs_unknown_control_function);
         }
 
         let after1 = SYSCLOCK.now() + Duration::from_millis(1000);
         let after2 = SYSCLOCK.now() + Duration::from_millis(1000);
         self.rounds -= 1;
         panic!("TESTDEV");
-        Err(IoError::RepeatAfter(WaitFor::FirstOf(vec![
+        IoResult::RepeatAfter(WaitFor::FirstOf(vec![
             WaitFor::Time(after1),
             WaitFor::Time(after2),
-        ])))
+        ]))
+    }
+
+    fn read_waiting_for(&mut self, fc: FileClientId) -> WaitFor {
+        WaitFor::None
     }
 
     fn write(&mut self, _fd: FileClientId, _buf: &[u8]) -> IoResult<usize> {
-        Ok(0)
+        IoResult::Success(0)
     }
 }

@@ -1,4 +1,4 @@
-use num_enum::{TryFromPrimitive, IntoPrimitive};
+use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 #[derive(Debug, TryFromPrimitive)]
 #[allow(non_camel_case_types)]
@@ -10,7 +10,8 @@ pub enum SyscallNumber {
     mem_set_size = 0x03,
     fs_open = 0x30,
     fs_exec = 0x31,
-    fs_fileinfo = 0x32,
+    fs_attach = 0x32,
+    fs_fileinfo = 0x33,
     fd_close = 0x40,
     fd_read = 0x41,
     fd_write = 0x42,
@@ -26,8 +27,10 @@ pub enum SyscallNumber {
 #[repr(u64)]
 pub enum SyscallErrorCode {
     unknown = 0,
+    /// Empty list given, but now allowed
+    empty_list_argument,
     /// Trying to create a node which already exists
-    fs_node_exists = 0x1_0000,
+    fs_node_exists,
     /// Node is requested but does not exist
     fs_node_not_found,
     /// This operation requires a leaf node

@@ -9,6 +9,7 @@ use hashbrown::HashMap;
 
 use crate::driver::disk_io::DISK_IO;
 use crate::filesystem::{error::*, FileClientId, FileOps, Leafness, Path, FILESYSTEM};
+use crate::multitasking::{ExplicitEventId, WaitFor};
 
 fn round_up_sector(p: u64) -> u64 {
     (p + SECTOR_SIZE - 1) / SECTOR_SIZE
@@ -59,7 +60,11 @@ impl FileOps for StaticFSLeaf {
         let count = (data.len() - offset).min(buf.len());
         buf[..count].copy_from_slice(&data[offset..offset + count]);
         self.readers.insert(fc, offset + count);
-        Ok(count)
+        IoResult::Success(count)
+    }
+
+    fn read_waiting_for(&mut self, fc: FileClientId) -> WaitFor {
+        WaitFor::None
     }
 
     /// Remove reader when closing

@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 
 use d7abi::fs::FileInfo;
 
+use crate::multitasking::ExplicitEventId;
+
 use super::error::*;
 use super::file::{FileOps, Leafness};
 use super::FileClientId;
@@ -28,14 +30,17 @@ impl NodeId {
 /// Somewhat analogous to Unix inode.
 #[derive(Debug)]
 pub struct Node {
+    /// Parent node id, None for root
+    pub(super) parent: Option<NodeId>,
     /// Contents
     pub(super) data: NodeData,
     /// Open file descriptors pointing to this node
     pub(super) fd_refcount: u64,
 }
 impl Node {
-    pub fn new(dev: Box<dyn FileOps>) -> Self {
+    pub fn new(parent: Option<NodeId>, dev: Box<dyn FileOps>) -> Self {
         Self {
+            parent,
             data: NodeData(dev),
             fd_refcount: 0,
         }
@@ -55,13 +60,14 @@ impl Node {
     pub fn open(&mut self, fd: FileClientId) -> IoResult<()> {
         self.data.open(fd)?;
         self.inc_ref();
-        Ok(())
+        IoResult::Success(())
     }
 
     /// Calls handler that always always succeeds, amd then
     /// decreases reference count. If refcount hits zero,
     /// returns `false` to inform the caller that this node
-    /// should be deleted
+    /// should be deleted.
+    /// Also returns a vec of events to trigger
     #[must_use]
     pub fn close(&mut self, fd: FileClientId) -> bool {
         assert_ne!(self.fd_refcount, 0, "close: fd refcount zero");
@@ -92,7 +98,7 @@ impl Node {
 
     /// Writes slice of data from this node,
     /// and returns how many bytes were written
-    pub fn write(&mut self, fd: FileClientId, buf: &mut [u8]) -> IoResult<usize> {
+    pub fn write(&mut self, fd: FileClientId, buf: &[u8]) -> IoResult<usize> {
         self.data.write(fd, buf)
     }
 }
@@ -101,7 +107,7 @@ impl Node {
 pub struct NodeData(Box<dyn FileOps>);
 impl fmt::Debug for NodeData {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        unimplemented!()
+        write!(f, "NodeData(...)")
     }
 }
 impl Deref for NodeData {

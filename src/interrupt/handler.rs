@@ -285,9 +285,11 @@ fn fail(pid: ProcessId, error: process::Error) -> ! {
 
 /// Terminate the give process and switch to the next one
 fn terminate(pid: ProcessId, result: process::ProcessResult) -> ! {
+    use crate::filesystem::FILESYSTEM;
     let next_process = unsafe {
         let mut sched = SCHEDULER.try_lock().expect("Sched unlock");
-        sched.terminate_and_switch(pid, result)
+        let mut vfs = FILESYSTEM.try_lock().expect("VFS unlock");
+        sched.terminate_and_switch(&mut *vfs, pid, result)
     };
 
     match next_process {
@@ -352,13 +354,18 @@ unsafe fn handle_repeat_syscall(p: Process) -> Option<Process> {
         SyscallResultAction::Terminate(status) => terminate(p.id(), status),
         SyscallResultAction::Continue => Some(p),
         SyscallResultAction::Switch(schedule) => {
-            let next_process = { SCHEDULER.try_lock().unwrap().switch(Some(schedule)) };
+            let next_process = {
+                SCHEDULER
+                    .try_lock()
+                    .expect("Scheduler locked")
+                    .switch(Some(schedule))
+            };
             match next_process {
                 ProcessSwitch::Continue => None,
                 ProcessSwitch::Idle => None,
                 ProcessSwitch::Switch(inner_p) => Some(inner_p),
                 ProcessSwitch::RepeatSyscall(inner_p) => {
-                    panic!("INNER REPEAT");
+                    assert!(p.id() != inner_p.id(), "handle_repeat_syscall loops");
                     handle_repeat_syscall(inner_p)
                 },
             }

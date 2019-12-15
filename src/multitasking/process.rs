@@ -1,14 +1,11 @@
 use alloc::prelude::v1::*;
-use core::fmt;
-use core::num::NonZeroU64;
 use core::ptr;
-use core::u64;
 use serde::{Deserialize, Serialize};
 use x86_64::structures::idt::{InterruptStackFrameValue, PageFaultErrorCode};
 use x86_64::structures::paging::PageTableFlags as Flags;
 use x86_64::{PhysAddr, VirtAddr};
 
-pub use d7abi::process::{Error, ProcessResult};
+pub use d7abi::process::{Error, ProcessId, ProcessResult};
 
 use crate::memory::paging::PageMap;
 use crate::memory::prelude::*;
@@ -18,32 +15,6 @@ use crate::memory::{PROCESS_COMMON_CODE, PROCESS_STACK};
 use crate::util::elf_parser;
 
 use super::loader::ElfImage;
-
-/// ProcessId is stores as `NonZeroU64`, so that `Option<ProcessId>`
-/// still has uses only `size_of<Processid>` bytes
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
-pub struct ProcessId(NonZeroU64);
-impl ProcessId {
-    /// # Safety
-    /// Must be called only once
-    pub(super) const unsafe fn first() -> Self {
-        Self(NonZeroU64::new_unchecked(1))
-    }
-
-    pub(super) fn next(self) -> Self {
-        assert_ne!(self.0.get(), u64::MAX, "Kernel process id has no successor");
-        Self(NonZeroU64::new(self.0.get() + 1).expect("Overflow"))
-    }
-
-    pub const fn as_u64(self) -> u64 {
-        self.0.get()
-    }
-}
-impl fmt::Display for ProcessId {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct ProcessMetadata {

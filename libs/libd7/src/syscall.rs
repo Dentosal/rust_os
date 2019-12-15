@@ -1,6 +1,7 @@
 use core::convert::TryFrom;
 use core::hint::unreachable_unchecked;
 use core::mem::MaybeUninit;
+use core::time::Duration;
 
 use d7abi::{fs::{FileDescriptor, FileInfo}, SyscallErrorCode, SyscallNumber};
 
@@ -97,6 +98,18 @@ pub fn fs_exec(path: &str) -> SyscallResult<FileDescriptor> {
     }
 }
 
+/// Like fs_open, but attaches to the file instead
+pub fn fs_attach(path: &str, is_leaf: bool) -> SyscallResult<FileDescriptor> {
+    let len = path.len() as u64;
+    let slice = path.as_ptr() as u64;
+
+    unsafe {
+        Ok(FileDescriptor::from_u64(
+            syscall!(SyscallNumber::fs_attach; len, slice, is_leaf as u64)?,
+        ))
+    }
+}
+
 pub fn fs_fileinfo(path: &str) -> SyscallResult<FileInfo> {
     let len = path.len() as u64;
     let slice = path.as_ptr() as u64;
@@ -116,6 +129,26 @@ pub fn fd_read(fd: FileDescriptor, buf: &mut [u8]) -> SyscallResult<usize> {
             SyscallNumber::fd_read;
             fd.as_u64(), buf.as_mut_ptr() as u64, buf.len() as u64
         )? as usize)
+    }
+}
+
+pub fn fd_write(fd: FileDescriptor, buf: &[u8]) -> SyscallResult<usize> {
+    unsafe {
+        Ok(syscall!(
+            SyscallNumber::fd_write;
+            fd.as_u64(), buf.as_ptr() as u64, buf.len() as u64
+        )? as usize)
+    }
+}
+
+pub fn fd_select(fds: &[FileDescriptor], timeout: Option<Duration>) -> SyscallResult<FileDescriptor> {
+    unsafe {
+        Ok(FileDescriptor::from_u64(syscall!(
+            SyscallNumber::fd_select;
+            fds.len() as u64,
+            fds.as_ptr() as u64,
+            timeout.map(|d| d.as_nanos() as u64).unwrap_or(0)
+        )?))
     }
 }
 

@@ -1,11 +1,13 @@
+use alloc::prelude::v1::*;
+
 use crate::multitasking::{
     process::{ProcessId, ProcessResult},
-    WaitFor,
+    ExplicitEventId, WaitFor,
 };
 
 use super::super::{error::*, path::Path, FileClientId};
 
-use super::{FileOps, Leafness};
+use super::{FileOps, Leafness, Trigger};
 
 /// # Process
 /// Reading a process blocks until the process is
@@ -49,9 +51,18 @@ impl FileOps for ProcessFile {
                 buf.len()
             );
             buf[..data.len()].copy_from_slice(&data);
-            Ok(data.len())
+            IoResult::Success(data.len())
         } else {
-            Err(IoError::RepeatAfter(WaitFor::Process(self.pid)))
+            IoResult::RepeatAfter(WaitFor::Process(self.pid))
+        }
+    }
+
+    fn read_waiting_for(&mut self, fc: FileClientId) -> WaitFor {
+        assert_ne!(fc.process, Some(self.pid), "Process read self");
+        if self.result.is_some() {
+            WaitFor::None
+        } else {
+            WaitFor::Process(self.pid)
         }
     }
 
@@ -59,10 +70,16 @@ impl FileOps for ProcessFile {
         if fc.is_kernel() {
             // Kernel writes set result code
             self.result = Some(pinecone::from_bytes(buf).unwrap());
-            Ok(buf.len())
+            IoResult::Success(buf.len())
         } else {
             // Process writes are not allowed yet
-            Err(IoError::Code(ErrorCode::fs_readonly))
+            IoResult::Code(ErrorCode::fs_readonly)
         }
+    }
+
+    /// When process file is destroyed, e.g. on owner process death,
+    /// the process must be killed
+    fn destroy(&mut self) -> Trigger {
+        Trigger::kill_process(self.pid)
     }
 }

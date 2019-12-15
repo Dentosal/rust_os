@@ -1,7 +1,10 @@
 use alloc::prelude::v1::*;
 use hashbrown::HashMap;
+use serde::{Deserialize, Serialize};
 
 use d7abi::fs::protocol;
+
+use crate::multitasking::WaitFor;
 
 use super::super::{error::IoResult, node::NodeId, FileClientId};
 use super::{FileOps, Leafness};
@@ -10,7 +13,8 @@ use super::{FileOps, Leafness};
 /// is instead managed on the vfs level.
 #[derive(Debug, Clone)]
 pub struct InternalBranch {
-    children: HashMap<String, NodeId>,
+    /// Vec used to emulate binary mapping
+    children: Vec<(NodeId, String)>,
     /// Readers and their snapshots of data.
     /// Data is already formatted for reading, and is
     /// stored in reverse order for fast `pop` operations.
@@ -20,7 +24,7 @@ pub struct InternalBranch {
 impl InternalBranch {
     pub fn new() -> Self {
         Self {
-            children: HashMap::new(),
+            children: Vec::new(),
             readers: HashMap::new(),
         }
     }
@@ -29,10 +33,10 @@ impl InternalBranch {
     /// Provides entries in arbitrary order.
     fn format_contents(&self, is_kernel: bool) -> Vec<u8> {
         let mut result = if is_kernel {
-            pinecone::to_vec(&self.children).unwrap()
+            pinecone::to_vec(&InternalRead(self.children.clone())).unwrap()
         } else {
             pinecone::to_vec(&protocol::ReadBranch {
-                items: self.children.keys().cloned().collect(),
+                items: self.children.iter().map(|(_, n)| n.clone()).collect(),
             })
             .unwrap()
         };
@@ -62,7 +66,11 @@ impl FileOps for InternalBranch {
                 break;
             }
         }
-        Ok(count)
+        IoResult::Success(count)
+    }
+
+    fn read_waiting_for(&mut self, fc: FileClientId) -> WaitFor {
+        WaitFor::None
     }
 
     /// TODO: Currently doesn't buffer incoming data, so requires every single message to
@@ -70,11 +78,36 @@ impl FileOps for InternalBranch {
     /// number of read bytes is reported correctly.
     fn write(&mut self, fc: FileClientId, buf: &[u8]) -> IoResult<usize> {
         if fc.is_kernel() {
-            let opt_msg: Result<(String, NodeId), _> = pinecone::from_bytes(buf);
+            let opt_msg: Result<InternalModification, _> = pinecone::from_bytes(buf);
             match opt_msg {
-                Ok((node_name, node_id)) => {
-                    self.children.insert(node_name, node_id);
-                    Ok(buf.len())
+                Ok(InternalModification::Add(node_id, node_name)) => {
+                    // Replace name if it exists, otherwise add new
+                    let mut found = false;
+                    for c in self.children.iter_mut() {
+                        if c.1 == node_name {
+                            c.0 = node_id;
+                            found = true;
+                            break;
+                        }
+                    }
+                    if !found {
+                        self.children.push((node_id, node_name));
+                    }
+                    IoResult::Success(buf.len())
+                },
+                Ok(InternalModification::Remove(node_id)) => {
+                    // Remove child if it exists
+                    let mut index: Option<usize> = None;
+                    for (i, c) in self.children.iter_mut().enumerate() {
+                        if c.0 == node_id {
+                            index = Some(i);
+                            break;
+                        }
+                    }
+                    if let Some(i) = index {
+                        self.children.remove(i);
+                    }
+                    IoResult::Success(buf.len())
                 },
                 Err(pinecone::Error::DeserializeUnexpectedEnd) => unimplemented!("Partial request"),
                 Err(other) => panic!("Deser error {:?}", other),
@@ -89,3 +122,14 @@ impl FileOps for InternalBranch {
         self.readers.remove(&fd);
     }
 }
+
+/// Filesystem-internal protocol modification operation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum InternalModification {
+    Add(NodeId, String),
+    Remove(NodeId),
+}
+
+/// Filesystem-internal protocol read operation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InternalRead(Vec<(NodeId, String)>);

@@ -6,7 +6,7 @@ use crate::syscall::{self, SyscallResult};
 /// A safe wrapper for processes
 #[derive(Debug)]
 pub struct Process {
-    fd: FileDescriptor,
+    pub fd: FileDescriptor,
 }
 impl Process {
     pub fn spawn(path: &str) -> SyscallResult<Self> {

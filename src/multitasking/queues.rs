@@ -7,7 +7,7 @@ use d7time::Instant;
 
 use crate::multitasking::ProcessId;
 
-use super::WaitFor;
+use super::{ExplicitEventId, WaitFor};
 
 /// Internal wait id for scheduler queues.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -42,6 +42,8 @@ pub struct Queues {
     wait_sleeping: VecDeque<(Instant, WaitId)>,
     /// Waiting for a process to complete.
     wait_process: HashMap<ProcessId, Vec<WaitId>>,
+    /// Waiting for an explict event
+    wait_event: HashMap<ExplicitEventId, Vec<WaitId>>,
 }
 impl Queues {
     pub fn new() -> Self {
@@ -51,6 +53,7 @@ impl Queues {
             next_waitid: WaitId(0),
             wait_sleeping: VecDeque::new(),
             wait_process: HashMap::new(),
+            wait_event: HashMap::new(),
         }
     }
 
@@ -87,6 +90,9 @@ impl Queues {
                     .or_default()
                     .push(wait_id);
             },
+            WaitFor::Event(event_id) => {
+                self.wait_event.entry(event_id).or_default().push(wait_id);
+            },
             WaitFor::None => {
                 panic!("WaitFor::None inside of WaitFor::FirstOf");
             },
@@ -99,8 +105,8 @@ impl Queues {
     }
 
     pub fn give(&mut self, pid: ProcessId, mut s: WaitFor) {
-        s = s.reduce(&self, pid);
-        if let WaitFor::None = s {
+        s = s.reduce_queues(&self, pid);
+        if s == WaitFor::None {
             self.running.push_back(pid);
             return;
         }
@@ -137,7 +143,23 @@ impl Queues {
 
     /// Update when a process completes
     pub fn on_process_over(&mut self, completed: ProcessId) {
+        for (i, pid) in self.running.iter().enumerate() {
+            if *pid == completed {
+                self.running.remove(i);
+                break;
+            }
+        }
+
         if let Some(wait_ids) = self.wait_process.remove(&completed) {
+            for wait_id in wait_ids {
+                self.trigger_wait(wait_id);
+            }
+        }
+    }
+
+    /// When an explicit event is triggered
+    pub fn on_explicit_event(&mut self, event_id: ExplicitEventId) {
+        if let Some(wait_ids) = self.wait_event.remove(&event_id) {
             for wait_id in wait_ids {
                 self.trigger_wait(wait_id);
             }

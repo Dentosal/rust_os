@@ -19,6 +19,7 @@
 mod allocator;
 pub mod syscall;
 pub mod process;
+pub mod attachment;
 pub mod fs;
 
 use core::alloc::Layout;

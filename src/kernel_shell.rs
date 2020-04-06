@@ -4,7 +4,7 @@ use crate::driver::keyboard;
 
 pub fn wait_enter() {
     loop {
-        if let Some(event) = { (*keyboard::KEYBOARD.lock()).pop_event() } {
+        if let Some(event) = (*keyboard::KEYBOARD.lock()).pop_event() {
             if event.event_type == keyboard::KeyboardEventType::Press
                 && event.key == keyboard::Key::Enter
             {
@@ -17,7 +17,7 @@ pub fn wait_enter() {
 fn read_line() -> String {
     let mut buffer = String::new();
     loop {
-        if let Some(event) = { (*keyboard::KEYBOARD.lock()).pop_event() } {
+        if let Some(event) = (*keyboard::KEYBOARD.lock()).pop_event() {
             if event.event_type == keyboard::KeyboardEventType::Press {
                 if event.key == keyboard::Key::Backspace {
                     if !buffer.is_empty() {

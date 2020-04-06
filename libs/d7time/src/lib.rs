@@ -17,10 +17,12 @@ pub struct TimeSpec {
     pub nsec: u32,
 }
 impl TimeSpec {
+    #[inline]
     pub const fn new(sec: u64, nsec: u32) -> Self {
         Self { sec, nsec }
     }
 
+    #[inline]
     fn as_duration(&self) -> Duration {
         Duration::new(self.sec, self.nsec)
     }
@@ -115,6 +117,7 @@ impl Instant {
     ///
     /// Unsafe to prevent accidental use, as well as to remind about
     /// the monotonicity guarantees
+    #[inline]
     pub unsafe fn create(ts: TimeSpec) -> Self {
         Self(ts)
     }

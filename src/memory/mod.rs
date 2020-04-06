@@ -257,6 +257,7 @@ impl MemoryController {
             bytes.len(),
         );
         self.unmap_area(pmap);
+        self.free_virtual_area(area);
         Some(())
     }
 

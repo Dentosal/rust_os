@@ -148,6 +148,7 @@ impl SymTree {
 
     /// Depth limit is 0 for no nodes, and 1 for root, etc.
     /// Bool true if found
+    #[inline]
     pub fn get(&self, depth_limit: u8, mut path: u32) -> (bool, u8) {
         let mut cursor: u16 = 0; // Zero is root
         for i in 0..(depth_limit + 1) {

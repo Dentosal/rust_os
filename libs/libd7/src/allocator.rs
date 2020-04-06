@@ -1,4 +1,4 @@
-use core::alloc::{Alloc, AllocErr, GlobalAlloc, Layout};
+use core::alloc::{AllocErr, AllocInit, AllocRef, GlobalAlloc, Layout, MemoryBlock};
 use core::ptr::NonNull;
 
 use spin::Mutex;
@@ -47,26 +47,32 @@ impl BlockAllocator {
     }
 }
 
-unsafe impl<'a> Alloc for BlockAllocator {
-    unsafe fn alloc(&mut self, layout: Layout) -> Result<NonNull<u8>, AllocErr> {
+unsafe impl<'a> AllocRef for BlockAllocator {
+    fn alloc(&mut self, layout: Layout, init: AllocInit) -> Result<MemoryBlock, AllocErr> {
+        assert!(init == AllocInit::Uninitialized);
+
         // Calculate resulting pointer and required bytes
         let start_addr = align_up(
             PROCESS_DYNAMIC_MEMORY.as_u64() + self.used_bytes,
             layout.align() as u64,
         );
-        let required_size = (layout.size() + layout.align()) as u64;
+        let required_size = layout.size() + layout.align();
+        let required_size_u64 = required_size as u64;
 
         // Allocate more if required
-        if self.available_capacity_bytes() < required_size {
-            let more = required_size - self.available_capacity_bytes();
+        if self.available_capacity_bytes() < required_size_u64 {
+            let more = required_size_u64 - self.available_capacity_bytes();
             let required_bytes = self.capacity_bytes + more;
-            self.capacity_bytes = mem_set_size(required_bytes).map_err(|_| AllocErr)?;
-            debug_assert!(required_size <= self.available_capacity_bytes());
+            self.capacity_bytes = unsafe { mem_set_size(required_bytes).map_err(|_| AllocErr)? };
+            debug_assert!(required_size_u64 <= self.available_capacity_bytes());
         }
 
         // Update used byte count and return
-        self.used_bytes += required_size;
-        Ok(NonNull::new_unchecked(start_addr as *mut _))
+        self.used_bytes += required_size_u64;
+        Ok(MemoryBlock {
+            ptr: unsafe { NonNull::new_unchecked(start_addr as *mut _) },
+            size: required_size as usize,
+        })
     }
 
     unsafe fn dealloc(&mut self, _ptr: NonNull<u8>, _layout: Layout) {
@@ -87,7 +93,11 @@ impl GlobAlloc {
 unsafe impl GlobalAlloc for GlobAlloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let mut alloc = self.alloc.lock();
-        alloc.alloc(layout).expect("Could not allocate").as_mut()
+        alloc
+            .alloc(layout, AllocInit::Uninitialized)
+            .expect("Could not allocate")
+            .ptr
+            .as_mut()
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {

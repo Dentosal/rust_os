@@ -8,7 +8,7 @@
 
 extern crate spin;
 
-use core::alloc::{Alloc, AllocErr, GlobalAlloc, Layout};
+use core::alloc::{AllocErr, AllocInit, AllocRef, GlobalAlloc, Layout, MemoryBlock};
 use core::ptr::NonNull;
 
 pub const HEAP_START: u64 = 0x4000_0000; // At 1 GiB
@@ -54,8 +54,9 @@ impl BumpAllocator {
     }
 }
 
-unsafe impl<'a> Alloc for &'a BumpAllocator {
-    unsafe fn alloc(&mut self, layout: Layout) -> Result<NonNull<u8>, AllocErr> {
+unsafe impl<'a> AllocRef for &'a BumpAllocator {
+    fn alloc(&mut self, layout: Layout, init: AllocInit) -> Result<MemoryBlock, AllocErr> {
+        assert!(init == AllocInit::Uninitialized);
         loop {
             // load current state of the `next` field
             let current_next = self.next.load(Ordering::Relaxed);
@@ -69,9 +70,10 @@ unsafe impl<'a> Alloc for &'a BumpAllocator {
                         .compare_and_swap(current_next, alloc_end, Ordering::Relaxed);
                 if next_now == current_next {
                     // next address was successfully updated, allocation succeeded
-                    return Ok(
-                        NonNull::new(alloc_start as *mut _).expect("Tried to alloc null ptr")
-                    );
+                    return Ok(MemoryBlock {
+                        ptr: NonNull::new(alloc_start as *mut _).expect("Tried to alloc null ptr"),
+                        size: (alloc_end - alloc_start) as usize,
+                    });
                 }
             } else {
                 return Err(AllocErr);
@@ -98,8 +100,9 @@ unsafe impl GlobalAlloc for GlobAlloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let alloc = self.alloc.lock();
         (&*alloc)
-            .alloc(layout)
+            .alloc(layout, AllocInit::Uninitialized)
             .expect("Could not allocate")
+            .ptr
             .as_mut()
     }
 

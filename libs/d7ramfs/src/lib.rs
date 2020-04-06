@@ -7,6 +7,7 @@
 #![feature(const_fn)]
 #![feature(nll)]
 #![feature(vec_remove_item)]
+#![feature(never_type)]
 #![no_std]
 
 #[cfg(test)]

@@ -100,6 +100,7 @@ fn syscall(
                 let string = try_str!(slice);
                 rprintln!("[pid={}] {}", pid.as_u64(), string);
                 unsafe { m.unmap_area(area) };
+                m.free_virtual_area(area);
                 SyscallResult::Continue(Ok(0))
             },
             SC::mem_set_size => {
@@ -118,6 +119,7 @@ fn syscall(
                     let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
                     let fc = fs.open(sched, pid, path)?;
                     unsafe { m.unmap_area(area) };
+                    m.free_virtual_area(area);
                     SyscallResult::Continue(Ok(unsafe { fc.fd.as_u64() }))
                 } else {
                     SyscallResult::Terminate(process::ProcessResult::Failed(
@@ -134,6 +136,7 @@ fn syscall(
                     let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
                     let fc = fs.exec(m, sched, pid, path).expect("EXEC FAILED");
                     unsafe { m.unmap_area(area) };
+                    m.free_virtual_area(area);
                     SyscallResult::Continue(Ok(unsafe { fc.fd.as_u64() }))
                 } else {
                     SyscallResult::Terminate(process::ProcessResult::Failed(
@@ -153,6 +156,7 @@ fn syscall(
                         .attach(sched, pid, path, is_leaf != 0)
                         .expect("ATTACH FAILED");
                     unsafe { m.unmap_area(area) };
+                    m.free_virtual_area(area);
                     SyscallResult::Continue(Ok(unsafe { fc.fd.as_u64() }))
                 } else {
                     SyscallResult::Terminate(process::ProcessResult::Failed(
@@ -173,6 +177,8 @@ fn syscall(
                         m.process_write_value(process, fileinfo, dst_ptr);
                     }
                     unsafe { m.unmap_area(area) };
+                    m.free_virtual_area(area);
+
                     SyscallResult::Continue(Ok(0))
                 } else {
                     SyscallResult::Terminate(process::ProcessResult::Failed(
@@ -197,6 +203,7 @@ fn syscall(
                     let fc = FileClientId::process(pid, fd);
                     let read_count = fs.read(sched, fc, slice)?;
                     unsafe { m.unmap_area(area) };
+                    m.free_virtual_area(area);
                     SyscallResult::Continue(Ok(read_count as u64))
                 } else {
                     SyscallResult::Terminate(process::ProcessResult::Failed(
@@ -213,6 +220,7 @@ fn syscall(
                     let fc = FileClientId::process(pid, fd);
                     let written_count = fs.write(sched, fc, slice)?;
                     unsafe { m.unmap_area(area) };
+                    m.free_virtual_area(area);
                     SyscallResult::Continue(Ok(written_count as u64))
                 } else {
                     SyscallResult::Terminate(process::ProcessResult::Failed(
@@ -249,6 +257,7 @@ fn syscall(
                         conditions.push(condition);
                     }
                     unsafe { m.unmap_area(area) };
+                    m.free_virtual_area(area);
 
                     if timeout_ns != 0 {
                         let now = SYSCLOCK.now();

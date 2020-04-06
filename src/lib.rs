@@ -144,6 +144,7 @@ pub extern "C" fn rust_main() -> ! {
             }
         }
     }
+    rprintln!("");
 
     crate::memory::configure(|mut mem_ctrl| {
         use crate::filesystem::FILESYSTEM;

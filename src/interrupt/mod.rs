@@ -182,7 +182,7 @@ pub fn enable_external_interrupts() {
 }
 
 pub fn disable_external_interrupts() {
-    rprintln!("Enabling external interrupts");
+    rprintln!("Disabling external interrupts");
 
     unsafe {
         asm!("cli" :::: "volatile", "intel");

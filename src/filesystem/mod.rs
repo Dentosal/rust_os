@@ -10,7 +10,7 @@ use d7abi::fs::{FileDescriptor, FileInfo};
 use crate::memory::MemoryController;
 use crate::multitasking::{
     process::{ProcessId, ProcessResult},
-    ElfImage, ExplicitEventId, Scheduler, WaitFor,
+    ElfImage, Scheduler, WaitFor,
 };
 
 pub mod error;
@@ -97,7 +97,7 @@ unsafe fn read_to_end(file: &mut dyn FileOps, fc: FileClientId) -> IoResult<Vec<
             // EOF
             break;
         }
-        result.extend(buffer.iter());
+        result.extend(buffer[..count].iter());
     }
     IoResult::Success(result)
 }
@@ -163,12 +163,20 @@ impl VirtualFS {
         IoResult::Success(cursor)
     }
 
-    pub fn node(&self, id: NodeId) -> &Node {
-        self.nodes.get(&id).expect("Node not found")
+    pub fn node(&self, id: NodeId) -> IoResult<&Node> {
+        if let Some(node) = self.nodes.get(&id) {
+            IoResult::Success(node)
+        } else {
+            IoResult::Code(ErrorCode::fs_file_destroyed)
+        }
     }
 
-    pub fn node_mut(&mut self, id: NodeId) -> &mut Node {
-        self.nodes.get_mut(&id).expect("Node not found")
+    pub fn node_mut(&mut self, id: NodeId) -> IoResult<&mut Node> {
+        if let Some(node) = self.nodes.get_mut(&id) {
+            IoResult::Success(node)
+        } else {
+            IoResult::Code(ErrorCode::fs_file_destroyed)
+        }
     }
 
     /// Create a new node
@@ -187,7 +195,7 @@ impl VirtualFS {
         let new_node_id = self.next_node_id;
         if self.has_child(parent, name)? {
             IoResult::Code(ErrorCode::fs_node_exists)
-        } else if self.node(parent).leafness() == Leafness::Leaf {
+        } else if self.node(parent)?.leafness() == Leafness::Leaf {
             IoResult::Code(ErrorCode::fs_node_is_leaf)
         } else {
             self.add_child(parent, name, new_node_id)?;
@@ -205,7 +213,7 @@ impl VirtualFS {
         let parent: NodeId = self.resolve(parent_path)?;
         let file_name = path.file_name().expect("Path without file_name?");
         let id = self.create_node(parent, file_name, Node::new(Some(parent), dev))?;
-        self.node_mut(id).inc_ref();
+        self.node_mut(id).unwrap().inc_ref();
         IoResult::Success(id)
     }
 
@@ -219,27 +227,28 @@ impl VirtualFS {
     pub fn fileinfo(&mut self, path: &str) -> IoResult<FileInfo> {
         let path = Path::new(path);
         let id = self.resolve(path)?;
-        IoResult::Success(self.node(id).fileinfo())
+        IoResult::Success(self.node(id)?.fileinfo())
     }
 
     pub fn get_children(&mut self, node_id: NodeId) -> IoResult<Vec<(NodeId, String)>> {
-        match self.node(node_id).leafness() {
+        match self.node(node_id)?.leafness() {
             Leafness::Leaf => IoResult::Code(ErrorCode::fs_node_is_leaf),
             Leafness::Branch => {
                 // Use standard `ReadBranch` protocol.
                 let fc = self.take_kernel_fc();
-                let node = self.node_mut(node_id);
+                let node = self.node_mut(node_id)?;
                 node.open(fc)?;
                 let bytes = unsafe { read_to_end(&mut *node.data, fc)? };
                 unimplemented!()
             },
             Leafness::InternalBranch => {
                 // Use internal branch protocol.
+                let bytes = self.temp_open(node_id, |node, fc| unsafe {
+                    read_to_end(&mut *node.data, fc)
+                })?;
                 IoResult::Success(
-                    pinecone::from_bytes(&self.temp_open(node_id, |node, fc| unsafe {
-                        read_to_end(&mut *node.data, fc)
-                    })?)
-                    .expect("Failed to decode InternalBranch protocol message"),
+                    pinecone::from_bytes(&bytes)
+                        .expect("Failed to decode InternalBranch protocol message"),
                 )
             },
         }
@@ -270,7 +279,7 @@ impl VirtualFS {
     /// Adds a child. This does not work with non-internal branches;
     /// they must be modified by userspace processes only.
     fn add_child(&mut self, parent_id: NodeId, child_name: &str, child_id: NodeId) -> IoResult<()> {
-        match self.node(parent_id).leafness() {
+        match self.node(parent_id)?.leafness() {
             Leafness::Leaf => IoResult::Code(ErrorCode::fs_node_is_leaf),
             Leafness::Branch => panic!("add_child only supports internal branches"),
             Leafness::InternalBranch => {
@@ -290,7 +299,7 @@ impl VirtualFS {
     /// Removes a child. This does not work with non-internal branches;
     /// they must be modified by userspace processes only.
     fn remove_child(&mut self, parent_id: NodeId, child_id: NodeId) -> IoResult<()> {
-        match self.node(parent_id).leafness() {
+        match self.node(parent_id)?.leafness() {
             Leafness::Leaf => IoResult::Code(ErrorCode::fs_node_is_leaf),
             Leafness::Branch => panic!("remove_child only supports internal branches"),
             Leafness::InternalBranch => {
@@ -311,7 +320,6 @@ impl VirtualFS {
     fn temp_open<F, R>(&mut self, node_id: NodeId, body: F) -> IoResult<R>
     where F: FnOnce(&mut Node, FileClientId) -> IoResult<R> {
         let fc = self.take_kernel_fc();
-        // let node = self.node_mut(node_id);
         let node = self
             .nodes
             .get_mut(&node_id)
@@ -319,7 +327,7 @@ impl VirtualFS {
         node.open(fc)?;
         let result: IoResult<R> = body(node, fc);
         let keep = node.close(fc);
-        assert!(keep, "Not possible");
+        assert!(keep == CloseAction::Normal, "Not possible");
         result
     }
 
@@ -342,7 +350,7 @@ impl VirtualFS {
         let process = self.process_mut(pid);
         let fd = process.create_id(node_id);
         let fc = FileClientId::process(pid, fd);
-        self.node_mut(node_id).open(fc)?;
+        self.node_mut(node_id)?.open(fc)?;
         IoResult::Success(fc)
     }
 
@@ -382,7 +390,7 @@ impl VirtualFS {
                 self.take_kernel_fc()
             }
         };
-        self.node_mut(owner_node_id).inc_ref();
+        self.node_mut(owner_node_id)?.inc_ref();
 
         // Spawn the new process
         let new_pid = unsafe { sched.spawn(mem_ctrl, elfimage) };
@@ -407,7 +415,7 @@ impl VirtualFS {
                 self.take_kernel_fc()
             }
         };
-        self.node_mut(node_id)
+        self.node_mut(node_id)?
             .open(fc)
             .expect("Unable to open node");
         IoResult::Success(fc)
@@ -477,21 +485,36 @@ impl VirtualFS {
         })?;
 
         // Create new fd for the attachment
-        self.node_mut(node_id).open(fc)?;
+        self.node_mut(node_id)?.open(fc)?;
         IoResult::Success(fc)
     }
 
     /// Close a file descriptor (system call)
+    /// If the process owning the file descriptor is already
+    /// dead, then the close request is simply ignored
     pub fn close(&mut self, sched: &mut Scheduler, fc: FileClientId) -> IoResult<()> {
-        let node_id = self.resolve_fc(fc)?;
-        let node = self.nodes.get_mut(&node_id).expect("Close: no such file");
-        let destroy = !node.close(fc);
-        if destroy {
-            let mut node = self.remove_node(node_id);
-            let trigger = node.data.destroy();
-            trigger.run(sched, self);
-        }
+        let fc_pid = fc.process.expect("Kernel not supported here");
+        let pd = self
+            .descriptors
+            .get(&fc_pid)
+            .unwrap_or_else(|| panic!("No such process {}", fc_pid));
+
+        let node_id = pd.resolve(fc.fd).expect("No such file descriptor");
+        self.close_removed(sched, fc, node_id);
         IoResult::Success(())
+    }
+
+    /// Close a file descriptor using node_id
+    /// Can be used to close file descriptors for already-killed process
+    pub fn close_removed(&mut self, sched: &mut Scheduler, fc: FileClientId, node_id: NodeId) {
+        if let Some(node) = self.nodes.get_mut(&node_id) {
+            let action = node.close(fc);
+            if action == CloseAction::Destroy {
+                let mut node = self.remove_node(node_id);
+                let trigger = node.data.destroy();
+                trigger.run(sched, self);
+            }
+        }
     }
 
     /// Read from file (system call)
@@ -499,7 +522,7 @@ impl VirtualFS {
         &mut self, sched: &mut Scheduler, fc: FileClientId, buf: &mut [u8],
     ) -> IoResult<usize> {
         let node_id = self.resolve_fc(fc)?;
-        let node = self.node_mut(node_id);
+        let node = self.node_mut(node_id)?;
         match node.read(fc, buf) {
             IoResult::TriggerEvent(event_id, inner) => {
                 sched.on_explicit_event(event_id);
@@ -514,7 +537,7 @@ impl VirtualFS {
         &mut self, sched: &mut Scheduler, fc: FileClientId,
     ) -> IoResult<WaitFor> {
         let node_id = self.resolve_fc(fc)?;
-        IoResult::Success((*self.node_mut(node_id).data).read_waiting_for(fc))
+        IoResult::Success((*self.node_mut(node_id)?.data).read_waiting_for(fc))
     }
 
     /// Write to file (system call)
@@ -522,7 +545,7 @@ impl VirtualFS {
         &mut self, sched: &mut Scheduler, fc: FileClientId, buf: &[u8],
     ) -> IoResult<usize> {
         let node_id = self.resolve_fc(fc)?;
-        let node = self.node_mut(node_id);
+        let node = self.node_mut(node_id)?;
         match node.write(fc, buf) {
             IoResult::TriggerEvent(event_id, inner) => {
                 sched.on_explicit_event(event_id);
@@ -549,8 +572,12 @@ impl VirtualFS {
 
         // Remove link from parent branch
         if let Some(parent) = node.parent {
-            self.remove_child(parent, node_id)
-                .expect("Child removal failed");
+            let result = self.remove_child(parent, node_id);
+            match result {
+                IoResult::Success(()) => {},
+                IoResult::Code(ErrorCode::fs_file_destroyed) => {},
+                error => panic!("Child removal failed: {:?}", error)
+            };
         }
 
         node
@@ -573,19 +600,11 @@ impl VirtualFS {
                 })
                 .expect("FileOps::close not supported for Process files")
             }
+
             // Close files process was holding open
             for (fd, node_id) in pd.descriptors.into_iter() {
                 let fc = FileClientId::process(pid, fd);
-                let mut destroy = false;
-                if let Some(ref mut node) = self.nodes.get_mut(&node_id) {
-                    destroy = !node.close(FileClientId::process(pid, fd));
-                }
-
-                if destroy {
-                    let mut node = self.remove_node(node_id);
-                    let trigger = node.data.destroy();
-                    trigger.run(sched, self);
-                }
+                self.close_removed(sched, fc, node_id);
             }
         }
     }

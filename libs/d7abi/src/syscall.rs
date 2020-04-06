@@ -41,6 +41,9 @@ pub enum SyscallErrorCode {
     fs_unknown_control_function,
     /// File does not support writing
     fs_readonly,
+    /// File was destroyed while an operation was pending
+    /// Normal files never do this, but processes, attachments and pipes do
+    fs_file_destroyed,
     /// Invalid UTF-8
     invalid_utf8,
 }

@@ -8,7 +8,7 @@ use d7abi::fs::FileDescriptor;
 use crate::multitasking::{ExplicitEventId, ProcessId, WaitFor};
 
 use super::super::{error::IoResult, node::NodeId, FileClientId};
-use super::{FileOps, Leafness, Trigger};
+use super::{CloseAction, FileOps, Leafness, Trigger};
 
 /// # Attachment point
 /// This node and its contents are managed by a driver
@@ -39,7 +39,7 @@ pub struct Attachment {
     /// Reads in progress. This is used store client wakeup ids.
     reads_in_progress: HashMap<FileClientId, ExplicitEventId>,
     /// Completed reads. Data is removed when read. When all data has been removed,
-    /// and the queue is empty, the entry here will be removed as well.
+    /// and the queue is empty, the entry here will be kept to until the client closes the file.
     reads_completed: HashMap<FileClientId, VecDeque<u8>>,
 }
 impl Attachment {
@@ -68,11 +68,12 @@ impl FileOps for Attachment {
             // Reading from attachment fd
             if let Some((reader_fc, event_id)) = self.reads_pending.pop_front() {
                 // The next client is trying to read
-                let req = Message {
-                    sender_pid: reader_fc.process.expect("TODO? kernel"),
-                    sender_f: unsafe { reader_fc.fd.as_u64() },
-                    type_: FileOperationType::Read,
-                    data: Vec::new(),
+                let req = Request {
+                    sender: Sender {
+                        pid: reader_fc.process.expect("TODO? kernel"),
+                        f: unsafe { reader_fc.fd.as_u64() },
+                    },
+                    data: FileOperation::Read(buf.len() as u64),
                 };
 
                 let bytes = pinecone::to_vec(&req).expect("Could not serialize");
@@ -102,10 +103,9 @@ impl FileOps for Attachment {
                     break;
                 }
             }
-            if !data.is_empty() {
-                // Insert back
-                self.reads_completed.insert(fc, data);
-            }
+            // Insert back
+            self.reads_completed.insert(fc, data);
+            // Return
             IoResult::Success(i)
         } else {
             assert!(
@@ -146,11 +146,11 @@ impl FileOps for Attachment {
     fn write(&mut self, fc: FileClientId, buf: &[u8]) -> IoResult<usize> {
         if fc == self.manager {
             // Manager writes response to a request. The whole response must be written at once.
-            let (message, rest): (Message, &[u8]) =
+            let (request, rest): (Response, &[u8]) =
                 pinecone::take_from_bytes(buf).expect("Partial write from manager");
 
-            let client_fc = FileClientId::process(message.sender_pid, unsafe {
-                FileDescriptor::from_u64(message.sender_f)
+            let client_fc = FileClientId::process(request.sender.pid, unsafe {
+                FileDescriptor::from_u64(request.sender.f)
             });
 
             let client_wakeup_event = self
@@ -158,7 +158,7 @@ impl FileOps for Attachment {
                 .remove(&client_fc)
                 .expect("Client does not exist");
 
-            self.reads_completed.insert(client_fc, message.data.into());
+            self.reads_completed.insert(client_fc, request.data.into());
             IoResult::TriggerEvent(
                 client_wakeup_event,
                 Box::new(IoResult::Success(buf.len() - rest.len())),
@@ -172,6 +172,28 @@ impl FileOps for Attachment {
             // Ok(buf.len() - rest.len())
             unimplemented!()
         }
+    }
+
+    /// When manager closes the file, destroy this, triggering all waiting processes
+    fn close(&mut self, fc: FileClientId) -> CloseAction {
+        if fc == self.manager {
+            return CloseAction::Destroy;
+        }
+
+        for (i, (fc_id, _event)) in self.reads_pending.iter().copied().enumerate() {
+            if fc_id == fc {
+                self.reads_pending.remove(i);
+                break;
+            }
+        }
+
+        if self.reads_in_progress.contains_key(&fc) {
+            self.reads_in_progress.remove(&fc);
+        } else if self.reads_completed.contains_key(&fc) {
+            self.reads_completed.remove(&fc);
+        }
+
+        CloseAction::Normal
     }
 
     /// Trigger all waiting processes

@@ -14,7 +14,7 @@ Number | Name           | Arguments (logical)   | On success  | Short descriptio
 0x32  x| fs_attach      | **path**, is_leaf?    | fd          | Create a fs node and manage it
 0x33  x| fs_fileinfo    | **path**, *dst*       | *FileInfo*  | Get metadata about a file
 0x40   | fd_close       | fd                    | -           | Close fd, closing a mount unmounts
-0x41  x| fd_read        | fd, *buf*, count      | byte_count  | Reads `count` bytes from `fd` to `buf_ptr`
+0x41  x| fd_read        | fd, *buf*, count      | ReadResult  | Reads `count` bytes from `fd` to `buf_ptr`
 0x42  x| fd_write       | fd, *buf*, count      | byte_count  | Writes `count` bytes from `buf_ptr` to `fd`
 0x43   | fd_synchronize | fd                    | -           | Ensures all written data has been delivered
 0x44   | fd_control     | fd, function          | -           | Send control function for a file
@@ -26,7 +26,11 @@ Number | Name           | Arguments (logical)   | On success  | Short descriptio
 **Bold** text implies that something is a read-only slice, i.e. `len, ptr` pair.
 Values like `ok?` ending with `?` represent booleans.
 
-## Call structure
+## `ReadResult` and EOF behavior
+
+The most significant bit in u64 `ReadResult` marks EOF.
+
+# Call structure
 
 Register | Description
 ---------|-------------

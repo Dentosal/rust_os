@@ -1,0 +1,27 @@
+[package]
+name = "d7_driver_ata_pio"
+version = "0.1.0"
+authors = ["Hannes Karppila <hannes.karppila@gmail.com>"]
+publish = false
+edition = "2018"
+
+[lib]
+crate-type = ["staticlib"]
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+
+[dependencies]
+cpuio = "0.2.0"
+
+[dependencies.hashbrown]
+version = "0.7"
+features = ["nightly", "inline-more", "serde"]
+
+
+[dependencies.libd7]
+version = "*"
+path = "../../libs/libd7"

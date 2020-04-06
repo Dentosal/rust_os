@@ -108,6 +108,7 @@ impl Scheduler {
 
             // Schedule processes waiting for the termination
             self.queues.on_process_over(process.id());
+
             // Close open file pointers
             vfs.on_process_over(self, process.id(), status);
 

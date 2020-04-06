@@ -9,7 +9,7 @@ use d7abi::fs::FileInfo;
 use crate::multitasking::ExplicitEventId;
 
 use super::error::*;
-use super::file::{FileOps, Leafness};
+use super::file::{CloseAction, FileOps, Leafness};
 use super::FileClientId;
 use super::Path;
 
@@ -64,15 +64,19 @@ impl Node {
     }
 
     /// Calls handler that always always succeeds, amd then
-    /// decreases reference count. If refcount hits zero,
-    /// returns `false` to inform the caller that this node
-    /// should be deleted.
-    /// Also returns a vec of events to trigger
+    /// decreases reference count.
+    /// If refcout hits zero or the node request self-destruction,
+    /// then returns `CloseAction::Destroy` to singal that.
     #[must_use]
-    pub fn close(&mut self, fd: FileClientId) -> bool {
+    pub fn close(&mut self, fd: FileClientId) -> CloseAction {
         assert_ne!(self.fd_refcount, 0, "close: fd refcount zero");
-        self.data.close(fd);
-        self.dec_ref()
+        let default_action = self.data.close(fd);
+        let refcount_positive = self.dec_ref();
+        if refcount_positive {
+            default_action
+        } else {
+            CloseAction::Destroy
+        }
     }
 
     /// Increases reference count

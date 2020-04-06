@@ -27,7 +27,8 @@ pub trait FileOps: Send {
     /// Non-leaf nodes MUST conform to `ReadBranch` protocol.
     fn leafness(&self) -> Leafness;
 
-    /// Pull some bytes from this source into the buffer, returning how many bytes were read.
+    /// Pull some bytes from this source into the buffer,
+    /// returning how many bytes were read, end_of_file
     fn read(&mut self, fc: FileClientId, buf: &mut [u8]) -> IoResult<usize>;
 
     /// Returns `WaitFor::None` if this file is ready for reading,
@@ -52,7 +53,9 @@ pub trait FileOps: Send {
     /// This function must not fail.
     ///
     /// If not implemented, does nothing.
-    fn close(&mut self, fc: FileClientId) {}
+    fn close(&mut self, fc: FileClientId) -> CloseAction {
+        CloseAction::Normal
+    }
 
     /// Allows releasing resource when an instance is destroyed,
     /// e.g. when process is killed on death of the owner
@@ -144,4 +147,14 @@ impl Trigger {
             ..Default::default()
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[must_use]
+pub enum CloseAction {
+    /// Just decrease refcount normally
+    Normal,
+    /// Destroy the vfs file object, making pending and further actions
+    /// to it return `fs_file_destroyed` error
+    Destroy,
 }

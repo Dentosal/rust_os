@@ -7,7 +7,7 @@ use d7abi::fs::protocol;
 use crate::multitasking::WaitFor;
 
 use super::super::{error::IoResult, node::NodeId, FileClientId};
-use super::{FileOps, Leafness};
+use super::{CloseAction, FileOps, Leafness};
 
 /// Branch that doesn't require attached process, but
 /// is instead managed on the vfs level.
@@ -118,8 +118,9 @@ impl FileOps for InternalBranch {
     }
 
     /// Remove buffers when closing
-    fn close(&mut self, fd: FileClientId) {
+    fn close(&mut self, fd: FileClientId) -> CloseAction {
         self.readers.remove(&fd);
+        CloseAction::Normal
     }
 }
 

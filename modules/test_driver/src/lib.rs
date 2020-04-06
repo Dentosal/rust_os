@@ -4,52 +4,45 @@
 #![feature(allocator_api)]
 #![deny(unused_must_use)]
 
-use libd7::{fs, process::Process, attachment::*, syscall};
+use libd7::{attachment::*, fs::{list_dir, File}, process::Process, syscall};
 
 #[macro_use]
 extern crate alloc;
 
-const SEND_DATA: [u8; 4] = [0x12, 0x34, 0x56, 0xff];
+use alloc::prelude::v1::*;
 
 #[no_mangle]
 fn main() -> u64 {
     let pid = syscall::get_pid();
 
-    // List processes
-    syscall::debug_print(&format!("{:?}", fs::list_dir("/mnt").unwrap()));
+    // Start ATA PIO driver
+    let p = Process::spawn("/mnt/staticfs/mod_ata_pio").unwrap();
 
-    if pid == 1 {
-        let a = Leaf::new("/mnt/a0").unwrap();
-        let p = Process::spawn("/mnt/staticfs/mod_test").unwrap();
-
-        let avail_fd = syscall::fd_select(&[], None).unwrap();
-        loop {
-            let avail_fd = syscall::fd_select(&[a.fd, p.fd], None).unwrap();
-            if avail_fd == p.fd {
-                syscall::debug_print(&format!("Wait proc"));
-                let retcode = p.wait();
-                syscall::debug_print(&format!("Return code {:?}", retcode));
-                break;
-            } else if avail_fd == a.fd {
-                syscall::debug_print(&format!("Wait attach"));
-                let req = a.next_request().unwrap();
-                match req.type_ {
-                    FileOperationType::Read => {
-                        a.reply(req.into_reply(SEND_DATA.to_vec())).unwrap();
-                    }
-                    other => unimplemented!("Unsupported request: {:?}", other)
-                }
-                syscall::debug_print(&format!("Replied"));
-            } else {
-                unreachable!()
-            }
+    // Wait until the device endpoint is available
+    loop {
+        let dirlist = list_dir("/dev").unwrap();
+        if dirlist.contains(&"ata_pio_0".to_owned()) {
+            break;
         }
-    } else if pid == 2 {
-        let proc0 = syscall::fs_open("/mnt/a0").unwrap();
-        let mut buffer = [0u8; 4];
-        let count = syscall::fd_read(proc0, &mut buffer).unwrap();
-        assert_eq!(buffer[..count], SEND_DATA);
+
+        // syscall::debug_print("Waiting...");
+        syscall::sched_sleep_ns(1_000_000).unwrap();
     }
 
-    pid
+    let drive = File::open("/dev/ata_pio_0").unwrap();
+
+    // Example: Read boot sector and verify signature
+    let mut buffer = [0; 512];
+    let count = drive.read(&mut buffer).unwrap();
+    assert_eq!(count, buffer.len());
+
+    if buffer[510..512] == [0x55, 0xaa] {
+        syscall::debug_print("Correct boot signature");
+    } else {
+        syscall::debug_print("Incorrect boot signature");
+    }
+
+    // The spawned process will be killed as this one terminates
+
+    0
 }

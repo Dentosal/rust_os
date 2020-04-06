@@ -131,6 +131,7 @@ pub fn fd_close(fd: FileDescriptor) -> SyscallResult<()> {
     }
 }
 
+/// Returns `count_bytes`, zero on EOF
 pub fn fd_read(fd: FileDescriptor, buf: &mut [u8]) -> SyscallResult<usize> {
     unsafe {
         Ok(syscall!(

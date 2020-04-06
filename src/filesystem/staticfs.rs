@@ -8,8 +8,8 @@ use alloc::prelude::v1::*;
 use hashbrown::HashMap;
 
 use crate::driver::disk_io::DISK_IO;
-use crate::filesystem::{error::*, FileClientId, FileOps, Leafness, Path, FILESYSTEM};
-use crate::multitasking::{ExplicitEventId, WaitFor};
+use crate::filesystem::{error::*, CloseAction, FileClientId, FileOps, Leafness, Path, FILESYSTEM};
+use crate::multitasking::WaitFor;
 
 fn round_up_sector(p: u64) -> u64 {
     (p + SECTOR_SIZE - 1) / SECTOR_SIZE
@@ -68,8 +68,9 @@ impl FileOps for StaticFSLeaf {
     }
 
     /// Remove reader when closing
-    fn close(&mut self, fc: FileClientId) {
+    fn close(&mut self, fc: FileClientId) -> CloseAction {
         self.readers.remove(&fc);
+        CloseAction::Normal
     }
 }
 

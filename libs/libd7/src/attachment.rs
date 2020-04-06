@@ -1,6 +1,6 @@
 use d7abi::fs::FileDescriptor;
 
-pub use d7abi::fs::protocol::attachment::{Message, FileOperationType};
+pub use d7abi::fs::protocol::attachment::{Sender, Request, Response, FileOperation};
 
 use crate::syscall::{self, SyscallResult};
 
@@ -26,15 +26,15 @@ impl Leaf {
     }
 
     /// Receive next request
-    pub fn next_request(&self) -> SyscallResult<Message> {
-        let mut buffer = [0u8; 32];
+    pub fn next_request(&self) -> SyscallResult<Request> {
+        let mut buffer = [0u8; 32]; // TODO: is 32 always enough?
         let count = syscall::fd_read(self.fd, &mut buffer)?;
         Ok(pinecone::from_bytes(&buffer[..count]).unwrap())
     }
 
     /// Reply to a received request
-    pub fn reply(&self, message: Message) -> SyscallResult<()> {
-        let buffer = pinecone::to_vec(&message).unwrap();
+    pub fn reply(&self, response: Response) -> SyscallResult<()> {
+        let buffer = pinecone::to_vec(&response).unwrap();
         let count = syscall::fd_write(self.fd, &buffer)?;
         assert_eq!(buffer.len(), count, "TODO: Multipart writes");
         Ok(())

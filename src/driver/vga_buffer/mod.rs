@@ -152,6 +152,20 @@ impl Terminal {
         }
     }
 
+    /// Clear the current line
+    pub fn clear_line(&mut self) {
+        self.cursor.col = 0;
+        let row = self.cursor.row;
+        let clear_color = self.output_color;
+        let buffer = self.get_buffer();
+        for col in 0..SCREEN_WIDTH {
+            buffer.chars[row][col].write(CharCell {
+                character: b' ',
+                color: clear_color,
+            });
+        }
+    }
+
     /// Write single byte to terminal's stdout
     pub fn write_byte(&mut self, byte: u8) {
         assert!(byte != 0);
@@ -299,6 +313,14 @@ macro_rules! rreset {
             .try_lock()
             .expect("TERMINAL LOCKED")
             .reset();
+    }};
+}
+macro_rules! rclearline {
+    () => {{
+        $crate::driver::vga_buffer::TERMINAL
+            .try_lock()
+            .expect("TERMINAL LOCKED")
+            .clear_line();
     }};
 }
 macro_rules! rforce_unlock {

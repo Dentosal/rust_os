@@ -11,25 +11,21 @@ use crate::driver::disk_io::DISK_IO;
 use crate::filesystem::{error::*, CloseAction, FileClientId, FileOps, Leafness, Path, FILESYSTEM};
 use crate::multitasking::WaitFor;
 
-fn round_up_sector(p: u64) -> u64 {
-    (p + SECTOR_SIZE - 1) / SECTOR_SIZE
-}
-
 pub struct StaticFSLeaf {
     /// Sector on disk
     start_sector: u32,
-    /// Size on disk, in sectors
-    size_sectors: u32,
+    /// Size on disk, in bytes
+    size_bytes: u64,
     /// Data, loaded when requested for the first time
     data: Option<Vec<u8>>,
     /// Readers and offsets to the data
     readers: HashMap<FileClientId, usize>,
 }
 impl StaticFSLeaf {
-    fn new(start_sector: u32, size_sectors: u32) -> Self {
+    fn new(start_sector: u32, size_bytes: u64) -> Self {
         Self {
             start_sector,
-            size_sectors,
+            size_bytes,
             data: None,
             readers: HashMap::new(),
         }
@@ -39,11 +35,15 @@ impl StaticFSLeaf {
         if self.data.is_none() {
             let mut dc = DISK_IO.lock();
             self.data = Some(
-                dc.read(self.start_sector as u64, self.size_sectors as u64)
-                    .iter()
-                    .flatten()
-                    .cloned()
-                    .collect(),
+                dc.read(
+                    self.start_sector as u64,
+                    to_sectors_round_up(self.size_bytes),
+                )
+                .iter()
+                .flatten()
+                .take(self.size_bytes as usize)
+                .cloned()
+                .collect(),
             );
         }
     }
@@ -86,7 +86,7 @@ fn find_file_list() -> u32 {
     ])
 }
 
-/// Returns entry count
+/// Returns header body size, in bytes
 fn load_header(file_list_sector: u32) -> u32 {
     let mut dc = DISK_IO.lock();
     let header = &dc.read(file_list_sector as u64, 1)[0][..16];
@@ -112,32 +112,30 @@ fn load_file_entries() -> Vec<(FileEntry, u32)> {
     if base_sector == 0xd7cafed7 {
         panic!("StaticFS missing");
     }
-    let entry_count = load_header(base_sector);
-    let sector_count = round_up_sector(16 + sizeof!(FileEntry) as u64 * entry_count as u64);
+    let header_body_size = load_header(base_sector) as u64;
+    let sector_count = to_sectors_round_up(HEADER_SIZE_BYTES + header_body_size);
     let mut dc = DISK_IO.lock();
     let bytes: Vec<u8> = dc
         .read(base_sector as u64, sector_count)
         .iter()
         .flatten()
-        .skip(16)
+        .skip(HEADER_SIZE_BYTES as usize)
+        .take(header_body_size as usize)
         .cloned()
         .collect();
 
+    let file_list: Vec<FileEntry> =
+        pinecone::from_bytes(&bytes[..]).expect("Could not deserialize staticfs file list");
+
     let mut result = Vec::new();
-    let mut position = base_sector + sector_count as u32;
-    for chunk in bytes
-        .chunks_exact(sizeof!(FileEntry))
-        .take(entry_count as usize)
-    {
-        let file_entry = FileEntry::from_bytes([
-            chunk[0x0], chunk[0x1], chunk[0x2], chunk[0x3], chunk[0x4], chunk[0x5], chunk[0x6],
-            chunk[0x7], chunk[0x8], chunk[0x9], chunk[0xa], chunk[0xb], chunk[0xc], chunk[0xd],
-            chunk[0xe], chunk[0xf],
-        ]);
-        if !file_entry.is_skip() {
-            result.push((file_entry, position));
-        }
-        position += file_entry.size;
+    let mut current_sector_offset = 0;
+    for file in file_list {
+        let size_sectors = file.size_sectors() as u32;
+        result.push((
+            file,
+            base_sector + sector_count as u32 + current_sector_offset,
+        ));
+        current_sector_offset += size_sectors;
     }
     result
 }
@@ -149,15 +147,10 @@ pub fn init() {
         .expect("Could not create /dev/staticfs");
 
     for (file_entry, pos) in load_file_entries() {
-        let mut name_bytes = file_entry.name.to_vec();
-        while name_bytes.last() == Some(&0) {
-            let _ = name_bytes.pop();
-        }
-        assert!(!name_bytes.is_empty());
-        let name = String::from_utf8(name_bytes).expect("StaticFS: mon-UTF-8 filename");
-        let leaf = StaticFSLeaf::new(pos, file_entry.size);
+        assert!(!file_entry.name.is_empty());
+        let leaf = StaticFSLeaf::new(pos, file_entry.size_bytes);
         fs.create_static(
-            Path::new(&format!("/mnt/staticfs/{}", name)),
+            Path::new(&format!("/mnt/staticfs/{}", file_entry.name)),
             Box::new(leaf),
         )
         .expect("Could not create file under /mnt/staticfs");

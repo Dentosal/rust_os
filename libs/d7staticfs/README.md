@@ -22,8 +22,8 @@ The header is followed by an array of file entries, each 16 bytes in size.
 
 Offset | Size | Content
 -------|------|--------
-0      |   12 | Filename (`[a-zA-Z0-9_]+`, Zero-padded)
-12     |    4 | File size in sectors (zero for empty file)
+0      |   24 | Filename (`[a-zA-Z0-9_]+`, Zero-padded)
+24     |    8 | File size in bytes (zero for empty file)
 
 There is also a two special File entries. When filename is all zeroes:
 * Skip: Size is nonzero: The file has been deleted, and the entry marks the size of the empty region on file space.
@@ -31,6 +31,4 @@ There is also a two special File entries. When filename is all zeroes:
 
 ## Files
 
-First file starts immediately after the file table. Second file starts right after it. Size of each file (in sectors) is specified in the file table.
-
-File size is always a multiple of sector size. They are zero-padded the full length if necessary.
+First file starts immediately after the file table. Second file starts on the next sector after it. Size of each file (in bytes) is specified in the file table. Files are always a stored in full sectors. They are zero-padded the full length if necessary.

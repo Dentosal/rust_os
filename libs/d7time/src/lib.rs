@@ -1,17 +1,20 @@
+//! Temporal quantification.
+
 #![no_std]
 #![feature(const_fn)]
 
-//! Temporal quantification.
 
 use core::fmt;
 use core::ops::{Add, AddAssign, Sub, SubAssign};
 
 pub use core::time::Duration;
 
+use serde::{Serialize, Deserialize};
+
 /// Internal time format
 /// This is public, but shouldn't be exposed to user applications,
 /// only the operating system and maybe some of it's drivers
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct TimeSpec {
     pub sec: u64,
     pub nsec: u32,
@@ -86,7 +89,7 @@ impl TimeSpec {
 /// no method to get "the number of seconds" from an instant. Instead, it only
 /// allows measuring the duration between two instants (or comparing two
 /// instants).
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Instant(TimeSpec);
 
 /// An error returned from the `duration_since` and `elapsed` methods on
@@ -107,7 +110,7 @@ pub struct Instant(TimeSpec);
 ///     Err(e) => println!("SystemTimeError difference: {:?}", e.duration()),
 /// }
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SystemTimeError(Duration);
 
 impl Instant {

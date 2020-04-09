@@ -102,9 +102,9 @@ pub fn init() {
     handlers[0x0e] = exception_handler_with_error_code!(exception_pf);
     handlers[0x20] = irq_handler_switch!(exception_irq0);
     handlers[0x21] = irq_handler!(exception_irq1);
-    handlers[0x21] = irq_handler!(exception_irq7);
+    handlers[0x27] = irq_handler!(exception_irq7);
     handlers[0x2e] = irq_handler!(exception_irq14);
-    handlers[0x2e] = irq_handler!(exception_irq15);
+    handlers[0x2f] = irq_handler!(exception_irq15);
 
     for index in 0..idt::ENTRY_COUNT {
         unsafe {

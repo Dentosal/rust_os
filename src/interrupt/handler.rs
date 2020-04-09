@@ -111,7 +111,7 @@ pub(super) unsafe extern "C" fn exception_irq0() -> u128 {
 pub(super) unsafe fn exception_irq1() {
     rforce_unlock!();
     keyboard::KEYBOARD.force_unlock();
-    let mut kbd = keyboard::KEYBOARD.lock();
+    let mut kbd = keyboard::KEYBOARD.try_lock().unwrap();
     if kbd.is_enabled() {
         kbd.notify();
     }
@@ -139,14 +139,14 @@ pub(super) unsafe fn exception_irq7() {
 /// (Possibly) spurious interrupt for the secondary PIC
 /// https://wiki.osdev.org/8259_PIC#Handling_Spurious_IRQs
 pub(super) unsafe fn exception_irq15() {
-    let mut pics = pic::PICS.lock();
+    let mut pics = pic::PICS.try_lock().unwrap();
     // Check if this is a real IRQ
     let is_real = pics.read_isr() & (1 << 15) != 0;
     if is_real {
-        pic::PICS.lock().notify_eoi(0x2f);
+        pics.notify_eoi(0x2f);
     } else {
         // Inform primary PIC about spurious interrupt
-        pic::PICS.lock().notify_eoi_primary();
+        pics.notify_eoi_primary();
     }
 }
 
@@ -247,12 +247,24 @@ unsafe extern "C" fn process_interrupt_inner(
             pic::PICS.lock().notify_eoi(interrupt);
             handle_switch!(next_process);
         },
-        0x21..=0x2f => {
-            // TODO: Handle keyboard input
-            // TODO: Handle (ignore) ata interrupts
-            // TODO: Handle spurious interrupts
+        0x21 => {
+            // Keyboard input
+            rforce_unlock!();
+            let mut kbd = keyboard::KEYBOARD.try_lock().unwrap();
+            kbd.notify();
+            pic::PICS.lock().notify_eoi(0x21);
+        },
+        0x22..=0x2d => {
             // pic::PICS.lock().notify_eoi(interrupt);
-            panic!("Unhandled interrupt: {}", interrupt);
+            panic!("Unhandled interrupt: {:02x}", interrupt);
+        },
+        0x2e => {
+            // Handle (ignore) ata interrupts
+            exception_irq14();
+        },
+        0x2f => {
+            // Handle spurious interrupts
+            exception_irq15();
         },
         0x00 => fail(pid, process::Error::DivideByZero(stack_frame)),
         0x0e => {

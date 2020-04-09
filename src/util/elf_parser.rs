@@ -36,7 +36,7 @@ pub struct ELFHeader {
     elf_type: u16,
     instrucion_set: u16,
     elf_version_2: u32,
-    program_entry_pos: u64,
+    pub program_entry_pos: u64,
     ph_table_position: u64,
     sh_table_position: u64,
     flags: u32,

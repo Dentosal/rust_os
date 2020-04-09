@@ -16,7 +16,7 @@ pub mod prelude;
 mod utils;
 
 use crate::multitasking::{ElfImage, Process};
-use crate::util::elf_parser::{self, ELFData, ELFProgramHeader};
+use crate::util::elf_parser::{self, ELFData, ELFHeader, ELFProgramHeader};
 
 pub use self::allocators::*;
 pub use self::prelude::*;
@@ -346,7 +346,9 @@ impl MemoryController {
     /// This function internally uses TLB flushes.
     ///
     /// Requires that the kernel page tables are active.
-    pub fn load_elf(&mut self, elf_image: ElfImage) -> Vec<(ELFProgramHeader, Vec<PhysFrame>)> {
+    pub fn load_elf(
+        &mut self, elf_image: ElfImage,
+    ) -> (ELFHeader, Vec<(ELFProgramHeader, Vec<PhysFrame>)>) {
         let elf = unsafe { elf_image.parse_elf() };
 
         let mut frames = Vec::new();
@@ -410,7 +412,7 @@ impl MemoryController {
             }
         }
 
-        frames
+        (elf.header, frames)
     }
 }
 

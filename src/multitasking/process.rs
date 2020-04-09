@@ -87,6 +87,9 @@ impl Process {
 /// Requires that the kernel page table is active.
 /// Returns ProcessId and PageMap for the process.
 unsafe fn create_process(mm: &mut MemoryController, pid: ProcessId, elf: ElfImage) -> Process {
+    // Load image
+    let (elf_header, elf_frames) = unsafe { mm.load_elf(elf) };
+
     // Allocate a stack for the process
     let stack_frames = mm.alloc_frames(PROCESS_STACK_SIZE_PAGES as usize);
     let stack_area = mm.alloc_virtual_area(PROCESS_STACK_SIZE_PAGES);
@@ -142,7 +145,7 @@ unsafe fn create_process(mm: &mut MemoryController, pid: ProcessId, elf: ElfImag
                 // CS
                 ptr::write(qwords_from_end!(4), 0x8u64);
                 // RIP
-                ptr::write(qwords_from_end!(5), 0x1_000_000u64);
+                ptr::write(qwords_from_end!(5), elf_header.program_entry_pos);
             }
 
             // Unmap from kernel table
@@ -214,8 +217,6 @@ unsafe fn create_process(mm: &mut MemoryController, pid: ProcessId, elf: ElfImag
     }
 
     // Map the executable image to its own page table
-
-    let elf_frames = unsafe { mm.load_elf(elf) };
     for (ph, frames) in elf_frames {
         assert!(ph.virtual_address >= 0x400_000);
         let start = VirtAddr::new(ph.virtual_address);

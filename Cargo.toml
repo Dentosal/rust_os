@@ -25,13 +25,18 @@ static_assertions = "1.1"       # Compile time assertions
 pinecone = "0.2"                # Message format for process IO
 
 [dependencies.hashbrown]        # HashMap for no_std contexts
-version = "0.6.3"
+version = "0.7"
 features = ["nightly", "inline-more", "serde"]
 
 [dependencies.serde]            # Serde
-version = "1.0.102"
+version = "1.0"
 default-features = false
 features = ["alloc", "derive"]
+
+[dependencies.serde_json]       # JSON support
+version = "1.0"
+default-features = false
+features = ["alloc"]
 
 [dependencies.lazy_static]      # Non-const_fn static intialization
 version = "1.4"

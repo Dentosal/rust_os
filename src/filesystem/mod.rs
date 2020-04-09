@@ -576,7 +576,7 @@ impl VirtualFS {
             match result {
                 IoResult::Success(()) => {},
                 IoResult::Code(ErrorCode::fs_file_destroyed) => {},
-                error => panic!("Child removal failed: {:?}", error)
+                error => panic!("Child removal failed: {:?}", error),
             };
         }
 
@@ -626,6 +626,12 @@ fn create_fs(fs: &mut VirtualFS) -> IoResult<()> {
     fs.create_static(Path::new("/dev/null"), Box::new(NullDevice))?;
     fs.create_static(Path::new("/dev/zero"), Box::new(ZeroDevice))?;
     fs.create_static(Path::new("/dev/test"), Box::new(TestDevice { rounds: 3 }))?;
+
+    // Kernel console
+    fs.create_static(
+        Path::new("/dev/console"),
+        Box::new(KernelConsoleDevice::new()),
+    )?;
 
     IoResult::Success(())
 }

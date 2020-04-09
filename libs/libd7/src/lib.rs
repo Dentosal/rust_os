@@ -17,10 +17,12 @@
 #![feature(panic_info_message)]
 
 mod allocator;
-pub mod syscall;
-pub mod process;
+
 pub mod attachment;
+pub mod console;
 pub mod fs;
+pub mod process;
+pub mod syscall;
 
 use core::alloc::Layout;
 use core::panic::PanicInfo;

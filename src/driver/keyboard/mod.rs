@@ -1,18 +1,17 @@
-mod event;
-mod key;
-mod keymap;
-mod keyreader;
-
 use cpuio::UnsafePort;
 use spin::Mutex;
 
+use alloc::vec::Vec;
+
+use d7abi::fs::protocol::console::KeyboardEvent;
+
+use crate::multitasking::{ExplicitEventId, WaitFor, SCHEDULER};
+use crate::time::SYSCLOCK;
 use crate::util::io_wait;
 
-pub use self::event::{KeyboardEvent, KeyboardEventType};
-pub use self::key::Key;
-use self::keyreader::KeyReader;
+mod state;
 
-use alloc::vec::Vec;
+pub use self::state::KeyboardState;
 
 // PS/2 ports
 const PS2_DATA: u16 = 0x60; // rw
@@ -27,29 +26,29 @@ const PIC_CMD_INIT: u8 = 0x11;
 const IO_WAIT_TIMEOUT: usize = 1000;
 
 // Event buffer
-const EVENT_BUFFER_SIZE: usize = 100;
+const EVENT_BUFFER_SIZE: usize = 1024;
 
 pub struct Keyboard {
     enabled: bool,
-    offset: u8,
     data_port: UnsafePort<u8>,
     status_port: UnsafePort<u8>,
     command_port: UnsafePort<u8>,
-    key_reader: KeyReader,
-    /// Items that are not yet moved to KEYBOARD_EVENTS
-    pending_buffer: Vec<KeyboardEvent>,
+    state: KeyboardState,
+    event_buffer: Vec<KeyboardEvent>,
+    /// Event to trigger when new data is available
+    notify_event: Option<ExplicitEventId>,
 }
 
 impl Keyboard {
     pub const unsafe fn new() -> Keyboard {
         Keyboard {
             enabled: false,
-            offset: 0,
             data_port: UnsafePort::new(PS2_DATA),
             status_port: UnsafePort::new(PS2_STATUS),
             command_port: UnsafePort::new(PS2_COMMAND),
-            key_reader: KeyReader::new(),
-            pending_buffer: Vec::new(),
+            state: KeyboardState::new(),
+            event_buffer: Vec::new(),
+            notify_event: None,
         }
     }
 
@@ -71,7 +70,6 @@ impl Keyboard {
         self.configure();
         self.enable_scanning();
 
-        self.key_reader.init();
         self.enabled = true;
     }
 
@@ -181,30 +179,49 @@ impl Keyboard {
         }
     }
 
-    pub unsafe fn notify(&mut self) {
-        let key = self.read_byte();
-        if !self.enabled || key == 0xFA || key == 0xEE {
-            return;
-        }
-        if let Some(key_event) = self.key_reader.insert(key) {
-            self.pending_buffer.push(key_event);
-        }
-    }
-
     unsafe fn read_byte(&mut self) -> u8 {
         self.wait_ready_read();
         self.data_port.read()
     }
+
     unsafe fn ps2_write_command(&mut self, c: u8) {
         self.wait_ready_write();
         self.command_port.write(c)
     }
 
-    pub fn pop_event(&mut self) -> Option<KeyboardEvent> {
-        if self.pending_buffer.is_empty() {
-            return None;
+    pub unsafe fn notify(&mut self) {
+        let byte = self.read_byte();
+
+        if !self.enabled || byte == 0xFA || byte == 0xEE {
+            return;
         }
-        Some(self.pending_buffer.remove(0))
+
+        let timestamp = SYSCLOCK.now();
+
+        if let Some(event) = self.state.apply(byte, timestamp) {
+            self.event_buffer.push(event);
+
+            if let Some(event_id) = self.notify_event.take() {
+                let mut sched = SCHEDULER.try_lock().unwrap();
+                sched.on_explicit_event(event_id);
+            }
+
+            if self.event_buffer.len() > EVENT_BUFFER_SIZE {
+                self.event_buffer.remove(0);
+            }
+        }
+    }
+
+    pub fn get_event(&mut self) -> ExplicitEventId {
+        *self.notify_event.get_or_insert_with(WaitFor::new_event_id)
+    }
+
+    pub fn pop_event_nonblocking(&mut self) -> Option<KeyboardEvent> {
+        if self.event_buffer.is_empty() {
+            None
+        } else {
+            Some(self.event_buffer.remove(0))
+        }
     }
 }
 

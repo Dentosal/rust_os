@@ -4,7 +4,13 @@
 #![feature(allocator_api)]
 #![deny(unused_must_use)]
 
-use libd7::{attachment::*, fs::{list_dir, File}, process::Process, syscall};
+use libd7::{
+    attachment::*,
+    console::Console,
+    fs::{list_dir, File},
+    process::Process,
+    syscall,
+};
 
 #[macro_use]
 extern crate alloc;
@@ -43,6 +49,22 @@ fn main() -> u64 {
     }
 
     // The spawned process will be killed as this one terminates
+
+    // Console
+    let mut console = Console::open(
+        "/dev/console",
+        "/mnt/staticfs/keycode.json",
+        "/mnt/staticfs/keymap.json",
+    )
+    .unwrap();
+    loop {
+        syscall::debug_print(&format!("Input test:"));
+        let line = console.read_line().unwrap();
+        syscall::debug_print(&format!("Line {:?}", line));
+        if line == "exit" {
+            break;
+        }
+    }
 
     0
 }

@@ -1,0 +1,16 @@
+{
+    "modifiers": [
+        "LeftCtrl",
+        "RightShift"
+    ],
+    "mapping": {
+        "Space": {"text": " "},
+        "A": {"text": "a"},
+        "LeftShift+A": {"text": "A"},
+        "RightShift+A": {"text": "A"},
+        "RightAlt+E": {"text": "€"},
+        "Shift+Acute": {"buffer": "`"},
+        "Escape A": {"text": "Escape first, then A"},
+        "CapsLock": {"remap": "Escape"}
+    }
+}

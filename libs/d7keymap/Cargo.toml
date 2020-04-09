@@ -1,5 +1,5 @@
 [package]
-name = "libd7"
+name = "d7keymap"
 version = "0.1.0"
 authors = ["Hannes Karppila <hannes.karppila@gmail.com>"]
 publish = false
@@ -11,17 +11,12 @@ panic = "abort"
 [profile.release]
 panic = "abort"
 
-[dependencies]
-spin = "0.5"
-pinecone = "0.2"
-unicode-segmentation = "1.6.0"
-
 [dependencies.hashbrown]        # HashMap for no_std contexts
 version = "0.7"
 features = ["nightly", "inline-more", "serde"]
 
 [dependencies.serde]            # Serde
-version = "1.0"
+version = "1.0.106"
 default-features = false
 features = ["alloc", "derive"]
 
@@ -29,17 +24,3 @@ features = ["alloc", "derive"]
 version = "1.0"
 default-features = false
 features = ["alloc"]
-
-[dependencies.unicode-normalization]    # Unicode normalization
-git = "https://github.com/Dentosal/unicode-normalization" # Pull request pending
-default-features = false
-
-[dependencies.x86_64]
-git = "https://github.com/Dentosal/x86_64"
-features = ["use-serde"]
-
-[dependencies.d7abi]
-path = "../d7abi"
-
-[dependencies.d7keymap]
-path = "../d7keymap"

@@ -1,0 +1,303 @@
+{
+    "modifiers": [
+        "LeftShift",
+        "RightShift",
+        "LeftSuper",
+        "RightSuper",
+        "LeftMeta",
+        "RightMeta",
+        "LeftAlt",
+        "RightAlt",
+        "LeftCtrl",
+        "RightCtrl",
+        "LeftHyper",
+        "RightHyper"
+    ],
+    "mapping": {
+        "Space": {
+            "text": " "
+        },
+        "Comma": {
+            "text": ","
+        },
+        "LeftShift+Comma": {
+            "text": ";"
+        },
+        "RightShift+Comma": {
+            "text": ";"
+        },
+        "Period": {
+            "text": "."
+        },
+        "LeftShift+Period": {
+            "text": ":"
+        },
+        "RightShift+Period": {
+            "text": ":"
+        },
+        "A": {
+            "text": "a"
+        },
+        "LeftShift+A": {
+            "text": "A"
+        },
+        "RightShift+A": {
+            "text": "A"
+        },
+        "B": {
+            "text": "b"
+        },
+        "LeftShift+B": {
+            "text": "B"
+        },
+        "RightShift+B": {
+            "text": "B"
+        },
+        "C": {
+            "text": "c"
+        },
+        "LeftShift+C": {
+            "text": "C"
+        },
+        "RightShift+C": {
+            "text": "C"
+        },
+        "D": {
+            "text": "d"
+        },
+        "LeftShift+D": {
+            "text": "D"
+        },
+        "RightShift+D": {
+            "text": "D"
+        },
+        "E": {
+            "text": "e"
+        },
+        "LeftShift+E": {
+            "text": "E"
+        },
+        "RightShift+E": {
+            "text": "E"
+        },
+        "F": {
+            "text": "f"
+        },
+        "LeftShift+F": {
+            "text": "F"
+        },
+        "RightShift+F": {
+            "text": "F"
+        },
+        "G": {
+            "text": "g"
+        },
+        "LeftShift+G": {
+            "text": "G"
+        },
+        "RightShift+G": {
+            "text": "G"
+        },
+        "H": {
+            "text": "h"
+        },
+        "LeftShift+H": {
+            "text": "H"
+        },
+        "RightShift+H": {
+            "text": "H"
+        },
+        "I": {
+            "text": "i"
+        },
+        "LeftShift+I": {
+            "text": "I"
+        },
+        "RightShift+I": {
+            "text": "I"
+        },
+        "J": {
+            "text": "j"
+        },
+        "LeftShift+J": {
+            "text": "J"
+        },
+        "RightShift+J": {
+            "text": "J"
+        },
+        "K": {
+            "text": "k"
+        },
+        "LeftShift+K": {
+            "text": "K"
+        },
+        "RightShift+K": {
+            "text": "K"
+        },
+        "L": {
+            "text": "l"
+        },
+        "LeftShift+L": {
+            "text": "L"
+        },
+        "RightShift+L": {
+            "text": "L"
+        },
+        "M": {
+            "text": "m"
+        },
+        "LeftShift+M": {
+            "text": "M"
+        },
+        "RightShift+M": {
+            "text": "M"
+        },
+        "N": {
+            "text": "n"
+        },
+        "LeftShift+N": {
+            "text": "N"
+        },
+        "RightShift+N": {
+            "text": "N"
+        },
+        "O": {
+            "text": "o"
+        },
+        "LeftShift+O": {
+            "text": "O"
+        },
+        "RightShift+O": {
+            "text": "O"
+        },
+        "P": {
+            "text": "p"
+        },
+        "LeftShift+P": {
+            "text": "P"
+        },
+        "RightShift+P": {
+            "text": "P"
+        },
+        "Q": {
+            "text": "q"
+        },
+        "LeftShift+Q": {
+            "text": "Q"
+        },
+        "RightShift+Q": {
+            "text": "Q"
+        },
+        "R": {
+            "text": "r"
+        },
+        "LeftShift+R": {
+            "text": "R"
+        },
+        "RightShift+R": {
+            "text": "R"
+        },
+        "S": {
+            "text": "s"
+        },
+        "LeftShift+S": {
+            "text": "S"
+        },
+        "RightShift+S": {
+            "text": "S"
+        },
+        "T": {
+            "text": "t"
+        },
+        "LeftShift+T": {
+            "text": "T"
+        },
+        "RightShift+T": {
+            "text": "T"
+        },
+        "U": {
+            "text": "u"
+        },
+        "LeftShift+U": {
+            "text": "U"
+        },
+        "RightShift+U": {
+            "text": "U"
+        },
+        "V": {
+            "text": "v"
+        },
+        "LeftShift+V": {
+            "text": "V"
+        },
+        "RightShift+V": {
+            "text": "V"
+        },
+        "W": {
+            "text": "w"
+        },
+        "LeftShift+W": {
+            "text": "W"
+        },
+        "RightShift+W": {
+            "text": "W"
+        },
+        "X": {
+            "text": "x"
+        },
+        "LeftShift+X": {
+            "text": "X"
+        },
+        "RightShift+X": {
+            "text": "X"
+        },
+        "Y": {
+            "text": "y"
+        },
+        "LeftShift+Y": {
+            "text": "Y"
+        },
+        "RightShift+Y": {
+            "text": "Y"
+        },
+        "Z": {
+            "text": "z"
+        },
+        "LeftShift+Z": {
+            "text": "Z"
+        },
+        "RightShift+Z": {
+            "text": "Z"
+        },
+        "0": {
+            "text": "0"
+        },
+        "1": {
+            "text": "1"
+        },
+        "2": {
+            "text": "2"
+        },
+        "3": {
+            "text": "3"
+        },
+        "4": {
+            "text": "4"
+        },
+        "5": {
+            "text": "5"
+        },
+        "6": {
+            "text": "6"
+        },
+        "7": {
+            "text": "7"
+        },
+        "8": {
+            "text": "8"
+        },
+        "9": {
+            "text": "9"
+        }
+    }
+}

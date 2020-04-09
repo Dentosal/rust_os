@@ -11,6 +11,9 @@ panic = "abort"
 [profile.release]
 panic = "abort"
 
+[dependencies]
+serde-big-array = "0.2.0"       # Big array support for serde
+
 [dependencies.serde]
 version = "1.0.102"
 default-features = false
@@ -26,3 +29,7 @@ git = "https://github.com/Dentosal/num_enum_simplified"
 [dependencies.x86_64]
 git = "https://github.com/Dentosal/x86_64"
 features = ["use-serde"]
+
+[dependencies.d7time]
+version = "*"
+path = "../d7time"

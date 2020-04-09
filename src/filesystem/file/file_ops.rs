@@ -32,7 +32,7 @@ pub trait FileOps: Send {
     fn read(&mut self, fc: FileClientId, buf: &mut [u8]) -> IoResult<usize>;
 
     /// Returns `WaitFor::None` if this file is ready for reading,
-    /// and the wait condition otherwise.
+    /// and the wait condition otherwise. Used mainly by fd_select.
     fn read_waiting_for(&mut self, fc: FileClientId) -> WaitFor;
 
     /// Write a buffer into file, returning how many bytes were written

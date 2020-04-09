@@ -6,6 +6,7 @@
 #![deny(overflowing_literals)]
 #![deny(safe_packed_borrows)]
 #![deny(unused_must_use)]
+#![allow(incomplete_features)]
 // Code style (development time)
 #![allow(unused_macros)]
 #![allow(dead_code)]
@@ -24,8 +25,8 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::needless_range_loop)]
 #![allow(clippy::unreadable_literal)]
-// No-std
-#![no_std]
+// No-std when not running tests
+#![cfg_attr(not(test), no_std)]
 // Unstable features
 #![feature(abi_x86_interrupt)]
 #![feature(alloc_error_handler)]
@@ -35,6 +36,7 @@
 #![feature(box_into_raw_non_null)]
 #![feature(box_syntax, box_patterns)]
 #![feature(const_fn)]
+#![feature(const_generics)]
 #![feature(core_intrinsics)]
 #![feature(integer_atomics)]
 #![feature(lang_items)]
@@ -68,7 +70,6 @@ mod driver;
 mod cpuid;
 mod filesystem;
 mod interrupt;
-mod kernel_shell;
 mod memory;
 mod multitasking;
 mod syscall;
@@ -168,12 +169,14 @@ pub extern "C" fn rust_main() -> ! {
 }
 
 #[global_allocator]
+#[cfg(not(test))]
 static HEAP_ALLOCATOR: d7alloc::GlobAlloc = d7alloc::GlobAlloc::new(d7alloc::BumpAllocator::new(
     d7alloc::HEAP_START,
     d7alloc::HEAP_START + d7alloc::HEAP_SIZE,
 ));
 
 #[alloc_error_handler]
+#[cfg(not(test))]
 fn out_of_memory(_: Layout) -> ! {
     unsafe {
         asm!("cli"::::"intel","volatile");
@@ -184,6 +187,7 @@ fn out_of_memory(_: Layout) -> ! {
 }
 
 #[panic_handler]
+#[cfg(not(test))]
 #[allow(unused_variables)]
 #[no_mangle]
 extern "C" fn panic(info: &PanicInfo) -> ! {

@@ -32,7 +32,7 @@ pub struct Queues {
     /// and further times when the same WaitId is triggered are ignored.
     /// This allows multiple triggers for a process to be inserted,
     /// as only the first one actually triggers an event.
-    /// This ensures that a process will never be returned twice to the schduler.
+    /// This ensures that a process will never be returned twice to the scheduler.
     waiting: HashMap<WaitId, ProcessId>,
     /// Next available WaitId
     next_waitid: WaitId,
@@ -68,7 +68,7 @@ impl Queues {
         wait_id
     }
 
-    /// If wait_id has benn consumed, ignores it.
+    /// If wait_id has been consumed, ignores it.
     /// Otherwise the wait_id is consumed, and
     /// the associated process is scheduled for running.
     fn trigger_wait(&mut self, wait_id: WaitId) {

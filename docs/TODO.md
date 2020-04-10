@@ -3,6 +3,7 @@
     * Ramdisk builder tool (from staticfs)
     * Bootloader support
     * Kernel support
+* Move from print statements to structured logging
 * Implement (named) pipes
     * `/dev/pipe`
 * Provide `/dev/event`
@@ -13,7 +14,8 @@
     * https://github.com/rafalh/rust-fatfs
     * https://github.com/pi-pi3/ext2-rs
     * https://github.com/omerbenamram/mft
-
+* Porting rustc
+    * https://www.reddit.com/r/rust/comments/5ag60z/how_do_i_bootstrap_rust_to_crosscompile_for_a_new/d9gdjwf/
 
 * Reimplement virtualbox support (create hard drive images)
 * Look into https://github.com/minexew/Shrine/blob/master/HwSupp/Pci.HC

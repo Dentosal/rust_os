@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 
 use d7abi::fs::protocol::console::KeyboardEvent;
 
-use crate::multitasking::{ExplicitEventId, WaitFor, SCHEDULER};
+use crate::multitasking::{EventQueue, ExplicitEventId, WaitFor, SCHEDULER};
 use crate::time::SYSCLOCK;
 use crate::util::io_wait;
 
@@ -25,8 +25,8 @@ const PIC_CMD_INIT: u8 = 0x11;
 // Sensible timeout
 const IO_WAIT_TIMEOUT: usize = 1000;
 
-// Event buffer
-const EVENT_BUFFER_SIZE: usize = 1024;
+// Event buffer max size
+const EVENT_BUFFER_LIMIT: usize = 1024;
 
 pub struct Keyboard {
     enabled: bool,
@@ -34,21 +34,18 @@ pub struct Keyboard {
     status_port: UnsafePort<u8>,
     command_port: UnsafePort<u8>,
     state: KeyboardState,
-    event_buffer: Vec<KeyboardEvent>,
-    /// Event to trigger when new data is available
-    notify_event: Option<ExplicitEventId>,
+    pub event_queue: EventQueue<KeyboardEvent>,
 }
 
 impl Keyboard {
-    pub const unsafe fn new() -> Keyboard {
+    pub unsafe fn new() -> Keyboard {
         Keyboard {
             enabled: false,
             data_port: UnsafePort::new(PS2_DATA),
             status_port: UnsafePort::new(PS2_STATUS),
             command_port: UnsafePort::new(PS2_COMMAND),
             state: KeyboardState::new(),
-            event_buffer: Vec::new(),
-            notify_event: None,
+            event_queue: EventQueue::new(EVENT_BUFFER_LIMIT),
         }
     }
 
@@ -199,33 +196,14 @@ impl Keyboard {
         let timestamp = SYSCLOCK.now();
 
         if let Some(event) = self.state.apply(byte, timestamp) {
-            self.event_buffer.push(event);
-
-            if let Some(event_id) = self.notify_event.take() {
-                let mut sched = SCHEDULER.try_lock().unwrap();
-                sched.on_explicit_event(event_id);
-            }
-
-            if self.event_buffer.len() > EVENT_BUFFER_SIZE {
-                self.event_buffer.remove(0);
-            }
-        }
-    }
-
-    pub fn get_event(&mut self) -> ExplicitEventId {
-        *self.notify_event.get_or_insert_with(WaitFor::new_event_id)
-    }
-
-    pub fn pop_event_nonblocking(&mut self) -> Option<KeyboardEvent> {
-        if self.event_buffer.is_empty() {
-            None
-        } else {
-            Some(self.event_buffer.remove(0))
+            self.event_queue.push(event);
         }
     }
 }
 
-pub static KEYBOARD: Mutex<Keyboard> = Mutex::new(unsafe { Keyboard::new() });
+lazy_static::lazy_static! {
+    pub static ref KEYBOARD: Mutex<Keyboard> = Mutex::new(unsafe { Keyboard::new() });
+}
 
 // Interrupts must be disabled during initialization,
 // so this wont deadlock on not-terribly-slow computers, including Qemu

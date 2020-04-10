@@ -73,9 +73,11 @@ impl Packet {
     pub fn to_reply(mut self, mac: MacAddr, ip: Ipv4Addr) -> Self {
         assert!(self.is_request());
 
-        self.operation == Operation::Reply;
-        self.target_hw = mac;
-        self.target_ip = ip;
+        self.operation = Operation::Reply;
+        self.target_hw = self.sender_hw;
+        self.target_ip = self.sender_ip;
+        self.sender_hw = mac;
+        self.sender_ip = ip;
 
         self
     }

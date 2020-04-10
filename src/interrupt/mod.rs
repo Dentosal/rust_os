@@ -1,4 +1,4 @@
-use spin::Once;
+use spin::{Mutex, Once};
 use x86_64::instructions::segmentation::set_cs;
 use x86_64::instructions::tables::{lidt, load_tss};
 use x86_64::structures::gdt::SegmentSelector;
@@ -103,6 +103,9 @@ pub fn init() {
     handlers[0x20] = irq_handler_switch!(exception_irq0);
     handlers[0x21] = irq_handler!(exception_irq1);
     handlers[0x27] = irq_handler!(exception_irq7);
+    handlers[0x29] = irq_handler!(exception_irq9);
+    handlers[0x2a] = irq_handler!(exception_irq10);
+    handlers[0x2b] = irq_handler!(exception_irq11);
     handlers[0x2e] = irq_handler!(exception_irq14);
     handlers[0x2f] = irq_handler!(exception_irq15);
 
@@ -170,6 +173,46 @@ pub fn init_after_memory() {
         );
     }
 }
+
+pub struct FreeIRQs {
+    irq9: Option<fn() -> ()>,
+    irq10: Option<fn() -> ()>,
+    irq11: Option<fn() -> ()>,
+}
+impl FreeIRQs {
+    pub fn set_by_irq(&mut self, irq: u8, f: fn() -> ()) {
+        match irq {
+            9 => self.irq9 = Some(f),
+            10 => self.irq10 = Some(f),
+            11 => self.irq11 = Some(f),
+            _ => panic!("Invalid free irq"),
+        }
+    }
+
+    pub fn by_irq(&self, irq: u8) -> Option<fn() -> ()> {
+        match irq {
+            9 => self.irq9,
+            10 => self.irq10,
+            11 => self.irq11,
+            _ => panic!("Invalid free irq"),
+        }
+    }
+
+    pub fn by_int(&self, int: u8) -> Option<fn() -> ()> {
+        match int {
+            0x29 => self.irq9,
+            0x2a => self.irq10,
+            0x2b => self.irq11,
+            _ => panic!("Invalid free irq"),
+        }
+    }
+}
+
+pub static FREE_IRQ_HOOK: Mutex<FreeIRQs> = Mutex::new(FreeIRQs {
+    irq9: None,
+    irq10: None,
+    irq11: None,
+});
 
 pub fn enable_external_interrupts() {
     rprintln!("Enabling external interrupts");

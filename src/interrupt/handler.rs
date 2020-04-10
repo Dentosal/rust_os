@@ -150,6 +150,31 @@ pub(super) unsafe fn exception_irq15() {
     }
 }
 
+/// Free IRQs, i.e. {9,10,11} for peripherals
+/// These can be hooked by devices
+pub(super) unsafe fn exception_irq_free(interrupt: u8) {
+    use super::FREE_IRQ_HOOK;
+    let irq_hook = FREE_IRQ_HOOK.try_lock().unwrap();
+    if let Some(f) = irq_hook.by_int(interrupt) {
+        f();
+    }
+
+    let mut pics = pic::PICS.try_lock().unwrap();
+    pics.notify_eoi(interrupt);
+}
+
+pub(super) unsafe fn exception_irq9() {
+    exception_irq_free(0x29)
+}
+
+pub(super) unsafe fn exception_irq10() {
+    exception_irq_free(0x2a)
+}
+
+pub(super) unsafe fn exception_irq11() {
+    exception_irq_free(0x2b)
+}
+
 /// Interrupt from a process
 /// Called from `src/asm_misc/process_common.asm`, process_interrupt
 /// Input registers:
@@ -254,9 +279,12 @@ unsafe extern "C" fn process_interrupt_inner(
             kbd.notify();
             pic::PICS.lock().notify_eoi(0x21);
         },
-        0x22..=0x2d => {
+        0x22..=0x28 | 0x2c..=0x2d => {
             // pic::PICS.lock().notify_eoi(interrupt);
             panic!("Unhandled interrupt: {:02x}", interrupt);
+        },
+        0x29..=0x2b => {
+            exception_irq_free(interrupt);
         },
         0x2e => {
             // Handle (ignore) ata interrupts

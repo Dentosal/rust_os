@@ -102,14 +102,11 @@ impl ChainedPics {
         // Modify masks
         // http://wiki.osdev.org/IRQ#Standard_ISA_IRQs
         // http://wiki.osdev.org/8259_PIC#Masking
-        // Enable PIT, Keyboard, Cascade, Primary ATA
+        // PIC1: PIT, Keyboard, Cascade
+        // PIC2: Free IRQs (9,10,11), Primary ATA
         // Disable everything else
         let mask1 = 0b11111000;
-        let mask2 = 0b10111111;
-
-        // rprintln!("old {:08b} {:08b}", _mask1, _mask2);
-        // rprintln!("new {:08b} {:08b}", mask1, mask2);
-        // loop {}
+        let mask2 = 0b10110001;
 
         // Restore / Set masks
         self.pics[0].data_port.write(mask1);

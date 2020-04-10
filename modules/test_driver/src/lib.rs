@@ -50,6 +50,11 @@ fn main() -> u64 {
 
     // The spawned process will be killed as this one terminates
 
+
+    // Start networking daemon driver
+    let p_netd = Process::spawn("/mnt/staticfs/netd").unwrap();
+
+
     // Console
     let mut console = Console::open(
         "/dev/console",

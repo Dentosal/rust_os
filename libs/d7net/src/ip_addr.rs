@@ -1,7 +1,10 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+use alloc::prelude::v1::*;
+use core::fmt;
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Ipv4Addr(pub [u8; 4]);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Ipv6Addr(pub [u8; 16]);
 
 impl Ipv4Addr {
@@ -24,6 +27,21 @@ impl Ipv6Addr {
         Ipv6Addr(data)
     }
 }
+
+impl fmt::Debug for Ipv4Addr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let parts: Vec<_> = self.0.iter().map(|c| format!("{}", c)).collect();
+        write!(f, "Ipv4Addr({})", parts.join("."))
+    }
+}
+
+impl fmt::Debug for Ipv6Addr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let parts: Vec<_> = self.0.iter().map(|c| format!("{:02x}", c)).collect();
+        write!(f, "Ipv6Addr({})", parts.join(":"))
+    }
+}
+
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum IpAddr {

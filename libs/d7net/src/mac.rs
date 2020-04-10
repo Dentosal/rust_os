@@ -1,4 +1,7 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+use alloc::prelude::v1::*;
+use core::fmt;
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MacAddr(pub [u8; 6]);
 
 impl MacAddr {
@@ -10,5 +13,12 @@ impl MacAddr {
         let mut data = [0; 6];
         data.copy_from_slice(bytes);
         MacAddr(data)
+    }
+}
+
+impl fmt::Debug for MacAddr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let parts: Vec<_> = self.0.iter().map(|c| format!("{:02x}", c)).collect();
+        write!(f, "MacAddr({})", parts.join(":"))
     }
 }

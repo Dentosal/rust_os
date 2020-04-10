@@ -8,9 +8,9 @@ extern crate alloc;
 
 use alloc::prelude::v1::*;
 
-use d7net::{arp, ethernet, EtherType, Ipv4Addr, MacAddr};
+use d7net::{arp, ethernet, ipv4, EtherType, Ipv4Addr, MacAddr};
 use libd7::{
-    d7abi::fs::protocol::network::ReceivedPacket,
+    d7abi::fs::protocol::network::{OutboundPacket, ReceivedPacket},
     fs::{self, File},
     pinecone, syscall,
 };
@@ -44,11 +44,10 @@ fn main() -> ! {
 
         match frame.header.ethertype {
             EtherType::ARP => {
+                // Reply to ARP packets
                 let arp_packet = arp::Packet::from_bytes(&frame.payload);
-                syscall::debug_print(&format!("{:?}", arp_packet));
-
                 if arp_packet.is_request() && arp_packet.target_ip == my_ip {
-                    syscall::debug_print(&format!("Reply to"));
+                    syscall::debug_print("ARP: Replying");
 
                     let reply = (ethernet::Frame {
                         header: ethernet::FrameHeader {
@@ -57,10 +56,17 @@ fn main() -> ! {
                             ethertype: EtherType::ARP,
                         },
                         payload: arp_packet.to_reply(my_mac, my_ip).to_bytes(),
-                    }).to_bytes();
+                    })
+                    .to_bytes();
 
-                    nic.write_all(&pinecone::to_vec(&reply).unwrap()).unwrap();
+                    nic.write_all(&pinecone::to_vec(&OutboundPacket { packet: reply }).unwrap())
+                        .unwrap();
                 }
+            }
+            EtherType::Ipv4 => {
+                let ip_packet = ipv4::Packet::from_bytes(&frame.payload);
+                syscall::debug_print(&format!("{:?}", ip_packet));
+                panic!("IP!!!");
             }
             _ => {}
         }

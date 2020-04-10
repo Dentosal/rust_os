@@ -75,6 +75,17 @@ name = "MEMORY_RESERVED_BELOW"
 type = "PhysAddr"
 value = "PAGE_TABLES_END"
 
+# DMA memory region
+[[constant]]
+name = "DMA_MEMORY_START"
+type = "PhysAddr"
+value = "0x2_0000"
+
+[[constant]]
+name = "DMA_MEMORY_SIZE"
+type = "PhysAddr"
+value = "0x7_0000"
+
 # Kernel stack for system calls
 [[constant]]
 name = "SYSCALL_STACK"

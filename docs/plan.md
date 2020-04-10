@@ -52,7 +52,7 @@ TODO: Proper virtual memory map
 
 Begin       | Size    |rwx| Content
 ------------|---------|---|---------
-           0| 200_000 |r--| IDT, GDT, Global pointers
+           0| 200_000 |r--| IDT, GDT, Global pointers, DMA buffers
      200_000| 200_000 |r-x| Common code for process switching
   10_000_000| 200_000 |rw-| Kernel page tables, identity mapped
   11_000_000| 200_000 |rw-| System call kernel stack (grows downwards)

@@ -44,7 +44,7 @@ pub unsafe fn init(elf_metadata: ELFData) -> PageMap {
     // Kernel code and data segments
     new_table.identity_map_elf(PT_VADDR, elf_metadata);
 
-    // Identity map IDT, GDT, and VGA text buffer
+    // Identity map IDT, GDT, DMA buffers, and the VGA text buffer
     let idt_frame = PhysFrame::containing_address(PhysAddr::new(idt::ADDRESS as u64));
     let vga_buffer_frame = PhysFrame::containing_address(VGA_BUFFER_PHYSADDR);
 

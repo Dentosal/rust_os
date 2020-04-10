@@ -30,6 +30,8 @@ pub struct MemoryController {
     pub page_map: PageMap,
     /// Physical memory allocator
     pub frame_allocator: frame_allocator::Allocator,
+    /// DMA memory allocator
+    pub dma_allocator: dma_allocator::Allocator,
     /// Kernel stack allocator
     stack_allocator: stack_allocator::StackAllocator,
     /// Virtual address space allocator
@@ -459,9 +461,12 @@ pub fn init() {
         stack_allocator::StackAllocator::new(stack_alloc_range)
     };
 
+    let dma_allocator = unsafe { dma_allocator::Allocator::new() };
+
     let mem_ctrl = MemoryController {
         page_map,
         frame_allocator,
+        dma_allocator,
         stack_allocator,
         virtual_allocator: virtual_allocator::VirtualAllocator::new(),
     };

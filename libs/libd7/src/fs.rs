@@ -47,6 +47,15 @@ impl File {
         syscall::fd_write(self.fd, buf)
     }
 
+    pub fn write_all(&self, buf: &[u8]) -> SyscallResult<()> {
+        let mut data = buf;
+        while !data.is_empty() {
+            let count = syscall::fd_write(self.fd, data)?;
+            data = &data[count..];
+        }
+        Ok(())
+    }
+
     pub fn close(self) -> SyscallResult<()> {
         syscall::fd_close(self.fd)
     }

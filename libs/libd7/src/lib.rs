@@ -27,6 +27,9 @@ pub mod syscall;
 use core::alloc::Layout;
 use core::panic::PanicInfo;
 
+pub use d7abi;
+pub use pinecone;
+
 #[macro_use]
 extern crate alloc;
 

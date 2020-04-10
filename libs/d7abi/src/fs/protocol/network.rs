@@ -10,3 +10,9 @@ pub struct ReceivedPacket {
     /// Timestamp
     pub timestamp: Instant,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OutboundPacket {
+    /// Packet contents
+    pub packet: Vec<u8>,
+}

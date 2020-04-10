@@ -35,7 +35,9 @@ impl FileOps for NetworkDevice {
     /// Whole packet must be written in one operation
     fn write(&mut self, _fd: FileClientId, buf: &[u8]) -> IoResult<usize> {
         let mut nw = NETWORK.try_lock().unwrap();
-        nw.map(&mut |drv| drv.send(buf)).expect("No NIC connected"); // TODO: report error
+        let msg: OutboundPacket = pinecone::from_bytes(&buf).expect("Invalid outbound packet"); // TODO: client error, not a kernel panic
+        nw.map(&mut |drv| drv.send(&msg.packet))
+            .expect("No NIC connected"); // TODO: report error
         IoResult::Success(buf.len())
     }
 }

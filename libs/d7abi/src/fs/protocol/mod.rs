@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod attachment;
 pub mod console;
+pub mod network;
 
 /// Branch ("directory") contents
 #[derive(Debug, Clone, Serialize, Deserialize)]

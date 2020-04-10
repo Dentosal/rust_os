@@ -117,11 +117,14 @@ pub extern "C" fn rust_main() -> ! {
     driver::disk_io::init();
     interrupt::disable_external_interrupts();
 
-    // StaticFS retuires disk drivers for now
+    // StaticFS requires disk drivers for now
     filesystem::staticfs::init();
 
     // Memory init late phase
     memory::init_late();
+
+    // NICs
+    driver::nic::init();
 
     rreset!();
     rprintln!("Kernel initialized.\n");

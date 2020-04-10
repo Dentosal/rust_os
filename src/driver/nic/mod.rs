@@ -1,16 +1,31 @@
-use alloc::boxed::Box;
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::collections::VecDeque;
+use alloc::prelude::v1::*;
 use spin::Mutex;
 
-mod ne2000;
-mod virtio;
+use d7abi::fs::protocol::network::ReceivedPacket;
+use d7time::Instant;
+
+use crate::multitasking::{EventQueue, ExplicitEventId, WaitFor};
+use crate::time::SYSCLOCK;
+
+// mod ne2000;
+// mod virtio;
+
+mod rtl8139;
+
+#[derive(Debug, Clone)]
+pub struct Packet(Vec<u8>);
 
 pub trait NIC: Send {
     /// Returns success status
     fn init(&mut self) -> bool;
 
-    fn send(&mut self, packet: Vec<u8>);
+    fn send(&mut self, packet: &[u8]);
+
+    /// Notification about IRQ
+    fn notify_irq(&mut self) -> Vec<Packet> {
+        Vec::new()
+    }
 
     fn mac_addr(&self) -> [u8; 6];
 
@@ -27,44 +42,57 @@ pub trait NIC: Send {
     }
 }
 
+const EVENT_BUFFER_LIMIT: usize = 100;
+
 pub struct NetworkController {
+    /// The actual device driver
     pub driver: Option<Box<dyn NIC>>,
+    /// Received network packets
+    pub received_queue: EventQueue<ReceivedPacket>,
 }
 impl NetworkController {
-    pub const fn new() -> NetworkController {
-        NetworkController { driver: None }
+    pub fn new() -> NetworkController {
+        NetworkController {
+            driver: None,
+            received_queue: EventQueue::new(EVENT_BUFFER_LIMIT),
+        }
     }
 
     pub unsafe fn init(&mut self) {
         rprintln!("Selecting NIC driver...");
 
-        self.driver = virtio::VirtioNet::try_new();
+        self.driver = rtl8139::RTL8139::try_new();
         if self.driver.is_some() {
-            rprintln!("Using VirtIO Networking");
+            rprintln!("Using RTL8139 Networking");
         } else {
-            self.driver = ne2000::Ne2000::try_new();
-            if self.driver.is_some() {
-                rprintln!("Using Ne2000");
-            } else {
-                rprintln!("Not suitable NIC driver found");
-            }
+            rprintln!("Not suitable NIC driver found");
         }
 
-        if self.driver.is_some() {
-            let ok = if let Some(ref mut driver) = self.driver {
-                driver.init()
-            } else {
-                unreachable!()
-            };
+        // self.driver = virtio::VirtioNet::try_new();
+        // if self.driver.is_some() {
+        //     rprintln!("Using VirtIO Networking");
+        // } else {
+        //     self.driver = ne2000::Ne2000::try_new();
+        //     if self.driver.is_some() {
+        //         rprintln!("Using Ne2000");
+        //     } else {
+        //         rprintln!("No suitable NIC driver found");
+        //     }
+        // }
 
+        if let Some(ref mut driver) = self.driver {
+            let ok = driver.init();
             if !ok {
-                rprintln!("NIC driver initialization failed");
-                self.driver = None;
+                panic!("NIC driver initialization failed");
             }
         }
     }
 
-    pub unsafe fn map<T>(&mut self, f: &mut dyn FnMut(&mut Box<dyn NIC>) -> T) -> Option<T> {
+    fn on_receive_packet(&mut self, packet: ReceivedPacket) {
+        self.received_queue.push(packet);
+    }
+
+    pub fn map<T>(&mut self, f: &mut dyn FnMut(&mut Box<dyn NIC>) -> T) -> Option<T> {
         if let Some(ref mut driver) = self.driver {
             Some(f(driver))
         } else {
@@ -74,7 +102,26 @@ impl NetworkController {
 }
 
 // Create static pointer mutex with spinlock to make networking thread-safe
-pub static NETWORK: Mutex<NetworkController> = Mutex::new(NetworkController::new());
+lazy_static::lazy_static! {
+    pub static ref NETWORK: Mutex<NetworkController> = Mutex::new(NetworkController::new());
+}
+
+/// A driver can make the interrupt handler to call this function,
+/// and it will be forwarded to it
+fn notify_irq() {
+    // Collect timestamp as early as possible
+    let timestamp = SYSCLOCK.now();
+
+    let mut nw = NETWORK.try_lock().unwrap();
+    if let Some(packets) = nw.map(&mut |nic| nic.notify_irq()) {
+        for packet in packets {
+            nw.on_receive_packet(ReceivedPacket {
+                packet: packet.0,
+                timestamp,
+            });
+        }
+    }
+}
 
 pub fn init() {
     unsafe {

@@ -633,6 +633,10 @@ fn create_fs(fs: &mut VirtualFS) -> IoResult<()> {
         Box::new(KernelConsoleDevice::new()),
     )?;
 
+    // NIC interface
+    fs.create_static(Path::new("/dev/nic"), Box::new(NetworkDevice))?;
+    fs.create_static(Path::new("/dev/nic_mac"), Box::new(MacAddrDevice))?;
+
     IoResult::Success(())
 }
 

@@ -31,22 +31,18 @@ impl FileOps for KernelConsoleDevice {
     /// Reads from the physical keyboard
     fn read(&mut self, _fd: FileClientId, buf: &mut [u8]) -> IoResult<usize> {
         let mut kbd = KEYBOARD.try_lock().unwrap();
-        if let Some(event) = kbd.pop_event_nonblocking() {
-            let data = pinecone::to_vec(&event).expect("Couldn't serialize keyboard event");
-            assert!(data.len() <= buf.len(), "Buffer is too small"); // TODO: client error, not a kernel panic
-            buf[..data.len()].copy_from_slice(&data);
-            IoResult::Success(data.len())
-        } else {
-            IoResult::RepeatAfter(WaitFor::Event(kbd.get_event()))
-        }
+        let event = kbd.event_queue.io_pop_event()?;
+        let data = pinecone::to_vec(&event).expect("Couldn't serialize keyboard event");
+        assert!(data.len() <= buf.len(), "Buffer is too small"); // TODO: client error, not a kernel panic
+        buf[..data.len()].copy_from_slice(&data);
+        IoResult::Success(data.len())
     }
 
     fn read_waiting_for(&mut self, _fc: FileClientId) -> WaitFor {
         let mut kbd = KEYBOARD.try_lock().unwrap();
-        WaitFor::Event(kbd.get_event())
+        WaitFor::Event(kbd.event_queue.get_event())
     }
 
-    /// Discards all data
     fn write(&mut self, _fd: FileClientId, buf: &[u8]) -> IoResult<usize> {
         // TODO: client error, not kernel panic
         let tu: TextUpdate = pinecone::from_bytes(&buf).expect("Invalid message");

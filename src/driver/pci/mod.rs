@@ -87,6 +87,18 @@ impl Device {
         unsafe { self.read(0x10 + 4 * i) }
     }
 
+    // https://wiki.osdev.org/PCI#PCI_Device_Structure
+    // Under "Interrupt Line"
+    pub fn get_interrupt_line(&self) -> Option<u8> {
+        let line = unsafe { self.read_u8(0x3c) };
+        if line == 0xff {
+            // No connection
+            None
+        } else {
+            Some(line)
+        }
+    }
+
     // http://wiki.osdev.org/RTL8139#PCI_Bus_Mastering
     pub unsafe fn enable_bus_mastering(&self) {
         self.write(0x04, self.read(0x04) | (1 << 2));

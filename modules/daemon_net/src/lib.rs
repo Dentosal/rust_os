@@ -6,33 +6,45 @@
 #[macro_use]
 extern crate alloc;
 
+#[macro_use]
+extern crate libd7;
+
 use alloc::prelude::v1::*;
 
-use d7net::{arp, ethernet, ipv4, EtherType, Ipv4Addr, MacAddr};
+use core::time::Duration;
+use d7net::{arp, ethernet, ipv4, tcp, EtherType, IpProtocol, Ipv4Addr, MacAddr};
 use libd7::{
+    attachment,
     d7abi::fs::protocol::network::{OutboundPacket, ReceivedPacket},
     fs::{self, File},
-    pinecone, syscall,
+    pinecone, select, syscall,
 };
 
-#[no_mangle]
-fn main() -> ! {
-    syscall::debug_print("Network daemon starting");
+struct NetState {
+    pub nic: File,
+    pub mac: MacAddr,
+    pub ip: Ipv4Addr,
+}
+impl NetState {
+    pub fn new() -> Self {
+        let mac = {
+            let mac_bytes = fs::read("/dev/nic_mac").unwrap();
+            if mac_bytes.is_empty() {
+                panic!("no mac address, stopping");
+            }
+            MacAddr::from_bytes(&mac_bytes)
+        };
 
-    let mut buffer = [0; 2048]; // Large enough for any network package
-    let nic = File::open("/dev/nic").unwrap();
-
-    let my_mac = {
-        let mac_bytes = fs::read("/dev/nic_mac").unwrap();
-        if mac_bytes.is_empty() {
-            panic!("No mac address, stopping");
+        Self {
+            nic: File::open("/dev/nic").unwrap(),
+            mac,
+            ip:Ipv4Addr([10, 0, 2, 15]) // Use fixed IP until DHCP is implemented
         }
-        MacAddr::from_bytes(&mac_bytes)
-    };
-    let my_ip = Ipv4Addr([10, 0, 2, 15]); // Use fixed IP until DHCP is implemented
+    }
 
-    loop {
-        let count = nic.read(&mut buffer).unwrap();
+    pub fn on_event(&mut self) {
+        let mut buffer = [0; 2048]; // Large enough for any network package
+        let count = self.nic.read(&mut buffer).unwrap();
         let event: ReceivedPacket = pinecone::from_bytes(&buffer[..count]).unwrap();
 
         let frame = ethernet::Frame::from_bytes(&event.packet);
@@ -46,29 +58,69 @@ fn main() -> ! {
             EtherType::ARP => {
                 // Reply to ARP packets
                 let arp_packet = arp::Packet::from_bytes(&frame.payload);
-                if arp_packet.is_request() && arp_packet.target_ip == my_ip {
+                if arp_packet.is_request() && arp_packet.target_ip == self.ip {
                     syscall::debug_print("ARP: Replying");
 
                     let reply = (ethernet::Frame {
                         header: ethernet::FrameHeader {
                             dst_mac: frame.header.src_mac,
-                            src_mac: my_mac,
+                            src_mac: self.mac,
                             ethertype: EtherType::ARP,
                         },
-                        payload: arp_packet.to_reply(my_mac, my_ip).to_bytes(),
+                        payload: arp_packet.to_reply(self.mac, self.ip).to_bytes(),
                     })
                     .to_bytes();
 
-                    nic.write_all(&pinecone::to_vec(&OutboundPacket { packet: reply }).unwrap())
+                    self.nic.write_all(&pinecone::to_vec(&OutboundPacket { packet: reply }).unwrap())
                         .unwrap();
                 }
             }
             EtherType::Ipv4 => {
                 let ip_packet = ipv4::Packet::from_bytes(&frame.payload);
                 syscall::debug_print(&format!("{:?}", ip_packet));
+
+                match ip_packet.header.protocol {
+                    IpProtocol::TCP => {
+                        let tcp_packet = tcp::Segment::from_bytes(&ip_packet.payload);
+                        syscall::debug_print(&format!("{:?}", tcp_packet));
+                    }
+                    _ => {}
+                }
+
                 panic!("IP!!!");
             }
             _ => {}
         }
+    }
+}
+
+#[no_mangle]
+fn main() -> ! {
+    syscall::debug_print("Network daemon starting");
+
+    let mut net_state = NetState::new();
+
+
+    let mut a_root = attachment::StaticBranch::new("/net").unwrap();
+    let mut a_udp = a_root.add_branch("udp").unwrap();
+    let mut a_tcp = a_root.add_branch("tcp").unwrap();
+
+
+    loop {
+        println!("--> select!");
+        select! {
+            ok net_state.nic.fd => net_state.on_event(),
+            ok a_root.inner.fd => a_root.process_one().unwrap(),
+            ok a_udp.fd => {
+                println!("--> udp");
+                let r = a_udp.next_request();
+                panic!("udp: {:?}", r);
+            },
+            ok a_tcp.fd => {
+                println!("--> tcp");
+                let r = a_tcp.next_request();
+                panic!("tcp: {:?}", r);
+            },
+        };
     }
 }

@@ -37,19 +37,20 @@ impl Request {
     }
 }
 
-/// Currently open and close are not supported, but I think
-/// at least close must be implemented at some point
+/// Currently open is not supported
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum FileOperation {
     /// Read n bytes
     Read(u64),
     /// Query if this file is ready for reading,
     /// and the wait condition otherwise.
-    ReadWaitingFor(u64),
+    ReadWaitingFor,
     /// Write bytes
     Write(Vec<u8>),
     /// Control request
     Control(u64),
+    /// Close the file
+    Close,
 }
 
 /// When manager process reads from or writes to an attachment,
@@ -62,12 +63,13 @@ pub struct Response {
     pub data: Vec<u8>,
 }
 
-/// How branches ("directories") return their contents.
-/// The process MUST NOT return any data if the later
-/// reads would block, but must block on the first read
-/// call until they are ready.
+/// How branches ("directories") return their contents to the kernel.
+/// The process MUST NOT return any data if the later reads would block,
+/// but must block on the first read call until they are ready.
+/// Note that this is not same as `ReadBranch` protocol,
+/// which is used to return folder contents to processes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ReadBranch {
+pub struct ReadAttachmentBranch {
     /// File descriptors here must be ones created
     /// by `fs_attach` system call.
     pub items: HashMap<String, FileDescriptor>,

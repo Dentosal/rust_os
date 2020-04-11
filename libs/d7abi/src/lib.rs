@@ -12,6 +12,7 @@
 #![feature(allocator_api)]
 #![feature(alloc_prelude)]
 
+#[macro_use]
 extern crate alloc;
 
 mod kernel_constants;

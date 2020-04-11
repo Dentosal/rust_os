@@ -15,12 +15,12 @@ panic = "abort"
 serde-big-array = "0.2.0"       # Big array support for serde
 
 [dependencies.serde]
-version = "1.0.102"
+version = "1.0"
 default-features = false
 features = ["alloc", "derive"]
 
 [dependencies.hashbrown]
-version = "0.6.3"
+version = "0.7"
 features = ["nightly", "inline-more", "serde"]
 
 [dependencies.num_enum]

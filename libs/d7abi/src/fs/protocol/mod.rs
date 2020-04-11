@@ -9,6 +9,7 @@ pub mod console;
 pub mod network;
 
 /// Branch ("directory") contents
+/// Note that this is not same as `ReadAttachmentBranch` protocol.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReadBranch {
     pub items: Vec<String>,

@@ -263,7 +263,7 @@ impl VirtioDevice {
 
     pub fn set_status(&mut self, status: DeviceStatus) {
         self.write_config::<u8>(CommonCfg::DeviceStatus, status.bits());
-        rprintln!("VirtIO: Device status: {:?}", status);
+        log::info!("Device status: {:?}", status);
     }
 
     pub fn reset(&mut self) {
@@ -287,7 +287,7 @@ impl VirtioDevice {
     pub fn set_features(&mut self, features: FeatureBits) -> bool {
         // Check global driver features
         if !features.is_enabled(FEATURE_RING_EVENT_IDX) || !features.is_enabled(FEATURE_VIRTIO_1) {
-            rprintln!("VirtIO: Device does not support VirtIO 1.0, disabled.");
+            log::warn!("Device does not support VirtIO 1.0, disabled.");
             return false;
         }
 
@@ -300,7 +300,7 @@ impl VirtioDevice {
         self.set_status(DeviceStatus::STATE_READY | DeviceStatus::FEATURES_OK);
 
         if !self.get_status().contains(DeviceStatus::FEATURES_OK) {
-            rprintln!("VirtIO feature negotiation failed.");
+            log::warn!("VirtIO feature negotiation failed.");
             return false;
         }
         true

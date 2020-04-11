@@ -33,8 +33,8 @@ pub(super) unsafe fn exception_df(stack_frame: &InterruptStackFrame, error_code:
     // error code is always zero
     panic_indicator!(0x4f664f64); // "df"
     rforce_unlock!();
-    rprintln!("Exception: Double Fault\n{:?}", *stack_frame);
-    rprintln!("exception stack frame at {:#p}", stack_frame);
+    log::error!("Exception: Double Fault\n{:?}", *stack_frame);
+    log::error!("exception stack frame at {:#p}", stack_frame);
     loop {}
 }
 
@@ -156,6 +156,8 @@ pub(super) unsafe fn exception_irq_free(interrupt: u8) {
     use super::FREE_IRQ_HOOK;
     let irq_hook = FREE_IRQ_HOOK.try_lock().unwrap();
     if let Some(f) = irq_hook.by_int(interrupt) {
+        rforce_unlock!();
+        log::trace!("Triggering free IRQ int={:02x}", interrupt);
         f();
     }
 
@@ -350,6 +352,7 @@ fn terminate(pid: ProcessId, result: process::ProcessResult) -> ! {
 
 fn idle() -> ! {
     use crate::memory::process_common_code::COMMON_ADDRESS_VIRT;
+    log::trace!("Setting processor to idle state");
 
     // Jump into the idle state
     unsafe {

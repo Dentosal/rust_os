@@ -221,7 +221,7 @@ impl PageMap {
         // Map the address
         p2[i2].set_addr(frame.start_address(), flags | Flags::HUGE_PAGE);
 
-        // rprintln!(
+        // log::trace!(
         //     "mapped {:?} to {:?} with {:?}",
         //     frame,
         //     page,
@@ -280,7 +280,7 @@ impl PageMap {
                     flags |= Flags::WRITABLE;
                 }
 
-                // rprintln!("{:#x} :+ {:#x} [{:?}]", start, size, flags);
+                // log::debug!("{:#x} :+ {:#x} [{:?}]", start, size, flags);
 
                 let start_frame = PhysFrame::containing_address(start);
                 let end_frame = PhysFrame::containing_address(start + (size - 1));

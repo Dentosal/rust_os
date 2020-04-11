@@ -101,7 +101,7 @@ impl BlockDevice for VirtioBlock {
         // Update device state
         self.device.set_status(virtio::DeviceStatus::STATE_READY);
 
-        rprintln!("VirtIO-blk: Device ready");
+        log::debug!("VirtIO-blk: Device ready");
 
         // Success
         true

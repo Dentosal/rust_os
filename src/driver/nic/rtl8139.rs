@@ -278,22 +278,22 @@ impl RTL8139 {
 
             let status = RxStatus::from_bits_truncate(status_bits);
 
-            rprintln!("RTL8139 receive status: {:?}", status);
+            log::debug!("receive status: {:?}", status);
 
             if !status.contains(RxStatus::OK) {
-                rprintln!("RTL8139 receive status not ok");
+                log::warn!("receive status not ok");
                 todo!("reset?");
                 return None;
             }
 
             if (length as usize) < PACKET_SIZE_MIN || (length as usize) >= PACKET_SIZE_MAX {
-                rprintln!("RTL8139 receive invalid packet length");
+                log::warn!("receive invalid packet length");
                 todo!("reset?");
                 return None;
             }
 
             if status.intersects(RxStatus::ALL_ERRORS) {
-                rprintln!("RTL8139 receive status error");
+                log::warn!("receive status error");
                 todo!("reset?");
                 return None;
             }
@@ -376,7 +376,7 @@ impl NIC for RTL8139 {
     }
 
     fn send(&mut self, packet: &[u8]) {
-        rprintln!("RTL8139: send [length={}]", packet.len());
+        log::debug!(" send [length={}]", packet.len());
 
         if packet.len() > PACKET_SIZE_MAX as usize {
             panic!("RTL8139: packet too large");
@@ -386,7 +386,7 @@ impl NIC for RTL8139 {
             .select_buffer()
             .expect("RTL8139: hardware send buffers are full");
 
-        rprintln!("RTL8139: Buffer {} selected", buffer_index);
+        log::debug!(" Buffer {} selected", buffer_index);
         let buffers = self.buffers.as_mut().unwrap();
         buffers.tx_next = (buffer_index + 1) % 4;
 
@@ -425,53 +425,53 @@ impl NIC for RTL8139 {
                 break;
             }
 
-            rprintln!("RTL8138 IRQ status={:?}", status);
+            log::info!("IRQ status={:?}", status);
 
             if status.contains(IntFlags::RXOK) {
-                rprintln!("RTL8138 rx ready");
+                log::info!("rx ready");
                 if let Some(packet) = self.receive() {
                     received_packets.push(packet);
                 }
             }
 
             if status.contains(IntFlags::RXERR) {
-                rprintln!("RTL8138 rx error");
+                log::warn!("rx error");
                 // TODO: reset
                 // self.reset();
                 todo!()
             }
 
             if status.contains(IntFlags::TXOK) {
-                rprintln!("RTL8138 tx complete");
+                log::info!("tx complete");
             }
 
             if status.contains(IntFlags::TXERR) {
-                rprintln!("RTL8138 tx error");
+                log::warn!("tx error");
                 // TODO: reset
                 // self.reset();
                 todo!()
             }
 
             if status.contains(IntFlags::RX_BUFFER_OVERFLOW) {
-                rprintln!("RTL8138 rx buffer overflow");
+                log::warn!("rx buffer overflow");
             }
 
             if status.contains(IntFlags::LINK_CHANGE) {
-                rprintln!("RTL8138 link status changed");
+                log::warn!("link status changed");
                 todo!("HANDLE THIS")
                 // self.link_up = (in8(REG_MSR) & MSR_LINKB) == 0;
             }
 
             if status.contains(IntFlags::RX_FIFO_OVERFLOW) {
-                rprintln!("RTL8138 rx fifo overflow");
+                log::info!("rx fifo overflow");
             }
 
             if status.contains(IntFlags::LENGTH_CHANGE) {
-                rprintln!("RTL8138 cable length change");
+                log::info!("cable length change");
             }
 
             if status.contains(IntFlags::SYSTEM_ERROR) {
-                rprintln!("RTL8138 system error");
+                log::warn!("system error");
                 // TODO: reset
                 // self.reset();
                 todo!()

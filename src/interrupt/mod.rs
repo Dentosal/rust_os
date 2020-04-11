@@ -118,7 +118,7 @@ pub fn init() {
         }
     }
 
-    rprintln!("Loading new IDT...");
+    log::debug!("Loading new IDT...");
 
     unsafe {
         lidt(&DescriptorTablePointer {
@@ -127,14 +127,14 @@ pub fn init() {
         });
     }
 
-    rprintln!("Enabled.");
+    log::debug!("Enabled.");
 }
 
 static GDT: Once<gdt::GdtBuilder> = Once::new();
 static TSS: Once<TaskStateSegment> = Once::new();
 
 pub fn init_after_memory() {
-    rprintln!("Swithcing to new GDT and TSS...");
+    log::debug!("Swithcing to new GDT and TSS...");
     // Initialize TSS
     let double_fault_stack = memory::configure(|mem_ctrl: &mut MemoryController| {
         mem_ctrl
@@ -215,21 +215,21 @@ pub static FREE_IRQ_HOOK: Mutex<FreeIRQs> = Mutex::new(FreeIRQs {
 });
 
 pub fn enable_external_interrupts() {
-    rprintln!("Enabling external interrupts");
+    log::info!("Enabling external interrupts");
 
     unsafe {
         asm!("sti" :::: "volatile", "intel");
     }
 
-    rprintln!("Done.");
+    log::info!("Done.");
 }
 
 pub fn disable_external_interrupts() {
-    rprintln!("Disabling external interrupts");
+    log::info!("Disabling external interrupts");
 
     unsafe {
         asm!("cli" :::: "volatile", "intel");
     }
 
-    rprintln!("Done.");
+    log::info!("Done.");
 }

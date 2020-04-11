@@ -88,7 +88,7 @@ impl Ne2000 {
         }
         self.select_register_page(0);
 
-        rprintln!("INIT COMPLETE");
+        log::info!("INIT COMPLETE");
     }
 
     pub unsafe fn select_register_page(&mut self, page: u8) {

@@ -15,6 +15,19 @@ use crate::memory::{self, MemoryController};
 use crate::multitasking::{process, Process, ProcessId, Scheduler, WaitFor, SCHEDULER};
 use crate::time::SYSCLOCK;
 
+/// Separate module to get distinct logging path
+#[allow(non_snake_case)]
+mod PROCESS_OUTPUT {
+    use d7abi::process::ProcessId;
+
+    pub fn print(pid: ProcessId, string: &str) {
+        log::debug!("[pid={:8}] {}", pid.as_u64(), string);
+        if crate::syslog::LEVEL_SCREEN < log::Level::Debug {
+            rprintln!("[pid={}] {}", pid.as_u64(), string);
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 #[must_use]
 pub enum SyscallResult {
@@ -81,6 +94,8 @@ fn syscall(
     let pid = process.id();
 
     if let Ok(sc) = SC::try_from(rsc.routine) {
+        log::trace!("[pid={:8}] {:?} ", pid, sc);
+
         match sc {
             SC::exit => SyscallResult::Terminate(process::ProcessResult::Completed(rsc.args.0)),
             SC::get_pid => SyscallResult::Continue(Ok(pid.as_u64())),
@@ -98,7 +113,9 @@ fn syscall(
                     }
                 };
                 let string = try_str!(slice);
-                rprintln!("[pid={}] {}", pid.as_u64(), string);
+
+                PROCESS_OUTPUT::print(pid, string);
+
                 unsafe { m.unmap_area(area) };
                 m.free_virtual_area(area);
                 SyscallResult::Continue(Ok(0))
@@ -242,6 +259,7 @@ fn syscall(
                     unsafe { m.process_slice_mut(process, fds_len * size, fds) }
                 {
                     let mut conditions = Vec::new();
+                    log::trace!("select {{");
                     for fd_bytes in fds_slice.chunks_exact(8) {
                         let fd = unsafe {
                             FileDescriptor::from_u64(u64::from_le_bytes(
@@ -250,12 +268,19 @@ fn syscall(
                         };
                         let fc = FileClientId::process(pid, fd);
                         let condition = fs.read_waiting_for(sched, fc)?;
+
+                        let node_id = fs.resolve_fc(fc).unwrap();
+                        let path = fs.node_id_to_path(node_id).unwrap();
+                        log::trace!("* {:?} ({:?}) cond = {:?}", fc, path, condition);
+
                         if condition == WaitFor::None {
                             unsafe { m.unmap_area(area) };
                             return SyscallResult::Continue(Ok(unsafe { fd.as_u64() }));
                         }
                         conditions.push(condition);
                     }
+                    log::trace!("}}");
+
                     unsafe { m.unmap_area(area) };
                     m.free_virtual_area(area);
 
@@ -353,6 +378,7 @@ pub fn handle_syscall(
             args: (reg_rdi, reg_rsi, reg_rdx, reg_rcx),
         };
         let res = syscall(mm, &mut sched, pid, rsc);
+        log::trace!("[pid={:8}] => {:?} ", pid, res);
 
         // Write result register values into the process stack
         if let SyscallResult::Continue(r) | SyscallResult::Switch(r, _) = res {

@@ -38,7 +38,7 @@ pub unsafe fn get_rsdp_and_parse() -> Result<u64, RSDPParseError> {
     let ebda_end = ebda_start + 0x10 * 0x64;
     for p in (ebda_start..ebda_end).step_by(0x10) {
         // Is this an ACPI structure (quick signature check)
-        rprintln!("F1");
+        log::trace!("F1");
         if &*(p as *const [u8; 8]) == RSDP_SIGNATURE {
             return parse_rsdp(p);
         }
@@ -48,7 +48,7 @@ pub unsafe fn get_rsdp_and_parse() -> Result<u64, RSDPParseError> {
     let area_start = 0xe0000;
     let area_end = 0xfffff;
     for p in (area_start..area_end).step_by(0x10) {
-        rprintln!("F2");
+        log::trace!("F2");
         // Is this an ACPI structure (quick signature check)
         if &*(p as *const [u8; 8]) == RSDP_SIGNATURE {
             return parse_rsdp(p);
@@ -67,8 +67,8 @@ unsafe fn parse_rsdp(p: usize) -> Result<u64, RSDPParseError> {
     let basic_rsdpd_bytes: [u8; 20] = *(p as *const _); // XXX: size_of is not const-expr, counted bytes by hand
 
     // Revision:  0 = "ACPI 1.0", 2 = "ACPI 2.0+" (http://wiki.osdev.org/RSDP#Detecting_ACPI_Version)
-    rprintln!("revision: {:}", basic_rsdpd.revision);
     if basic_rsdpd.revision != 2 {
+        log::error!("unsupported revision: {:}", basic_rsdpd.revision);
         return Err(RSDPParseError::UnsupportedVersion);
     }
     // Checksum

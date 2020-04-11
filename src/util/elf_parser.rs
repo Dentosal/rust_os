@@ -116,9 +116,6 @@ pub unsafe fn parse_elf(ptr: usize) -> Result<ELFData, ELFParsingError> {
                 + (elf_data.header.ph_table_entry_size as usize) * (index as usize);
             let ph: ELFProgramHeader = *(ph_ptr as *const _);
 
-            // rprintln!("> {:x}", ph_ptr-ptr);
-            // rprintln!("< {:x}", ph.header_type);
-
             match ph.header_type as usize {
                 1 => {
                     // load, (needed)

@@ -96,7 +96,7 @@ impl SystemClock {
 pub static SYSCLOCK: SystemClock = unsafe { SystemClock::new() };
 
 pub fn init() {
-    rprintln!("SYSCLOCK: enabled");
+    log::info!("SYSCLOCK: enabled");
 }
 
 pub fn busy_sleep_until(until: Instant) {

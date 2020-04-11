@@ -36,7 +36,7 @@ pub unsafe fn set_active_table(p4_addr: PhysAddr) {
 /// Remap kernel and other necessary memory areas
 #[must_use]
 pub unsafe fn init(elf_metadata: ELFData) -> PageMap {
-    rprintln!("Remapping kernel...");
+    log::debug!("Remapping kernel...");
 
     // Create new page table
     let mut new_table = unsafe { PageMap::init(PT_VADDR, PT_PADDR, PT_VADDR) };
@@ -61,10 +61,10 @@ pub unsafe fn init(elf_metadata: ELFData) -> PageMap {
             .ignore();
     }
 
-    rprintln!("Switching to new table...");
+    log::debug!("Switching to new table...");
     unsafe {
         new_table.activate();
     }
-    rprintln!("Remapping done.");
+    log::debug!("Remapping done.");
     new_table
 }

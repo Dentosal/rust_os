@@ -35,14 +35,14 @@ pub struct AtaPio {
 }
 impl AtaPio {
     pub fn try_new() -> Option<Box<dyn BlockDevice>> {
-        rprintln!("DiskIO: Checking for ATA PIO");
+        log::debug!("DiskIO: Checking for ATA PIO");
         unsafe {
             Self::check_floating_bus();
             Self::reset_drives();
         }
         let properties = unsafe { Self::identify() };
-        rprintln!("DiskIO: ATA PIO found");
-        rprintln!(
+        log::debug!("DiskIO: ATA PIO found");
+        log::debug!(
             "DiskIO: ATA PIO LBA48 support: {}",
             properties.clone().supports_lba48()
         );
@@ -248,7 +248,7 @@ impl AtaPio {
 
 impl BlockDevice for AtaPio {
     fn init(&mut self) -> bool {
-        rprintln!("DiskIO: ATA PIO initialized");
+        log::info!("DiskIO: ATA PIO initialized");
         true
     }
 

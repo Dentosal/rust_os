@@ -42,7 +42,7 @@ macro_rules! raw_ptr {
 }
 
 macro_rules! dump_memory_at {
-    ($ptr:expr) => (rprintln!("{:x} {:x} {:x} {:x}", raw_ptr!(u16 $ptr; 0), raw_ptr!(u16 $ptr; 2), raw_ptr!(u16 $ptr; 4), raw_ptr!(u16 $ptr; 6)));
+    ($ptr:expr) => (log::trace!("{:x} {:x} {:x} {:x}", raw_ptr!(u16 $ptr; 0), raw_ptr!(u16 $ptr; 2), raw_ptr!(u16 $ptr; 4), raw_ptr!(u16 $ptr; 6)));
 }
 
 macro_rules! int {

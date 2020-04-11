@@ -96,7 +96,7 @@ impl NIC for VirtioNet {
         self.device
             .write::<u8>(0x12, virtio::DeviceStatus::STATE_READY.bits());
 
-        rprintln!("VirtIO-net: Device ready");
+        log::debug!("VirtIO-net: Device ready");
 
         // Success
         true
@@ -133,7 +133,7 @@ impl NIC for VirtioNet {
             for i in 0..(mem::size_of::<NetHeader>()) {
                 rprint!("{:02x} ", ptr::read_volatile(buffer.add(i)));
             }
-            rprintln!("\nHeader over");
+            log::debug!("\nHeader over");
             for i in 0..packet.len() {
                 rprint!(
                     "{:02x} ",
@@ -141,7 +141,7 @@ impl NIC for VirtioNet {
                 );
             }
         }
-        rprintln!("\nPacket over");
+        log::debug!("\nPacket over");
 
         unsafe {
             assert!(ptr::read_volatile(buffer) == 0);
@@ -170,7 +170,7 @@ impl NIC for VirtioNet {
 
         // Notify the device about the change
         self.device.queue_notify(QUEUE_TX);
-        rprintln!("VirtIO-net: TX Queue notify");
+        log::debug!("VirtIO-net: TX Queue notify");
 
         unsafe { HEAP_ALLOCATOR.dealloc(buffer as *mut u8, layout) };
     }

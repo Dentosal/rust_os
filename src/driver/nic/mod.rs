@@ -54,18 +54,18 @@ impl NetworkController {
     pub fn new() -> NetworkController {
         NetworkController {
             driver: None,
-            received_queue: EventQueue::new(EVENT_BUFFER_LIMIT),
+            received_queue: EventQueue::new("NIC", EVENT_BUFFER_LIMIT),
         }
     }
 
     pub unsafe fn init(&mut self) {
-        rprintln!("Selecting NIC driver...");
+        log::debug!("Selecting NIC driver...");
 
         self.driver = rtl8139::RTL8139::try_new();
         if self.driver.is_some() {
-            rprintln!("Using RTL8139 Networking");
+            log::info!("Using RTL8139 Networking");
         } else {
-            rprintln!("Not suitable NIC driver found");
+            log::warn!("Not suitable NIC driver found");
         }
 
         // self.driver = virtio::VirtioNet::try_new();
@@ -128,40 +128,7 @@ pub fn init() {
         let mut nw = NETWORK.lock();
         nw.init();
         nw.map(&mut |drv| {
-            rprintln!("MAC ADDR: {}", drv.mac_addr_string());
-
-            let mac_addr = drv.mac_addr();
-
-            // drv.send(vec![
-            //     // Hand crafted ARP Broadcast packet
-            //     // Remember: network byte order
-
-            //     // Ethernet header
-
-            //     // ARP header
-            //     // https://en.wikipedia.org/wiki/Address_Resolution_Protocol#Packet_structure
-            //     (1u16).to_be(),     // Hardware type: Ethernet
-            //     (0x800u16).to_be(), // Protocol type: IPv4
-            //     6,                  // Hardware address length: 6 for ethernet address
-            //     4,                  // Protocol address length: 4 for IPv4
-            //     (1u16).to_be(),     // Operation: request
-            //     // Sender MAC address
-            //     mac_addr[0],
-            //     mac_addr[1],
-            //     mac_addr[2],
-            //     mac_addr[3],
-            //     mac_addr[4],
-            //     mac_addr[5],
-            //     // Target MAC address (zero for request)
-            //     0,
-            //     0,
-            //     0,
-            //     0,
-            //     0,
-            //     0,
-            // ]);
-
-            rprintln!("SENT PACKET");
+            log::info!("MacAddr: {}", drv.mac_addr_string());
         });
     }
 }

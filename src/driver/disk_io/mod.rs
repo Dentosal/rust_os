@@ -34,19 +34,19 @@ impl DiskController {
     }
 
     pub unsafe fn init(&mut self) {
-        rprintln!("DiskIO: Selecting driver...");
+        log::debug!("DiskIO: Selecting driver...");
 
         // Initialize VirtIO controller if available
         self.driver = virtio::VirtioBlock::try_new();
         if self.driver.is_some() {
-            rprintln!("DiskIO: VirtIO-blk selected");
+            log::info!("DiskIO: VirtIO-blk selected");
         } else {
             // Initialize ATA PIO controller if available
             self.driver = ata_pio::AtaPio::try_new();
             if self.driver.is_some() {
-                rprintln!("DiskIO: ATA PIO selected");
+                log::info!("DiskIO: ATA PIO selected");
             } else {
-                rprintln!("DiskIO: No supported devices found");
+                log::warn!("DiskIO: No supported devices found");
             }
         }
 
@@ -58,13 +58,13 @@ impl DiskController {
             };
 
             if !ok {
-                rprintln!("DiskIO: Driver initialization failed");
+                log::warn!("DiskIO: Driver initialization failed");
                 self.driver = None;
             }
         }
 
         if let Some(ref mut driver) = self.driver {
-            rprintln!("DiskIO: Device capacity: {} bytes", driver.capacity_bytes());
+            log::info!("DiskIO: Device capacity: {} bytes", driver.capacity_bytes());
         }
     }
 
@@ -80,7 +80,7 @@ impl DiskController {
 
     pub fn read(&mut self, sector: u64, count: u64) -> Vec<Vec<u8>> {
         if let Some(ref mut driver) = self.driver {
-            rprintln!("DiskIO: Read sectors {}..{}", sector, sector + count);
+            log::info!("DiskIO: Read sectors {}..{}", sector, sector + count);
             (0..count)
                 .map(|offset| driver.read(sector + offset))
                 .collect()

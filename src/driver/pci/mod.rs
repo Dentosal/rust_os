@@ -120,8 +120,8 @@ impl PCIController {
     fn print(&self) {
         assert!(self.devices.is_some(), "PCI is not initialized");
         for dev in self.devices.clone().unwrap() {
-            rprintln!("/ {:x}:{:x}", dev.vendor, dev.id);
-            rprintln!("\\ {:x} {:x} {:x}", dev.class.0, dev.class.1, dev.class.2);
+            log::debug!("/ {:x}:{:x}", dev.vendor, dev.id);
+            log::debug!("\\ {:x} {:x} {:x}", dev.class.0, dev.class.1, dev.class.2);
         }
     }
 
@@ -140,6 +140,6 @@ pub static PCI: Mutex<PCIController> = Mutex::new(PCIController::new());
 
 pub fn init() {
     PCI.lock().init();
-    // PCI.lock().print();
-    rprintln!("PCI: enabled");
+    PCI.lock().print();
+    log::info!("PCI: enabled");
 }

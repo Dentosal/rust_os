@@ -6,13 +6,16 @@ use crate::multitasking::{ExplicitEventId, WaitFor, SCHEDULER};
 /// Queue with wakeup event blocking with max size
 /// Silently drops events after maxsize has been reached
 pub struct EventQueue<T> {
+    // Name used to identify the queue in logs
+    name: &'static str,
     queue: VecDeque<T>,
     event: Option<ExplicitEventId>,
     limit: usize,
 }
 impl<T> EventQueue<T> {
-    pub fn new(limit: usize) -> Self {
+    pub fn new(name: &'static str, limit: usize) -> Self {
         Self {
+            name,
             queue: VecDeque::new(),
             event: None,
             limit,
@@ -29,7 +32,7 @@ impl<T> EventQueue<T> {
 
         if self.queue.len() > self.limit {
             self.queue.remove(0);
-            // TODO: log full buffer
+            log::warn!("{}: Buffer full, discarding event", self.name);
         }
     }
 
@@ -38,7 +41,7 @@ impl<T> EventQueue<T> {
         self.queue.pop_front()
     }
 
-    /// Nonblocking, to be used in IO contexts
+    /// Soft blocking, to be used in IO contexts
     pub fn io_pop_event(&mut self) -> IoResult<T> {
         if let Some(event) = self.pop_event() {
             IoResult::Success(event)
@@ -48,6 +51,15 @@ impl<T> EventQueue<T> {
     }
 
     pub fn get_event(&mut self) -> ExplicitEventId {
+        let name = self.name.clone();
         *self.event.get_or_insert_with(WaitFor::new_event_id)
+    }
+
+    pub fn wait_for(&mut self) -> WaitFor {
+        if self.queue.is_empty() {
+            WaitFor::Event(self.get_event())
+        } else {
+            WaitFor::None
+        }
     }
 }

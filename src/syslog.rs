@@ -31,8 +31,8 @@ macro_rules! e9_print {
 
 struct SystemLogger;
 
-const LEVEL_SCREEN: log::Level = log::Level::Info;
-const LEVEL_PORTE9: log::Level = log::Level::Trace;
+pub const LEVEL_SCREEN: log::Level = log::Level::Info;
+pub const LEVEL_PORTE9: log::Level = log::Level::Trace;
 
 impl log::Log for SystemLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
@@ -43,13 +43,16 @@ impl log::Log for SystemLogger {
         let level = record.metadata().level();
         if level <= LEVEL_PORTE9 {
             e9_print!(
-                "{:5} {} - {}",
-                record.level(),
+                "{:40} {:5}  {}",
                 record.target(),
+                record.level(),
                 record.args()
             );
         }
         if level <= LEVEL_SCREEN {
+            unsafe {
+                rforce_unlock!();
+            }
             rprintln!(
                 "{:5} {} - {}",
                 record.level(),

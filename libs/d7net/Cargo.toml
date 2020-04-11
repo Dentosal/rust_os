@@ -4,5 +4,8 @@ version = "0.1.0"
 authors = ["Hannes Karppila <hannes.karppila@gmail.com>"]
 edition = "2018"
 
+[dependencies]
+bitflags = "1.2"
+
 [dependencies.num_enum]
 git = "https://github.com/Dentosal/num_enum_simplified"

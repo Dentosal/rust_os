@@ -1,7 +1,7 @@
 # `d7net` - Network stack data formats
 
-Supported protocols: Ethernet, ARP, IPv4
-Coming soon: UDP, TCP, IPv6, DHCP, DNS
+Supported protocols: Ethernet, ARP, IPv4, TCP
+Coming soon: UDP, IPv6, DHCP, DNS
 
 
 ## Current limitations
@@ -10,4 +10,6 @@ Coming soon: UDP, TCP, IPv6, DHCP, DNS
 
 ## Unsupported by design
 
-* IPv4 Options field is not supported
+* IPv4 Options fields are not supported
+* Only the most commonly used TCP Options fields are supported
+* TCP Urgency fields are not supported

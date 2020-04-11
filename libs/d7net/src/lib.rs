@@ -18,7 +18,9 @@ mod mac;
 pub mod arp;
 pub mod ethernet;
 pub mod ipv4;
+pub mod tcp;
 
+pub use self::ip_protocol::IpProtocol;
 pub use self::ethertype::EtherType;
 pub use self::ip_addr::*;
 pub use self::mac::MacAddr;

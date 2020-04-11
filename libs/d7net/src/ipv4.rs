@@ -49,6 +49,8 @@ impl Header {
         let total_len = u16::from_be_bytes([input[2], input[3]]);
         assert!(total_len >= 20, "Packet total_length too small");
 
+        // TODO: verify header checksum
+
         Self {
             dscp_and_ecn: input[1],
             payload_len: total_len - 20,
@@ -61,7 +63,6 @@ impl Header {
         }
     }
 
-    /// https://en.wikipedia.org/wiki/Address_Resolution_Protocol#Packet_structure
     pub fn to_bytes(self) -> Vec<u8> {
         let mut result = Vec::new();
         todo!();

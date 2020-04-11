@@ -16,7 +16,7 @@ version = "0.7"
 features = ["nightly", "inline-more", "serde"]
 
 [dependencies.serde]            # Serde
-version = "1.0.106"
+version = "1.0"
 default-features = false
 features = ["alloc", "derive"]
 

@@ -110,16 +110,14 @@ impl Console {
                 line: result.clone(),
                 newline: false,
             }).unwrap();
-            let x = self.file.write(&msg)?;
-            assert!(x == msg.len()); // TODO: write_all
+            self.file.write_all(&msg)?;
         }
 
         let msg: Vec<_> = pinecone::to_vec(&TextUpdate {
             line: result.clone(),
             newline: true,
         }).unwrap();
-        let x = self.file.write(&msg)?;
-        assert!(x == msg.len()); // TODO: write_all
+        self.file.write_all(&msg)?;
 
         Ok(result)
     }

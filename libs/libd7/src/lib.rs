@@ -17,6 +17,7 @@
 #![feature(panic_info_message)]
 
 mod allocator;
+mod select;
 
 pub mod attachment;
 pub mod console;
@@ -79,3 +80,26 @@ fn out_of_memory(_: Layout) -> ! {
     }
     loop {}
 }
+
+// Output macros
+// TODO: print to stdout and not debug_print
+
+#[macro_export]
+macro_rules! println {
+    ($($arg:tt)*) => ({
+        $crate::syscall::debug_print(&format!("{}", &format_args!($($arg)*)));
+    });
+}
+
+// #[macro_export]
+// macro_rules! print {
+//     ($($arg:tt)*) => ({
+//         $crate::syscall::debug_print(&format!("{}", &format_args!($($arg)*)));
+//     });
+// }
+
+// #[macro_export]
+// macro_rules! println {
+//     ($fmt:expr) => ($crate::print!(concat!($fmt, "\n")));
+//     ($fmt:expr, $($arg:tt)*) => ($crate::print!(concat!($fmt, "\n"), $($arg)*));
+// }

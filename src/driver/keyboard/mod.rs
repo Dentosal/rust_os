@@ -45,22 +45,19 @@ impl Keyboard {
             status_port: UnsafePort::new(PS2_STATUS),
             command_port: UnsafePort::new(PS2_COMMAND),
             state: KeyboardState::new(),
-            event_queue: EventQueue::new(EVENT_BUFFER_LIMIT),
+            event_queue: EventQueue::new("keyboard", EVENT_BUFFER_LIMIT),
         }
     }
 
     unsafe fn init(&mut self) {
         if self.self_test() {
-            rprintln!("Keyboard: self test: ok");
+            log::info!("self test: ok");
         } else {
-            rprintln!("Keyboard: self test: failed");
-            panic!("Keyboard: self test: failed");
+            log::info!("self test: failed");
+            panic!("self test: failed");
         }
 
-        rprintln!(
-            "Keyboard: echo: {}",
-            if self.test_echo() { "ok" } else { "failed" }
-        );
+        log::info!("echo: {}", if self.test_echo() { "ok" } else { "failed" });
 
         self.disable_scanning();
         self.verify_keyboard();
@@ -196,6 +193,24 @@ impl Keyboard {
         let timestamp = SYSCLOCK.now();
 
         if let Some(event) = self.state.apply(byte, timestamp) {
+            log::trace!("{:?}", event);
+
+            // Kernel debugging F-keys
+            // TODO: Remove these or at least move them behind a key combination
+            if !event.release {
+                match event.keycode {
+                    5 => {
+                        // F1: Panic immediately
+                        panic!("F1 pressed");
+                    },
+                    6 => {
+                        // F2: Display process queues
+                        rprintln!("{}", SCHEDULER.try_lock().unwrap().debug_view_string())
+                    },
+                    _ => {},
+                }
+            }
+
             self.event_queue.push(event);
         }
     }

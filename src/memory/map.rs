@@ -61,7 +61,7 @@ pub(crate) fn load_memory_map() -> [Option<PhysMemoryRange>; MAX_OK_ENTRIES] {
             unsafe { ptr::read_volatile(BOOT_TMP_MMAP_BUFFER.as_u64() as *mut u8) };
         for index in 0..(entry_count as usize) {
             let (e_start, e_size, e_type, e_acpi_data) = read_item(index);
-            rprintln!(
+            log::trace!(
                 "Section {:>3}: {:>16x}-{:>16x}: type: {:#x}, acpi: {:#x}",
                 index,
                 e_start,
@@ -96,16 +96,16 @@ pub(crate) fn load_memory_map() -> [Option<PhysMemoryRange>; MAX_OK_ENTRIES] {
     for entry in ok_entries.iter() {
         if let Some(area) = entry {
             memory_counter_bytes += area.size_bytes() as u64;
-            rprintln!("Area       : {:>16x}-{:>16x}", area.start(), area.end());
+            log::debug!("Area       : {:>16x}-{:>16x}", area.start(), area.end());
         }
     }
 
     if memory_counter_bytes < 1024 * 1024 * 1024 {
-        rprintln!("Memory size {} MiB", memory_counter_bytes / (1024 * 1024));
+        log::info!("Memory size {} MiB", memory_counter_bytes / (1024 * 1024));
     } else {
         let full_gibs = memory_counter_bytes / (1024 * 1024 * 1024);
         let cent_gibs = (memory_counter_bytes % (1024 * 1024 * 1024)) / 1024_00_000;
-        rprintln!("Memory size {}.{:02} GiB", full_gibs, cent_gibs);
+        log::info!("Memory size {}.{:02} GiB", full_gibs, cent_gibs);
     }
 
     // Result

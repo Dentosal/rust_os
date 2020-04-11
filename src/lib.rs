@@ -130,7 +130,7 @@ pub extern "C" fn rust_main() -> ! {
     driver::nic::init();
 
     rreset!();
-    rprintln!("Kernel initialized.\n");
+    log::info!("Kernel initialized.\n");
 
     {
         use crate::filesystem::FILESYSTEM;

@@ -50,7 +50,7 @@ pub fn init() {
             : "intel", "volatile"
         );
     }
-    rprintln!("CPU: {}", cpu_brand());
-    rprintln!("CPU: FEATURE BITS: {:b} {:b}", ecx, edx);
+    log::debug!("CPU: {}", cpu_brand());
+    log::debug!("CPU: FEATURE BITS: {:b} {:b}", ecx, edx);
     run_feature_checks(ecx, edx);
 }

@@ -68,6 +68,9 @@ fn main() -> u64 {
         syscall::debug_print(&format!("Line {:?}", line));
         if line == "exit" {
             break;
+        } else {
+            let dirlist = list_dir("/net").unwrap();
+            syscall::debug_print(&format!("/net: {:?}", dirlist));
         }
     }
 

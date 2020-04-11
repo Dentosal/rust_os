@@ -33,7 +33,7 @@ impl Console {
                     self.pressed_modifiers.insert(keysym.clone());
                 }
                 EventAction::Ignore
-            } else if event.release {
+            } else if !event.release {
                 let result = self.process_keysym_press(&keysym);
                 if let Some(action) = result {
                     EventAction::KeyAction(action)

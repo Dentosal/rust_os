@@ -73,6 +73,7 @@ mod interrupt;
 mod memory;
 mod multitasking;
 mod syscall;
+mod syslog;
 mod time;
 
 /// The kernel main function
@@ -80,7 +81,9 @@ mod time;
 #[no_mangle]
 pub extern "C" fn rust_main() -> ! {
     rreset!();
-    rprintln!("Loading the system...\n");
+    rprintln!("Initializing the system...\n");
+
+    syslog::enable();
 
     // Finish system setup
 
@@ -203,18 +206,18 @@ extern "C" fn panic(info: &PanicInfo) -> ! {
         rforce_unlock!();
 
         if let Some(location) = info.location() {
-            rprintln!(
+            log::error!(
                 "\nKernel Panic: file: '{}', line: {}",
                 location.file(),
                 location.line()
             );
         } else {
-            rprintln!("\nKernel Panic: Location unavailable");
+            log::error!("\nKernel Panic: Location unavailable");
         }
         if let Some(msg) = info.message() {
-            rprintln!("  {:?}", msg);
+            log::error!("  {:?}", msg);
         } else {
-            rprintln!("  Info unavailable");
+            log::error!("  Info unavailable");
         }
         asm!("jmp panic"::::"intel","volatile");
     }

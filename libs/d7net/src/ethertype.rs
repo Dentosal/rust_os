@@ -1,8 +1,21 @@
 use core::convert::TryFrom;
 use num_enum::TryFromPrimitive;
+use serde::{Deserialize, Serialize};
 
 /// https://en.wikipedia.org/wiki/EtherType#Examples
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, TryFromPrimitive)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    TryFromPrimitive,
+    Deserialize,
+    Serialize,
+)]
 #[repr(u16)]
 pub enum EtherType {
     Ipv4 = 0x0800,

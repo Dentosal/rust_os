@@ -1,12 +1,13 @@
 //! https://en.wikipedia.org/wiki/Address_Resolution_Protocol
 
 use alloc::prelude::v1::*;
+use serde::{Deserialize, Serialize};
 
 use crate::{EtherType, Ipv4Addr, MacAddr};
 
 /// Only supports Ethernet with MAC addresses and IPv4
 /// https://en.wikipedia.org/wiki/Address_Resolution_Protocol#Packet_structure
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Packet {
     pub ptype: EtherType,
     pub operation: Operation,
@@ -83,7 +84,7 @@ impl Packet {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
 pub enum Operation {
     Request,
     Reply,

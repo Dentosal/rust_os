@@ -1,7 +1,8 @@
 use alloc::prelude::v1::*;
 use core::fmt;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
 pub struct MacAddr(pub [u8; 6]);
 
 impl MacAddr {

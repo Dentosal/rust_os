@@ -2,12 +2,13 @@
 
 use alloc::prelude::v1::*;
 use core::convert::TryFrom;
+use serde::{Deserialize, Serialize};
 
 use crate::Ipv4Addr;
 
 pub use crate::ip_protocol::IpProtocol;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Packet {
     pub header: Header,
     pub payload: Vec<u8>,
@@ -30,7 +31,7 @@ impl Packet {
 }
 
 /// Does not support Options field
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Header {
     pub dscp_and_ecn: u8,
     pub payload_len: u16,

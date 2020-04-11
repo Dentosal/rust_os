@@ -1,8 +1,9 @@
 use alloc::prelude::v1::*;
+use serde::{Deserialize, Serialize};
 
 use crate::{EtherType, MacAddr};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Frame {
     pub header: FrameHeader,
     pub payload: Vec<u8>,
@@ -25,7 +26,7 @@ impl Frame {
 }
 
 /// https://en.wikipedia.org/wiki/Ethernet_frame#Frame_%E2%80%93_data_link_layer
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 pub struct FrameHeader {
     pub dst_mac: MacAddr,
     pub src_mac: MacAddr,

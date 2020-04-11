@@ -7,5 +7,15 @@ edition = "2018"
 [dependencies]
 bitflags = "1.2"
 
+[dependencies.hashbrown]        # HashMap for no_std contexts
+version = "0.7"
+features = ["nightly", "inline-more", "serde"]
+
+[dependencies.serde]            # Serde
+version = "1.0"
+default-features = false
+features = ["alloc", "derive"]
+
 [dependencies.num_enum]
 git = "https://github.com/Dentosal/num_enum_simplified"
+

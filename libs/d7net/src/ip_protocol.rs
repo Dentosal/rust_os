@@ -1,7 +1,20 @@
 use num_enum::TryFromPrimitive;
+use serde::{Deserialize, Serialize};
 
 #[allow(non_camel_case_types)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, TryFromPrimitive)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    TryFromPrimitive,
+    Deserialize,
+    Serialize,
+)]
 #[repr(u8)]
 pub enum IpProtocol {
     HOPOPT = 0,

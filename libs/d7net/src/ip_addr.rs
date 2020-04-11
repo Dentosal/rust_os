@@ -1,10 +1,11 @@
 use alloc::prelude::v1::*;
 use core::fmt;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
 pub struct Ipv4Addr(pub [u8; 4]);
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
 pub struct Ipv6Addr(pub [u8; 16]);
 
 impl Ipv4Addr {
@@ -42,8 +43,7 @@ impl fmt::Debug for Ipv6Addr {
     }
 }
 
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
 pub enum IpAddr {
     V4(Ipv4Addr),
     V6(Ipv6Addr),

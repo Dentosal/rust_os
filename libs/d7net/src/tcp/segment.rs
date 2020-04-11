@@ -1,10 +1,9 @@
 use alloc::prelude::v1::*;
-
-use super::HandshakeStep;
+use serde::{Deserialize, Serialize};
 
 const INITIAL_WINDOW_SIZE: u16 = 8760;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Segment {
     header: SegmentHeader,
     payload: Vec<u8>,
@@ -26,7 +25,7 @@ impl Segment {
 }
 
 /// https://en.wikipedia.org/wiki/Transmission_Control_Protocol#TCP_segment_structure
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct SegmentHeader {
     src_port: u16,
     dst_port: u16,
@@ -103,7 +102,7 @@ impl SegmentHeader {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
 pub struct SegmentOptions {
     /// SYN-only option
     segemnt_max_size: Option<u16>,
@@ -125,17 +124,17 @@ impl SegmentOptions {
                 1 => {
                     // NOP padding
                     input = &input[1..];
-                }
+                },
                 2 => {
                     // Maximum segment size
                     assert_eq!(input[1], 4);
                     result.segemnt_max_size = Some(u16::from_be_bytes([input[2], input[3]]));
                     input = &input[4..];
-                }
+                },
                 other => {
                     // Unsupported TCP option
                     panic!("Unsupported TCP option {:?}", input)
-                }
+                },
             }
         }
         result
@@ -143,6 +142,7 @@ impl SegmentOptions {
 }
 
 bitflags::bitflags! {
+    #[derive(Deserialize, Serialize)]
     pub struct SegmentFlags: u16 {
         const FIN     = 1 << 0;
         const SYN     = 1 << 1;

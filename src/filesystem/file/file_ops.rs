@@ -50,11 +50,11 @@ pub trait FileOps: Send {
     }
 
     /// Allows releasing resources when a fc is closed.
-    /// This function must not fail.
+    /// This function must not fail, but may trigger events.
     ///
     /// If not implemented, does nothing.
-    fn close(&mut self, fc: FileClientId) -> CloseAction {
-        CloseAction::Normal
+    fn close(&mut self, fc: FileClientId) -> IoResult<CloseAction> {
+        IoResult::Success(CloseAction::Normal)
     }
 
     /// Allows releasing resource when an instance is destroyed,

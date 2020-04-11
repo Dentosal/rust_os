@@ -67,9 +67,9 @@ impl FileOps for TestDevice {
         use crate::time::SYSCLOCK;
         use core::time::Duration;
 
-        rprintln!("/dev/test: READ");
+        log::info!("/dev/test: READ");
         if self.rounds == 0 {
-            rprintln!("/dev/test: DONE!");
+            log::info!("/dev/test: DONE!");
             return IoResult::Code(ErrorCode::fs_unknown_control_function);
         }
 

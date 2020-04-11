@@ -118,9 +118,9 @@ impl FileOps for InternalBranch {
     }
 
     /// Remove buffers when closing
-    fn close(&mut self, fd: FileClientId) -> CloseAction {
+    fn close(&mut self, fd: FileClientId) -> IoResult<CloseAction> {
         self.readers.remove(&fd);
-        CloseAction::Normal
+        IoResult::Success(CloseAction::Normal)
     }
 }
 

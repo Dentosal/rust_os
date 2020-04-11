@@ -29,7 +29,7 @@ impl FileOps for NetworkDevice {
 
     fn read_waiting_for(&mut self, _fc: FileClientId) -> WaitFor {
         let mut nw = NETWORK.try_lock().unwrap();
-        WaitFor::Event(nw.received_queue.get_event())
+        nw.received_queue.wait_for()
     }
 
     /// Whole packet must be written in one operation

@@ -4,7 +4,7 @@ use core::fmt;
 
 pub use d7abi::SyscallErrorCode as ErrorCode;
 
-use crate::multitasking::{ExplicitEventId, WaitFor};
+use crate::multitasking::{ExplicitEventId, Scheduler, WaitFor};
 
 use super::FileClientId;
 
@@ -43,6 +43,41 @@ impl<T: fmt::Debug> IoResult<T> {
             error => panic!("{}: {:?}", msg, error),
         }
     }
+
+    /// Splits to the result itself and an optional event
+    #[must_use]
+    pub fn decompose_event(self) -> (Self, Option<ExplicitEventId>) {
+        if let Self::TriggerEvent(event, t) = self {
+            (*t, Some(event))
+        } else {
+            (self, None)
+        }
+    }
+
+    /// Removes all events
+    #[must_use]
+    pub fn separate_events(self) -> (Self, Vec<ExplicitEventId>) {
+        let mut v = self;
+        let mut result = Vec::new();
+        loop {
+            let (new_v, event) = v.decompose_event();
+            if let Some(event) = event {
+                result.push(event);
+            } else {
+                return (new_v, result);
+            }
+            v = new_v;
+        }
+    }
+
+    /// Processes and removes all evennts
+    pub fn consume_events(self, sched: &mut Scheduler) -> Self {
+        let (result, events) = self.separate_events();
+        for event_id in events {
+            sched.on_explicit_event(event_id);
+        }
+        result
+    }
 }
 
 impl<T> IoResult<T> {
@@ -54,6 +89,14 @@ impl<T> IoResult<T> {
             Self::TriggerEvent(eeid, inner) => {
                 IoResult::TriggerEvent(eeid, unimplemented!("Event trigger not handled"))
             },
+        }
+    }
+
+    pub fn add_opt_event(self, event: Option<ExplicitEventId>) -> Self {
+        if let Some(event) = event {
+            Self::TriggerEvent(event, Box::new(self))
+        } else {
+            self
         }
     }
 }

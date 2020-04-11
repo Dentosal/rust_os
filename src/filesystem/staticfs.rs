@@ -68,9 +68,9 @@ impl FileOps for StaticFSLeaf {
     }
 
     /// Remove reader when closing
-    fn close(&mut self, fc: FileClientId) -> CloseAction {
+    fn close(&mut self, fc: FileClientId) -> IoResult<CloseAction> {
         self.readers.remove(&fc);
-        CloseAction::Normal
+        IoResult::Success(CloseAction::Normal)
     }
 }
 

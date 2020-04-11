@@ -30,7 +30,7 @@ impl NodeId {
 /// Somewhat analogous to Unix inode.
 #[derive(Debug)]
 pub struct Node {
-    /// Parent node id, None for root
+    /// Parent node id, None for root and anonymous nodes
     pub(super) parent: Option<NodeId>,
     /// Contents
     pub(super) data: NodeData,
@@ -63,19 +63,19 @@ impl Node {
         IoResult::Success(())
     }
 
-    /// Calls handler that always always succeeds, amd then
-    /// decreases reference count.
-    /// If refcout hits zero or the node request self-destruction,
+    /// Calls handler that always always succeeds (can still trigger events),
+    /// amd then decreases reference count.
+    /// If refcout hits zero or the node requests self-destruction,
     /// then returns `CloseAction::Destroy` to singal that.
     #[must_use]
-    pub fn close(&mut self, fd: FileClientId) -> CloseAction {
+    pub fn close(&mut self, fd: FileClientId) -> IoResult<CloseAction> {
         assert_ne!(self.fd_refcount, 0, "close: fd refcount zero");
         let default_action = self.data.close(fd);
         let refcount_positive = self.dec_ref();
         if refcount_positive {
             default_action
         } else {
-            CloseAction::Destroy
+            IoResult::Success(CloseAction::Destroy)
         }
     }
 

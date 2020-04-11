@@ -536,7 +536,7 @@ def step_create_filesystem(root_dir) -> Step:
 
 def step_all(root_dir) -> Step:
     return Step(
-        requires={step_create_filesystem, step_produce_dumps},
+        requires={step_create_filesystem}, #, step_produce_dumps
         cmd=Cmd(cmd=["echo", "done"]),
     )
 

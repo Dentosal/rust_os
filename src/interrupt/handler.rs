@@ -281,7 +281,10 @@ unsafe extern "C" fn process_interrupt_inner(
             kbd.notify();
             pic::PICS.lock().notify_eoi(0x21);
         },
-        0x22..=0x28 | 0x2c..=0x2d => {
+        0x27 => {
+            exception_irq7();
+        },
+        0x22..=0x26 | 0x28 | 0x2c..=0x2d => {
             // pic::PICS.lock().notify_eoi(interrupt);
             panic!("Unhandled interrupt: {:02x}", interrupt);
         },

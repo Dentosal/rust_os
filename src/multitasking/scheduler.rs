@@ -100,10 +100,10 @@ impl Scheduler {
         use crate::filesystem::FILESYSTEM;
 
         if let Some(process) = self.processes.remove(&target) {
-            rprintln!("Stopping pid {} with status {:?}", target, status);
+            log::info!("Stopping pid {} with status {:?}", target, status);
 
             if process.repeat_syscall {
-                rprintln!(" [system call was pending]");
+                log::info!(" [system call was pending]");
             }
 
             // Schedule processes waiting for the termination
@@ -226,6 +226,16 @@ impl Scheduler {
     /// Relay events to queues
     pub fn on_explicit_event(&mut self, event_id: ExplicitEventId) {
         self.queues.on_explicit_event(event_id);
+    }
+
+    /// Full-screen view of the current scheduler status
+    pub fn debug_view_string(&self) -> String {
+        let mut lines = format!(
+            "## SCHEDULER OVERVIEW ##  Currently running {:?}\n",
+            self.running
+        );
+        lines.push_str(&self.queues.debug_view_string());
+        lines
     }
 }
 

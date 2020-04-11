@@ -1,6 +1,6 @@
 use alloc::collections::VecDeque;
 use alloc::prelude::v1::*;
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 
 use d7abi::fs::FileDescriptor;
 use d7time::Instant;
@@ -41,9 +41,9 @@ pub struct Queues {
     /// TODO: Switch to a proper priority queue for faster insert time
     wait_sleeping: VecDeque<(Instant, WaitId)>,
     /// Waiting for a process to complete.
-    wait_process: HashMap<ProcessId, Vec<WaitId>>,
+    wait_process: HashMap<ProcessId, HashSet<WaitId>>,
     /// Waiting for an explict event
-    wait_event: HashMap<ExplicitEventId, Vec<WaitId>>,
+    wait_event: HashMap<ExplicitEventId, HashSet<WaitId>>,
 }
 impl Queues {
     pub fn new() -> Self {
@@ -73,6 +73,8 @@ impl Queues {
     /// the associated process is scheduled for running.
     fn trigger_wait(&mut self, wait_id: WaitId) {
         if let Some(pid) = self.waiting.remove(&wait_id) {
+            log::trace!("wakeup {:?}", pid);
+
             // TODO: can this cause starvation?
             self.running.push_front(pid);
         }
@@ -88,10 +90,10 @@ impl Queues {
                 self.wait_process
                     .entry(wait_for_pid)
                     .or_default()
-                    .push(wait_id);
+                    .insert(wait_id);
             },
             WaitFor::Event(event_id) => {
-                self.wait_event.entry(event_id).or_default().push(wait_id);
+                self.wait_event.entry(event_id).or_default().insert(wait_id);
             },
             WaitFor::None => {
                 panic!("WaitFor::None inside of WaitFor::FirstOf");
@@ -106,10 +108,13 @@ impl Queues {
 
     pub fn give(&mut self, pid: ProcessId, mut s: WaitFor) {
         s = s.reduce_queues(&self, pid);
+
         if s == WaitFor::None {
             self.running.push_back(pid);
             return;
         }
+
+        log::trace!("Queuing process {} until {:?}", pid, s);
 
         let wait_id = self.create_wait(pid);
         if let WaitFor::FirstOf(targets) = s {
@@ -143,6 +148,7 @@ impl Queues {
 
     /// Update when a process completes
     pub fn on_process_over(&mut self, completed: ProcessId) {
+        log::trace!("on_process_over {:?}", completed);
         for (i, pid) in self.running.iter().enumerate() {
             if *pid == completed {
                 self.running.remove(i);
@@ -159,11 +165,71 @@ impl Queues {
 
     /// When an explicit event is triggered
     pub fn on_explicit_event(&mut self, event_id: ExplicitEventId) {
+        log::trace!("on_explicit_event {:?}", event_id);
         if let Some(wait_ids) = self.wait_event.remove(&event_id) {
             for wait_id in wait_ids {
                 self.trigger_wait(wait_id);
             }
         }
+    }
+
+    /// Full-screen view of the current scheduler queue status
+    pub fn debug_view_string(&self) -> String {
+        let mut lines = format!(
+            "## QUEUE     OVERVIEW ##  Running queue {:?}\n",
+            self.running
+        );
+        let processes: HashSet<_> = self.waiting.values().collect();
+        for process in processes {
+            lines.push_str(&format!("{:?} <-", process));
+
+            let wait_ids: HashSet<_> = self
+                .waiting
+                .iter()
+                .filter_map(|(w, p)| if p == process { Some(w) } else { None })
+                .collect();
+
+            let w_timeout = self.wait_sleeping.iter().any(|(_, w)| wait_ids.contains(w));
+
+            if w_timeout {
+                lines.push_str(" timeout");
+            }
+
+            let w_processes: HashSet<_> = self
+                .wait_process
+                .iter()
+                .filter_map(|(pid, ws)| {
+                    if wait_ids.iter().any(|w| ws.contains(w)) {
+                        None
+                    } else {
+                        Some(pid)
+                    }
+                })
+                .collect();
+
+            for wp in w_processes {
+                lines.push_str(&format!(" {:?}", wp));
+            }
+
+            let w_events: HashSet<_> = self
+                .wait_event
+                .iter()
+                .filter_map(|(eid, ws)| {
+                    if wait_ids.iter().any(|w| ws.contains(w)) {
+                        None
+                    } else {
+                        Some(eid)
+                    }
+                })
+                .collect();
+
+            for we in w_events {
+                lines.push_str(&format!(" {:?}", we));
+            }
+
+            lines.push_str("\n");
+        }
+        lines
     }
 }
 

@@ -43,8 +43,19 @@ pub struct Attachment {
     reads_in_progress: HashMap<FileClientId, ExplicitEventId>,
 
     /// Completed reads. Data is removed when read. When all data has been removed,
-    /// and the queue is empty, the entry here will be kept to until the client closes the file.
+    /// and the queue is empty, the entry here will be removed.
     reads_completed: HashMap<FileClientId, VecDeque<u8>>,
+
+    /// Writes pending, i.e. waiting for the manager to read them.
+    /// This is used store (fc, client_wakeup_id, data_buffer) tuples.
+    writes_pending: VecDeque<(FileClientId, ExplicitEventId, VecDeque<u8>)>,
+
+    /// Writes in progress, waiting for the manager to respond to them
+    /// This is used store client wakeup ids.
+    writes_in_progress: HashMap<FileClientId, ExplicitEventId>,
+
+    /// Completed writes. This stores written byte counts tuples.
+    writes_completed: HashMap<FileClientId, usize>,
 
     /// Clients that have closed their file descriptor,
     /// waiting to be sent to the manager
@@ -59,12 +70,17 @@ impl Attachment {
             reads_pending: VecDeque::new(),
             reads_in_progress: HashMap::new(),
             reads_completed: HashMap::new(),
+            writes_pending: VecDeque::new(),
+            writes_in_progress: HashMap::new(),
+            writes_completed: HashMap::new(),
             closed_pending: VecDeque::new(),
         }
     }
 
     /// Manager: process closed read client
-    fn manager_read_close(&mut self, fc: FileClientId, buf: &mut [u8]) -> Option<IoResult<usize>> {
+    fn manager_get_close_pending(
+        &mut self, fc: FileClientId, buf: &mut [u8],
+    ) -> Option<IoResult<usize>> {
         debug_assert!(fc == self.manager);
 
         if let Some(closed_fc) = self.closed_pending.pop_front() {
@@ -74,7 +90,7 @@ impl Attachment {
                     pid: closed_fc.process.expect("TODO? kernel"),
                     f: unsafe { closed_fc.fd.as_u64() },
                 },
-                data: FileOperation::Close,
+                operation: RequestFileOperation::Close,
             };
 
             let bytes = pinecone::to_vec(&req).expect("Could not serialize");
@@ -91,7 +107,7 @@ impl Attachment {
     }
 
     /// Manager: process pending read
-    fn manager_read_pending(
+    fn manager_get_read_pending(
         &mut self, fc: FileClientId, buf: &mut [u8],
     ) -> Option<IoResult<usize>> {
         debug_assert!(fc == self.manager);
@@ -104,7 +120,7 @@ impl Attachment {
                     pid: reader_fc.process.expect("TODO? kernel"),
                     f: unsafe { reader_fc.fd.as_u64() },
                 },
-                data: FileOperation::Read(buf.len() as u64),
+                operation: RequestFileOperation::Read(buf.len() as u64), // TODO: replace with correct size
             };
 
             let bytes = pinecone::to_vec(&req).expect("Could not serialize");
@@ -122,13 +138,46 @@ impl Attachment {
         }
     }
 
-    fn manager_read(&mut self, fc: FileClientId, buf: &mut [u8]) -> IoResult<usize> {
+    /// Manager: process pending write
+    fn manager_get_write_pending(
+        &mut self, fc: FileClientId, buf: &mut [u8],
+    ) -> Option<IoResult<usize>> {
+        debug_assert!(fc == self.manager);
+
+        // Writing from attachment fd
+        if let Some((reader_fc, event_id, data)) = self.writes_pending.pop_front() {
+            let req = Request {
+                sender: Sender {
+                    pid: reader_fc.process.expect("TODO? kernel"),
+                    f: unsafe { reader_fc.fd.as_u64() },
+                },
+                operation: RequestFileOperation::Write(data.into_iter().collect()),
+            };
+
+            let bytes = pinecone::to_vec(&req).expect("Could not serialize");
+            if bytes.len() <= buf.len() {
+                buf[..bytes.len()].copy_from_slice(&bytes);
+            } else {
+                // TODO: Process error, not kernel panic
+                panic!("Target buffer not large enough");
+            }
+            // Mark the write to be in progress
+            self.writes_in_progress.insert(reader_fc, event_id);
+            Some(IoResult::Success(bytes.len()))
+        } else {
+            None
+        }
+    }
+
+    /// Manager is reading from the attachment
+    fn manager_get_event(&mut self, fc: FileClientId, buf: &mut [u8]) -> IoResult<usize> {
         assert!(fc == self.manager);
         log::trace!("Manager read");
 
         let action = self
-            .manager_read_close(fc, buf)
-            .or_else(|| self.manager_read_pending(fc, buf));
+            .manager_get_close_pending(fc, buf)
+            .or_else(|| self.manager_get_read_pending(fc, buf))
+            .or_else(|| self.manager_get_write_pending(fc, buf));
 
         if let Some(result) = action {
             log::debug!("Manager read complete more={:?}", self.has_pending_input());
@@ -158,7 +207,7 @@ impl FileOps for Attachment {
 
     fn read(&mut self, fc: FileClientId, buf: &mut [u8]) -> IoResult<usize> {
         if fc == self.manager {
-            self.manager_read(fc, buf)
+            self.manager_get_event(fc, buf)
         } else if let Some(mut data) = self.reads_completed.remove(&fc) {
             let mut i = 0;
             while i < buf.len() {
@@ -179,7 +228,6 @@ impl FileOps for Attachment {
             self.reads_pending.push_back((fc, event_id));
 
             log::trace!("Creating new read operation + wait {:?}", event_id);
-            log::trace!("Asking client to repeat request after the event");
 
             let repeat = IoResult::RepeatAfter(WaitFor::Event(event_id));
             self.manager_pending_data.set_available(repeat)
@@ -203,31 +251,53 @@ impl FileOps for Attachment {
     fn write(&mut self, fc: FileClientId, buf: &[u8]) -> IoResult<usize> {
         if fc == self.manager {
             // Manager writes response to a request. The whole response must be written at once.
-            let (request, rest): (Response, &[u8]) =
+            let (response, rest): (Response, &[u8]) =
                 pinecone::take_from_bytes(buf).expect("Partial write from manager");
 
-            let client_fc = FileClientId::process(request.sender.pid, unsafe {
-                FileDescriptor::from_u64(request.sender.f)
+            let client_fc = FileClientId::process(response.sender.pid, unsafe {
+                FileDescriptor::from_u64(response.sender.f)
             });
 
-            let client_wakeup_event = self
-                .reads_in_progress
-                .remove(&client_fc)
-                .expect("Client does not exist");
+            let client_wakeup_event = match response.operation {
+                ResponseFileOperation::Read(data) => {
+                    self.reads_completed.insert(client_fc, data.into());
 
-            self.reads_completed.insert(client_fc, request.data.into());
+                    self.reads_in_progress
+                        .remove(&client_fc)
+                        .expect("Client does not exist")
+                },
+                ResponseFileOperation::Write(count) => {
+                    self.writes_completed.insert(client_fc, count as usize);
+
+                    self.writes_in_progress
+                        .remove(&client_fc)
+                        .expect("Client does not exist")
+                },
+            };
+
             IoResult::TriggerEvent(
                 client_wakeup_event,
                 Box::new(IoResult::Success(buf.len() - rest.len())),
             )
+        } else if let Some(size) = self.writes_completed.remove(&fc) {
+            // Write is complete, return to the client
+            IoResult::Success(size)
         } else {
             // Writes to attachments must be of type `d7abi::fs::protocol::attachment::Request`,
             // and the whole request must be written at once
 
-            // let (req, rest): (Request, &[u8]) = pinecone::take_from_bytes(buf).except("Partial read");
-            // panic!("R {:?}", req);
-            // Ok(buf.len() - rest.len())
-            unimplemented!()
+            // Write cannot be in progress, as the client must be sleeping until it's complete
+            assert!(!self.writes_pending.iter().any(|(f, _, _)| *f == fc));
+
+            // Add to queue, and wait until manager processes the write request
+            let event_id = WaitFor::new_event_id();
+            self.writes_pending
+                .push_front((fc, event_id, buf.into_iter().copied().collect()));
+
+            log::trace!("Creating new write operation + wait {:?}", event_id);
+
+            let repeat = IoResult::RepeatAfter(WaitFor::Event(event_id));
+            self.manager_pending_data.set_available(repeat)
         }
     }
 

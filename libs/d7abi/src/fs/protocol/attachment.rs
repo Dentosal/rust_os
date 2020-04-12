@@ -25,32 +25,16 @@ pub struct Request {
     /// Sender identifier
     pub sender: Sender,
     /// Contents of the request
-    pub data: FileOperation,
+    pub operation: RequestFileOperation,
 }
 impl Request {
     /// Converts request message to a reply by replacing the data
-    pub fn response(&self, data: Vec<u8>) -> Response {
+    pub fn response(&self, operation: ResponseFileOperation) -> Response {
         Response {
             sender: self.sender,
-            data,
+            operation,
         }
     }
-}
-
-/// Currently open is not supported
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum FileOperation {
-    /// Read n bytes
-    Read(u64),
-    /// Query if this file is ready for reading,
-    /// and the wait condition otherwise.
-    ReadWaitingFor,
-    /// Write bytes
-    Write(Vec<u8>),
-    /// Control request
-    Control(u64),
-    /// Close the file
-    Close,
 }
 
 /// When manager process reads from or writes to an attachment,
@@ -60,8 +44,28 @@ pub struct Response {
     /// Sender of the corresponding `Request` identifier
     pub sender: Sender,
     /// Response data
-    pub data: Vec<u8>,
+    pub operation: ResponseFileOperation,
 }
+
+/// Currently open, control and waiting_for are not supported
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum RequestFileOperation {
+    /// Read n bytes
+    Read(u64),
+    /// Write bytes
+    Write(Vec<u8>),
+    /// Close the file
+    Close,
+}
+
+/// Response to request operation
+/// There is no response for close
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ResponseFileOperation {
+    Read(Vec<u8>),
+    Write(u64),
+}
+
 
 /// How branches ("directories") return their contents to the kernel.
 /// The process MUST NOT return any data if the later reads would block,

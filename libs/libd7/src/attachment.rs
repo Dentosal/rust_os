@@ -27,8 +27,8 @@ impl StaticBranch {
     /// Receive next request and reply
     pub fn process_one(&self) -> SyscallResult<()> {
         let r = self.inner.next_request()?;
-        match r.data {
-            FileOperation::Read(n) => {
+        match r.operation {
+            RequestFileOperation::Read(n) => {
                 // TODO: handle kernel requests differently
                 // let data = pinecone::to_vec(&ReadAttachmentBranch { items: self.items.clone() }).unwrap();
 
@@ -38,9 +38,10 @@ impl StaticBranch {
                 .unwrap();
 
                 assert!(data.len() as u64 <= n, "TODO: implement output buffering");
-                self.inner.reply(r.response(data))?;
+                self.inner
+                    .reply(r.response(ResponseFileOperation::Read(data)))?;
             }
-            FileOperation::Close => {}
+            RequestFileOperation::Close => {}
             _ => panic!("Unsupported operation to a static branch ({:?})", r),
         }
         Ok(())
@@ -50,6 +51,12 @@ impl StaticBranch {
         let new_branch = Branch::new_anonymous()?;
         self.items.insert(name.to_owned(), new_branch.fd);
         Ok(new_branch)
+    }
+
+    pub fn add_leaf(&mut self, name: &str) -> SyscallResult<Leaf> {
+        let new_leaf = Leaf::new_anonymous()?;
+        self.items.insert(name.to_owned(), new_leaf.fd);
+        Ok(new_leaf)
     }
 }
 
@@ -95,6 +102,10 @@ impl Leaf {
         Ok(Self {
             fd: syscall::fs_attach(path, true)?,
         })
+    }
+
+    pub fn new_anonymous() -> SyscallResult<Self> {
+        Self::new("")
     }
 
     /// Receive next request

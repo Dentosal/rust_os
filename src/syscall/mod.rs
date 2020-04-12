@@ -21,10 +21,11 @@ mod PROCESS_OUTPUT {
     use d7abi::process::ProcessId;
 
     pub fn print(pid: ProcessId, string: &str) {
-        log::debug!("[pid={:8}] {}", pid.as_u64(), string);
-        if crate::syslog::LEVEL_SCREEN < log::Level::Debug {
-            rprintln!("[pid={}] {}", pid.as_u64(), string);
-        }
+        log::info!("[pid={:8}] {}", pid.as_u64(), string);
+        // TODO: Sometimes terminal is locked when this happens
+        // if crate::syslog::LEVEL_SCREEN < log::Level::Debug {
+        //     rprintln!("[pid={}] {}", pid.as_u64(), string);
+        // }
     }
 }
 

@@ -27,10 +27,6 @@ Number | Name           | Arguments (logical)   | On success  | Short descriptio
 **Bold** text implies that something is a read-only slice, i.e. `len, ptr` pair.
 Values like `ok?` ending with `?` represent booleans.
 
-## `ReadResult` and EOF behavior
-
-The most significant bit in u64 `ReadResult` marks EOF.
-
 # Call structure
 
 Register | Description

@@ -22,10 +22,15 @@ pub enum Leafness {
 /// Operations on an opened file (from perspective of the owner)
 #[allow(unused_variables)]
 pub trait FileOps: Send {
-    /// Can this file has children in the filesystem.
+    /// Can this file have children in the filesystem.
     /// This check must not fail.
     /// Non-leaf nodes MUST conform to `ReadBranch` protocol.
     fn leafness(&self) -> Leafness;
+
+    /// If this file is a process, return it's pid
+    fn pid(&self) -> IoResult<ProcessId> {
+        IoResult::Code(ErrorCode::fs_node_not_process)
+    }
 
     /// Pull some bytes from this source into the buffer,
     /// returning how many bytes were read, end_of_file

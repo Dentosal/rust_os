@@ -19,6 +19,7 @@ Number | Name           | Arguments (logical)   | On success  | Short descriptio
 0x43   | fd_synchronize | fd                    | -           | Ensures all written data has been delivered
 0x44   | fd_control     | fd, function          | -           | Send control function for a file
 0x45  x| fd_select      | **fds**, (timeout_ns) | fd          | Wait until first fd is available
+0x46  x| fd_get_pid     | fd                    | pid         | Maps file descriptor to a process id
 0x50  x| sched_yield    | -                     | -           | Yield control to schedule next process
 0x51  x| sched_sleep_ns | ns                    | -           | Sleep specified number of nanoseconds
 

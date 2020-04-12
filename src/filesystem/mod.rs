@@ -619,6 +619,13 @@ impl VirtualFS {
         node.write(fc, buf).consume_events(sched)
     }
 
+    /// Get pid (system call)
+    pub fn get_pid(&mut self, fc: FileClientId) -> IoResult<ProcessId> {
+        let node_id = self.resolve_fc(fc)?;
+        let node = self.node(node_id)?;
+        node.data.pid()
+    }
+
     /// Read a file for other kernel component
     /// Discards data on error.
     pub fn read_file(&mut self, path: &str) -> IoResult<Vec<u8>> {

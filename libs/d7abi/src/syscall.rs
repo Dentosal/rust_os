@@ -18,6 +18,7 @@ pub enum SyscallNumber {
     fd_synchronize = 0x43,
     fd_control = 0x44,
     fd_select = 0x45,
+    fd_get_pid = 0x46,
     sched_yield = 0x50,
     sched_sleep_ns = 0x51,
 }
@@ -29,6 +30,8 @@ pub enum SyscallErrorCode {
     unknown = 0,
     /// Empty list given, but now allowed
     empty_list_argument,
+    /// System call done in nonblocking mode would block
+    would_block,
     /// Trying to create a node which already exists
     fs_node_exists,
     /// Node is requested but does not exist
@@ -44,6 +47,8 @@ pub enum SyscallErrorCode {
     /// File was destroyed while an operation was pending
     /// Normal files never do this, but processes, attachments and pipes do
     fs_file_destroyed,
+    /// File does is not a process, so it has no pid
+    fs_node_not_process,
     /// Invalid UTF-8
     invalid_utf8,
 }

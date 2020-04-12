@@ -9,12 +9,20 @@ use x86_64::structures::idt::PageFaultErrorCode;
 /// ProcessId is stores as `NonZeroU64`, so that `Option<ProcessId>`
 /// still has uses only `size_of<Processid>` bytes
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
+#[serde(transparent)]
 pub struct ProcessId(NonZeroU64);
 impl ProcessId {
     /// # Safety
     /// Must be called only once
     pub const unsafe fn first() -> Self {
         Self(NonZeroU64::new_unchecked(1))
+    }
+
+    /// # Safety
+    /// Must be only called for an actual process ids
+    /// Only to be used when deserializing from system call results and such
+    pub unsafe fn from_u64(value: u64) -> Self {
+        Self(NonZeroU64::new(value).expect("Zero ProcessId"))
     }
 
     /// # Safety

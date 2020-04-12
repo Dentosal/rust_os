@@ -1,11 +1,11 @@
 use core::convert::TryFrom;
 use core::hint::unreachable_unchecked;
 use core::mem::MaybeUninit;
-use core::time::Duration;
 
 use d7abi::{
     fs::{FileDescriptor, FileInfo},
     SyscallErrorCode, SyscallNumber,
+    process::ProcessId
 };
 
 macro_rules! syscall {
@@ -161,6 +161,14 @@ pub fn fd_select(
             timeout.map(|d| d.as_nanos() as u64).unwrap_or(0)
         )?))
     }
+}
+
+/// Get process id. Only to be used with (child) processes
+pub fn fd_get_pid(fd: FileDescriptor) -> SyscallResult<ProcessId> {
+    Ok(unsafe {ProcessId::from_u64(syscall!(
+        SyscallNumber::fd_get_pid;
+        fd.as_u64()
+    )?)})
 }
 
 /// This system call never fails, and does not return anything

@@ -39,12 +39,17 @@ impl FileOps for ProcessFile {
         Leafness::Leaf
     }
 
+    fn pid(&self) -> IoResult<ProcessId> {
+        IoResult::Success(self.pid)
+    }
+
     /// Blocks until the process is complete, and the returns the result
     fn read(&mut self, fc: FileClientId, buf: &mut [u8]) -> IoResult<usize> {
         assert_ne!(fc.process, Some(self.pid), "Process read self");
         if let Some(result) = &self.result {
             let data = pinecone::to_vec(&result).unwrap();
             assert!(
+                // TODO: this is a client error
                 data.len() <= buf.len(),
                 "Read process: buffer not large enough (required: {} <= {})",
                 data.len(),

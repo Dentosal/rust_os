@@ -302,6 +302,14 @@ fn syscall(
                     ))
                 }
             },
+            SC::fd_get_pid => {
+                let (fd, _, _, _) = rsc.args;
+                let fd = unsafe { FileDescriptor::from_u64(fd) };
+                let fc = FileClientId::process(pid, fd);
+                let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
+                let pid = fs.get_pid(fc)?;
+                SyscallResult::Continue(Ok(pid.as_u64()))
+            },
             SC::sched_yield => {
                 let (_, _, _, _) = rsc.args;
                 SyscallResult::Switch(Ok(0), WaitFor::None)

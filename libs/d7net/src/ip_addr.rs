@@ -57,3 +57,9 @@ impl IpAddr {
         }
     }
 }
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SocketAddr {
+    pub host: IpAddr,
+    pub port: u16,
+}

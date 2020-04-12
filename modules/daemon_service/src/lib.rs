@@ -138,7 +138,7 @@ impl Services {
                 r.startup_complete = true;
             }
         }
-        println!("Process with returned fd was not runniong");
+        println!("Process with returned fd was not running");
     }
 
     fn on_process_completed(&mut self, completed_fd: FileDescriptor) {
@@ -146,7 +146,7 @@ impl Services {
             .running
             .iter()
             .position(|r| r.process.fd == completed_fd)
-            .expect("Process with returned fd was not runniong");
+            .expect("Process with returned fd was not running");
 
         let service = self.running.remove(index);
         todo!("PROC WAIT {:?}", service.name);

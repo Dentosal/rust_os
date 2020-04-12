@@ -150,15 +150,18 @@ pub fn fd_write(fd: FileDescriptor, buf: &[u8]) -> SyscallResult<usize> {
     }
 }
 
-pub fn fd_select(
-    fds: &[FileDescriptor], timeout: Option<Duration>,
-) -> SyscallResult<FileDescriptor> {
+/// Select first available file descriptor from a list
+pub fn fd_select(fds: &[FileDescriptor], nonblocking: bool) -> SyscallResult<FileDescriptor> {
+    if fds.is_empty() {
+        panic!("Cannot fd_select from an empty list");
+    }
+
     unsafe {
         Ok(FileDescriptor::from_u64(syscall!(
             SyscallNumber::fd_select;
             fds.len() as u64,
             fds.as_ptr() as u64,
-            timeout.map(|d| d.as_nanos() as u64).unwrap_or(0)
+            nonblocking as u64
         )?))
     }
 }

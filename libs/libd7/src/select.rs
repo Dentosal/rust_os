@@ -1,13 +1,13 @@
 #[macro_export(local_inner_macros)]
 macro_rules! if_chain {
     (
-        $cond:expr => $body:block $( , $c:expr => $b:block )+ else $ebody:block
+        $cond:expr => $body:block , $( $c:expr => $b:block , )+ else $ebody:block
     ) => {
-        if $cond $body else { if_chain!($( $c => $b ),+ else $ebody ) }
+        if $cond $body else { if_chain!($( $c => $b , )+ else $ebody ) }
     };
 
     (
-        $cond:expr => $body:block else $ebody:block
+        $cond:expr => $body:block , else $ebody:block
     ) => {
         if $cond $body else $ebody
     };
@@ -16,25 +16,30 @@ macro_rules! if_chain {
 #[macro_export(local_inner_macros)]
 macro_rules! select_inner {
     (
-        $( ok $cfd:expr => $cbody:expr , )+
-        timeout $duration_opt:expr => $tbody:expr ,
+        $( any ($any:expr) -> $var:ident => $abody:expr , )*
+        $( one ($cfd:expr) => $cbody:expr , )*
+        nonblocking $nonblocking:literal => $bbody:expr ,
         error -> $e:ident => $ebody:expr
     ) => {
         {
-            match syscall::fd_select(&[$($cfd),*], $duration_opt) {
+            use $crate::d7abi::SyscallErrorCode;
+            let mut fds = ::alloc::vec::Vec::new();
+            $(fds.push($cfd);)*
+            $(fds.extend($any.iter().copied());)*
+            match $crate::syscall::fd_select(&fds, $nonblocking) {
                 Ok(avail_fd) => {
                     $crate::if_chain!(
-                        $( $cfd == avail_fd => { $cbody } ),+
+                        $( $any.contains(&avail_fd) => { let $var = avail_fd; { $abody} } , )*
+                        $( $cfd == avail_fd => { $cbody } , )*
                         else {
                             ::core::unreachable!("Select returned unknown alternative");
                         }
                     )
 
                 },
+                Err(SyscallErrorCode::would_block) => $bbody ,
                 Err($e) => $ebody ,
             }
-
-            // TODO: handle timeout
         }
     };
 }
@@ -42,28 +47,56 @@ macro_rules! select_inner {
 #[macro_export]
 macro_rules! select {
     (
-        $( ok $cfd:expr => $cbody:expr , )+
-        timeout $duration:expr => $tbody:expr ,
+        $( any ($any:expr) -> $var:ident => $abody:expr , )*
+        $( one ($cfd:expr) => $cbody:expr , )*
+        would_block => $bbody:expr ,
         error -> $e:ident => $ebody:expr $(,)?
     ) => {$crate::select_inner!{
-        $( ok $cfd => $cbody , )+
-        timeout Some($duration) => $tbody,
+        $( any ($any) -> $var => $abody , )*
+        $( one ($cfd) => $cbody , )*
+        nonblocking true => $bbody,
         error -> $e => $ebody
     }};
 
     (
-        $( ok $cfd:expr => $cbody:expr , )+
+        $( any ($any:expr) -> $var:ident => $abody:expr , )*
+        $( one ($cfd:expr) => $cbody:expr , )*
         error -> $e:ident => $ebody:expr $(,)?
     ) => {$crate::select_inner!{
-        $( ok $cfd => $cbody , )+
-        timeout None => {compile_error!()},
+        $( any ($any) -> $var => $abody , )*
+        $( one ($cfd) => $cbody , )*
+        nonblocking false => {unreachable!("Nonblocking system call would_block")},
         error -> $e => $ebody
     }};
 
+    // Panic-on-error variants
+
     (
-        $( ok $cfd:expr => $cbody:expr ),+ $(,)?
-    ) => {$crate::select!{
-        $( ok $cfd => $cbody , )+
+        $( any ($any:expr) -> $var:ident => $abody:expr , )*
+        $( one ($cfd:expr) => $cbody:expr , )*
+        would_block => $bbody:expr
+    ) => {$crate::select_inner!{
+        $( any ($any) -> $var => $abody , )*
+        $( one ($cfd) => $cbody , )*
+        nonblocking true => $bbody,
+        error -> err => { ::core::panic!("Unhandled error in select!: {:?}", err) }
+    }};
+
+    (
+        $( any ($any:expr) -> $var:ident => $abody:expr , )*
+        $( one ($cfd:expr) => $cbody:expr ),*
+    ) => {$crate::select_inner!{
+        $( any ($any) -> $var => $abody , )*
+        $( one ($cfd) => $cbody , )*
+        nonblocking false => {unreachable!()},
+        error -> err => { ::core::panic!("Unhandled error in select!: {:?}", err) }
+    }};
+
+    (
+        $( any ($any:expr) -> $var:ident => $abody:expr),*
+    ) => {$crate::select_inner!{
+        $( any ($any) -> $var => $abody , )*
+        nonblocking false => {unreachable!()},
         error -> err => { ::core::panic!("Unhandled error in select!: {:?}", err) }
     }};
 }

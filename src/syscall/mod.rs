@@ -246,7 +246,7 @@ fn syscall(
                 }
             },
             SC::fd_select => {
-                let (fds_len, fds, timeout_ns, _) = rsc.args;
+                let (fds_len, fds, nonblocking, _) = rsc.args;
 
                 if fds_len == 0 {
                     return SyscallResult::Continue(Err(ErrorCode::empty_list_argument.into()));
@@ -255,11 +255,14 @@ fn syscall(
                 let fds = VirtAddr::new(fds);
                 let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
                 let size = mem::size_of::<FileDescriptor>() as u64;
+                let blocking = nonblocking == 0;
+
+                log::trace!("fd_select n={} blocking={}", fds_len, blocking);
+
                 if let Some((area, fds_slice)) =
                     unsafe { m.process_slice_mut(process, fds_len * size, fds) }
                 {
                     let mut conditions = Vec::new();
-                    log::trace!("select {{");
                     for fd_bytes in fds_slice.chunks_exact(8) {
                         let fd = unsafe {
                             FileDescriptor::from_u64(u64::from_le_bytes(
@@ -279,14 +282,12 @@ fn syscall(
                         }
                         conditions.push(condition);
                     }
-                    log::trace!("}}");
 
                     unsafe { m.unmap_area(area) };
                     m.free_virtual_area(area);
 
-                    if timeout_ns != 0 {
-                        let now = SYSCLOCK.now();
-                        conditions.push(WaitFor::Time(now + Duration::from_nanos(timeout_ns)));
+                    if !blocking {
+                        return SyscallResult::Continue(Err(ErrorCode::would_block.into()));
                     }
 
                     match sched.try_resolve_waitfor(WaitFor::FirstOf(conditions.clone())) {

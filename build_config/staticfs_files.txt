@@ -1,7 +1,9 @@
 README.md=README.md
 p_commoncode=build/process_common.bin
-mod_test=build/modules/test_driver.elf
-mod_ata_pio=build/modules/driver_ata_pio.elf
+serviced=build/modules/daemon_service.elf
+startup_services.json=build_config/files/startup_services.json
 netd=build/modules/daemon_net.elf
+driver_ata_pio=build/modules/driver_ata_pio.elf
+examplebin=build/modules/examplebin.elf
 keycode.json=build_config/files/keycode.json
 keymap.json=build_config/files/keymap.json

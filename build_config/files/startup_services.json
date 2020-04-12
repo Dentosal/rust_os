@@ -1,0 +1,14 @@
+[
+    {
+        "name": "netd",
+        "description": "Network daemon",
+        "requires": [],
+        "executable": "/mnt/staticfs/netd"
+    },
+    {
+        "name": "examples",
+        "description": "Example user binary",
+        "requires": ["netd"],
+        "executable": "/mnt/staticfs/examplebin"
+    }
+]

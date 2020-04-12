@@ -1,0 +1,3 @@
+# `serviced`
+
+Service manager

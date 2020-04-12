@@ -132,27 +132,7 @@ pub extern "C" fn rust_main() -> ! {
     rreset!();
     log::info!("Kernel initialized.\n");
 
-    {
-        use crate::filesystem::FILESYSTEM;
-        let readme_bytes = FILESYSTEM
-            .lock()
-            .read_file("/mnt/staticfs/README.md")
-            .unwrap();
-        let mut lines = 3;
-        for b in readme_bytes {
-            if b == 0x0a {
-                lines -= 1;
-                if lines == 0 {
-                    break;
-                }
-            }
-            if (0x20 <= b && b <= 0x7f) || b == 0x0a {
-                rprint!("{}", b as char);
-            }
-        }
-    }
-    rprintln!("");
-
+    // Start service daemon
     crate::memory::configure(|mut mem_ctrl| {
         use crate::filesystem::FILESYSTEM;
         use crate::multitasking::SCHEDULER;
@@ -160,7 +140,7 @@ pub extern "C" fn rust_main() -> ! {
         let mut fs = FILESYSTEM.lock();
         let mut sched = SCHEDULER.lock();
 
-        fs.kernel_exec(&mut mem_ctrl, &mut sched, "/mnt/staticfs/mod_test")
+        fs.kernel_exec(&mut mem_ctrl, &mut sched, "/mnt/staticfs/serviced")
             .expect("Could not spawn");
     });
 

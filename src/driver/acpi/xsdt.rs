@@ -24,7 +24,7 @@ pub enum XSDPParseError {
 pub unsafe fn get_xsdp() -> Result<bool, XSDPParseError> {
     match rsdt::get_rsdp_and_parse() {
         Ok(addr) => {
-            rprintln!("OK {:#x}", addr);
+            panic!("OK {:#x}", addr); // ???
             // TODO: checksum
             Ok(true)
         },

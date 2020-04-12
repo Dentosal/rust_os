@@ -405,6 +405,7 @@ impl VirtualFS {
         &mut self, sched: &mut Scheduler, pid: ProcessId, path: &str,
     ) -> IoResult<FileClientId> {
         let path = Path::new(path);
+        log::info!("[pid={:8}] open {:?}", pid, path);
         let node_id = self.resolve(path.clone())?;
         let process = self.process_mut(pid);
         let fd = process.create_id(node_id);
@@ -596,7 +597,6 @@ impl VirtualFS {
     pub fn read(
         &mut self, sched: &mut Scheduler, fc: FileClientId, buf: &mut [u8],
     ) -> IoResult<usize> {
-        log::trace!("READ SYSCALL 0");
         let node_id = self.resolve_fc(fc)?;
         let node = self.node_mut(node_id)?;
         node.read(fc, buf).consume_events(sched)
@@ -689,11 +689,12 @@ lazy_static! {
 
 fn create_fs(fs: &mut VirtualFS) -> IoResult<()> {
     // Create top-level fs hierarchy
-    fs.create_static_branch(Path::new("/bin"))?;
-    fs.create_static_branch(Path::new("/cfg"))?;
-    fs.create_static_branch(Path::new("/dev"))?;
-    fs.create_static_branch(Path::new("/mnt"))?;
-    fs.create_static_branch(Path::new("/prc"))?;
+    fs.create_static_branch(Path::new("/bin"))?; // Binaries
+    fs.create_static_branch(Path::new("/cfg"))?; // System configuration
+    fs.create_static_branch(Path::new("/dev"))?; // Device files
+    fs.create_static_branch(Path::new("/mnt"))?; // Fs mount points
+    fs.create_static_branch(Path::new("/prc"))?; // Processes
+    fs.create_static_branch(Path::new("/srv"))?; // Service endpoints
 
     // Insert special files
     fs.create_static(Path::new("/dev/null"), Box::new(NullDevice))?;

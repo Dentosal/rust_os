@@ -150,6 +150,7 @@ fn syscall(
                 if let Some((area, slice)) = unsafe { m.process_slice(process, path_len, path_ptr) }
                 {
                     let path = try_str!(slice);
+                    log::info!("[pid={:8}] exec {:?}", pid, path);
                     let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
                     let fc = fs.exec(m, sched, pid, path).expect("EXEC FAILED");
                     unsafe { m.unmap_area(area) };

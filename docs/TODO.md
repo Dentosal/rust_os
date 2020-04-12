@@ -1,9 +1,10 @@
 * Move/copy disk drivers to own modules
+    * All must be moved in one step
 * Implement a initrd
     * Ramdisk builder tool (from staticfs)
     * Bootloader support
     * Kernel support
-* Move from print statements to structured logging
+* Implement proper logging in `libd7`
 * Implement (named) pipes
     * `/dev/pipe`
 * Provide `/dev/event`

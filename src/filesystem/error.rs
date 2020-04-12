@@ -45,8 +45,7 @@ impl<T: fmt::Debug> IoResult<T> {
     }
 
     /// Splits to the result itself and an optional event
-    #[must_use]
-    pub fn decompose_event(self) -> (Self, Option<ExplicitEventId>) {
+    fn decompose_event(self) -> (Self, Option<ExplicitEventId>) {
         if let Self::TriggerEvent(event, t) = self {
             (*t, Some(event))
         } else {
@@ -81,23 +80,44 @@ impl<T: fmt::Debug> IoResult<T> {
 }
 
 impl<T> IoResult<T> {
+    pub fn is_success(&self) -> bool {
+        match self {
+            Self::Success(_) => true,
+            Self::TriggerEvent(_, _) => unimplemented!("Event trigger not handled"),
+            other => false,
+        }
+    }
+
+    pub fn has_events(&self) -> bool {
+        match self {
+            Self::TriggerEvent(_, _) => true,
+            other => false,
+        }
+    }
+
+    pub fn erase_type<N>(self) -> IoResult<N> {
+        match self {
+            Self::Success(_) => panic!("Trying to erase type from success"),
+            Self::RepeatAfter(wf) => IoResult::RepeatAfter(wf),
+            Self::Code(ec) => IoResult::Code(ec),
+            Self::TriggerEvent(e, t) => IoResult::TriggerEvent(e, Box::new(t.erase_type())),
+        }
+    }
+
     pub fn convert<A>(self) -> IoResult<A> {
         match self {
             Self::Success(v) => unreachable!("Success is never an error"),
             Self::RepeatAfter(wf) => IoResult::RepeatAfter(wf),
             Self::Code(ec) => IoResult::Code(ec),
-            Self::TriggerEvent(eeid, inner) => {
-                IoResult::TriggerEvent(eeid, unimplemented!("Event trigger not handled"))
-            },
+            Self::TriggerEvent(_, _) => unimplemented!("Event trigger not handled"),
         }
     }
 
-    pub fn add_opt_event(self, event: Option<ExplicitEventId>) -> Self {
-        if let Some(event) = event {
-            Self::TriggerEvent(event, Box::new(self))
-        } else {
-            self
+    pub fn add_events(mut self, events: impl Iterator<Item = ExplicitEventId>) -> Self {
+        for event in events {
+            self = Self::TriggerEvent(event, Box::new(self));
         }
+        self
     }
 }
 

@@ -83,7 +83,7 @@ impl ProcessDescriptors {
     }
 }
 
-/// Read all bytes. Used when the kernel needs to read all data.
+/// Read all bytes. Used when the kernel needs to read all data from a file.
 /// # Safety
 /// This is marked unsafe, as it discards data if an io error occurs during it.
 unsafe fn read_to_end(file: &mut dyn FileOps, fc: FileClientId) -> IoResult<Vec<u8>> {
@@ -92,12 +92,16 @@ unsafe fn read_to_end(file: &mut dyn FileOps, fc: FileClientId) -> IoResult<Vec<
     let mut result = Vec::new();
     let mut buffer = [0u8; IO_BUFFER_SIZE];
     loop {
-        let count = file.read(fc, &mut buffer)?;
-        if count == 0 {
+        let r = file.read(fc, &mut buffer);
+        if r.has_events() {
+            return r.erase_type();
+        }
+        let count = r?;
+        result.extend(buffer[..count].iter());
+        if count < IO_BUFFER_SIZE {
             // EOF
             break;
         }
-        result.extend(buffer[..count].iter());
     }
     IoResult::Success(result)
 }
@@ -182,28 +186,35 @@ impl VirtualFS {
     }
 
     /// Resolve path from node, if any
-    pub fn node_id_to_path(&mut self, node_id: NodeId) -> IoResult<Option<PathBuf>> {
-        IoResult::Success(if let Some(mut ancestors) = self.node_ancestors(node_id)? {
-            let mut pb = Path::new("/").to_path_buf();
-            'outer: loop {
-                let parent_id = ancestors.pop().unwrap();
-                if let Some(child_id) = ancestors.last().copied() {
-                    for (id, name) in self.get_children(parent_id)? {
-                        if id == child_id {
-                            pb.push(&name);
-                            continue 'outer;
-                        }
-                    }
-                    todo!("???"); // FIXME: remove this?
-                // IoResult::Code(ErrorCode::fs_node_not_found)
-                } else {
-                    break;
+    /// This is only for creating debug strings, as it can return None even when a path exists
+    pub fn debug_node_id_to_path(&mut self, node_id: NodeId) -> Option<PathBuf> {
+        let ancestors = self.node_ancestors(node_id);
+        if !ancestors.is_success() {
+            return None;
+        }
+        let mut ancestors = ancestors.unwrap()?;
+        let mut pb = Path::new("/").to_path_buf();
+        'outer: loop {
+            let parent_id = ancestors.pop().unwrap();
+            if let Some(child_id) = ancestors.last().copied() {
+                let r = self.get_children(parent_id);
+                if !r.is_success() {
+                    // path blocked by non-resolving node (possibly an attachment)
+                    return None;
                 }
+                for (id, name) in r.unwrap() {
+                    if id == child_id {
+                        pb.push(&name);
+                        continue 'outer;
+                    }
+                }
+                todo!("???"); // FIXME: remove this?
+            // IoResult::Code(ErrorCode::fs_node_not_found)
+            } else {
+                break;
             }
-            Some(pb)
-        } else {
-            None
-        })
+        }
+        Some(pb)
     }
 
     pub fn node(&self, id: NodeId) -> IoResult<&Node> {
@@ -293,11 +304,13 @@ impl VirtualFS {
             Leafness::Leaf => IoResult::Code(ErrorCode::fs_node_is_leaf),
             Leafness::Branch => {
                 // Use `ReadAttachmentBranch` protocol.
+                // Note that this might result in event + repeat after request
                 let fc = self.take_kernel_fc();
                 let node = self.node_mut(node_id)?;
+                log::trace!("get_children (attachment)");
                 node.open(fc)?;
                 let bytes = unsafe { read_to_end(&mut *node.data, fc)? };
-                todo!()
+                todo!();
             },
             Leafness::InternalBranch => {
                 // Use internal branch protocol.
@@ -384,10 +397,10 @@ impl VirtualFS {
             .expect("temp_open: node missing");
         node.open(fc)?;
         let result: IoResult<R> = body(node, fc);
-        let (keep, event) = node.close(fc).decompose_event();
+        let (keep, events) = node.close(fc).separate_events();
         let keep = keep.expect("close must not fail (temp_open)");
         assert!(keep == CloseAction::Normal, "Not possible");
-        result.add_opt_event(event)
+        result.add_events(events.into_iter())
     }
 
     /// Get process descriptors
@@ -410,7 +423,7 @@ impl VirtualFS {
         let process = self.process_mut(pid);
         let fd = process.create_id(node_id);
         let fc = FileClientId::process(pid, fd);
-        self.node_mut(node_id)?.open(fc)?;
+        self.node_mut(node_id)?.open(fc).consume_events(sched)?;
         IoResult::Success(fc)
     }
 

@@ -58,9 +58,11 @@ impl Node {
 
     /// Calls handler and (on success) increases reference count
     pub fn open(&mut self, fd: FileClientId) -> IoResult<()> {
-        self.data.open(fd)?;
-        self.inc_ref();
-        IoResult::Success(())
+        let result = self.data.open(fd);
+        if result.is_success() {
+            self.inc_ref();
+        }
+        result
     }
 
     /// Calls handler that always always succeeds (can still trigger events),

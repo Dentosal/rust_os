@@ -65,7 +65,7 @@ impl NetworkController {
         if self.driver.is_some() {
             log::info!("Using RTL8139 Networking");
         } else {
-            log::warn!("Not suitable NIC driver found");
+            log::warn!("No suitable NIC driver found");
         }
 
         // self.driver = virtio::VirtioNet::try_new();

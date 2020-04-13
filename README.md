@@ -1,34 +1,37 @@
 # Dimension 7 - An operating system
 
-Dimension 7 is an operating system microkernel written in Rust. It runs only on x86-64. It is in fairly early stage, and is developed by fearlessly breaking things, trying new stuff before older stubs are even working and most importantly experimenting with weird ideas.
-
-## Development
-
-This is a learning project. Currently code contributions are not accepted, as I'd like to learn to fix the problems myself. Forking the project is of course possible, if you'd like to develop something based on this.
-Feel free to submit issues on GitHub if you find any bugs.
+Dimension 7 is an operating system kernel written in Rust. It aims to be an event-driven quasi-microkernel. By design, it runs only on x86-64. The system is in fairly early stage, and is developed by fearlessly breaking things, trying new stuff before older stubs are even working and most importantly experimenting with weird ideas.
 
 ## Current features:
-* Multitasking: round-robin scheduler
+* Multitasking: event-driven round-robin scheduler
 * Executable programs, in ELF format
 * Virtual filesystem, following everything-is-a-file principle
 * Keyboard input
 * Disk IO:
     * ATA PIO (Read only)
     * VirtIO-blk (Read only)
-* Simple RamFS
+* Networking:
+    * RTL8139 driver
+    * Usable TCP/IP stack
 
 ## Planned in near future:
 * A shell (with virtual TTYs!)
-* A simple filesystem, and writing to disk
+* More filesystems and writing to disk
 
 ## Not-in-so-near future features:
 * Networking
- * Intel E1000 driver
- * VirtIO-net driver
+    * Intel E1000 driver
+    * VirtIO-net driver
 * Automated tests
-* A proper filesystem, maybe SFS, FAT32, or ext3
+* Proper filesystem drivers, maybe FAT32, or ext2/3
 * Shell and utilities
-* Device drivers for USB/Audio/NICs
+* Device drivers for USB and Audio devices
+
+
+# Development
+
+This is a learning project. Currently code contributions are not accepted, as I'd like to learn to fix the problems myself. Forking the project is of course possible, if you'd like to develop something based on this.
+Feel free to submit issues on GitHub if you find any bugs.
 
 # Running
 The project is using Vagrant to virtualize the building environment. While being a little slower, this means that building the system on any supported platform should Just Work™. If you have a Unix-like system, install Qemu and
@@ -61,7 +64,7 @@ With Qemu and Vagrant installed, run `./autobuild.sh -u`. With Bochs: `./autobui
 ## Local development
 
 ```bash
-cargo fmt && factory && ./autobuild.sh -r
+cargo fmt && factory && ./autobuild.sh -n
 ```
 
 # License

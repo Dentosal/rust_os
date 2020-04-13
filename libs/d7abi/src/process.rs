@@ -12,22 +12,19 @@ use x86_64::structures::idt::PageFaultErrorCode;
 #[serde(transparent)]
 pub struct ProcessId(NonZeroU64);
 impl ProcessId {
-    /// # Safety
     /// Must be called only once
-    pub const unsafe fn first() -> Self {
-        Self(NonZeroU64::new_unchecked(1))
+    pub const fn first() -> Self {
+        Self(unsafe {NonZeroU64::new_unchecked(1)})
     }
 
-    /// # Safety
     /// Must be only called for an actual process ids
     /// Only to be used when deserializing from system call results and such
-    pub unsafe fn from_u64(value: u64) -> Self {
+    pub fn from_u64(value: u64) -> Self {
         Self(NonZeroU64::new(value).expect("Zero ProcessId"))
     }
 
-    /// # Safety
     /// Only to be used by the process scheduler
-    pub unsafe fn next(self) -> Self {
+    pub fn next(self) -> Self {
         assert_ne!(self.0.get(), u64::MAX, "Kernel process id has no successor");
         Self(NonZeroU64::new(self.0.get() + 1).expect("Overflow"))
     }
@@ -38,7 +35,8 @@ impl ProcessId {
 }
 impl fmt::Display for ProcessId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.pad_integral(true, "", &format!("{}", self.0))
+        write!(f, "{}", self.0) // XXX HERE?
+        // f.pad_integral(true, "", &format!("{}", self.0))
     }
 }
 

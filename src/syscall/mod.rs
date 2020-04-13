@@ -173,7 +173,7 @@ fn syscall(
                         .expect("ATTACH FAILED");
                     unsafe { m.unmap_area(area) };
                     m.free_virtual_area(area);
-                    SyscallResult::Continue(Ok(unsafe { fc.fd.as_u64() }))
+                    SyscallResult::Continue(Ok(fc.fd.as_u64()))
                 } else {
                     SyscallResult::Terminate(process::ProcessResult::Failed(
                         process::Error::Pointer(path_ptr),
@@ -192,8 +192,8 @@ fn syscall(
                     let fileinfo: FileInfo = fs.fileinfo(path)?;
                     unsafe {
                         m.process_write_value(process, fileinfo, dst_ptr);
-                    }
-                    unsafe { m.unmap_area(area) };
+                        m.unmap_area(area)
+                    };
                     m.free_virtual_area(area);
 
                     SyscallResult::Continue(Ok(0))
@@ -205,7 +205,7 @@ fn syscall(
             },
             SC::fd_close => {
                 let (fd, _, _, _) = rsc.args;
-                let fd = unsafe { FileDescriptor::from_u64(fd) };
+                let fd = FileDescriptor::from_u64(fd);
                 let fc = FileClientId::process(pid, fd);
                 log::info!("[pid={:8}] fd_close {:?}", pid, fc);
                 let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
@@ -214,7 +214,7 @@ fn syscall(
             },
             SC::fd_read => {
                 let (fd, buf, count, _) = rsc.args;
-                let fd = unsafe { FileDescriptor::from_u64(fd) };
+                let fd = FileDescriptor::from_u64(fd);
                 let buf = VirtAddr::new(buf);
                 let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
                 if let Some((area, slice)) = unsafe { m.process_slice_mut(process, count, buf) } {
@@ -232,7 +232,7 @@ fn syscall(
             },
             SC::fd_write => {
                 let (fd, buf, count, _) = rsc.args;
-                let fd = unsafe { FileDescriptor::from_u64(fd) };
+                let fd = FileDescriptor::from_u64(fd);
                 let buf = VirtAddr::new(buf);
                 let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
                 if let Some((area, slice)) = unsafe { m.process_slice(process, count, buf) } {
@@ -267,11 +267,9 @@ fn syscall(
                 {
                     let mut conditions = Vec::new();
                     for fd_bytes in fds_slice.chunks_exact(8) {
-                        let fd = unsafe {
-                            FileDescriptor::from_u64(u64::from_le_bytes(
-                                fd_bytes.try_into().unwrap(),
-                            ))
-                        };
+                        let fd = FileDescriptor::from_u64(u64::from_le_bytes(
+                            fd_bytes.try_into().unwrap(),
+                        ));
                         let fc = FileClientId::process(pid, fd);
                         let condition = fs.read_waiting_for(sched, fc)?;
 
@@ -281,7 +279,7 @@ fn syscall(
 
                         if condition == WaitFor::None {
                             unsafe { m.unmap_area(area) };
-                            return SyscallResult::Continue(Ok(unsafe { fd.as_u64() }));
+                            return SyscallResult::Continue(Ok(fd.as_u64()));
                         }
                         conditions.push(condition);
                     }
@@ -308,7 +306,7 @@ fn syscall(
             },
             SC::fd_get_pid => {
                 let (fd, _, _, _) = rsc.args;
-                let fd = unsafe { FileDescriptor::from_u64(fd) };
+                let fd = FileDescriptor::from_u64(fd);
                 let fc = FileClientId::process(pid, fd);
                 let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
                 let pid = fs.get_pid(fc)?;
@@ -389,9 +387,9 @@ pub fn handle_syscall(
             routine: reg_rax,
             args: (reg_rdi, reg_rsi, reg_rdx, reg_rcx),
         };
-        log::trace!("[pid={:8}] <= {:x} ", pid, rsc.routine);
+        log::trace!("[pid={}] <= {:x} ", pid, rsc.routine);
         let res = syscall(mm, &mut sched, pid, rsc);
-        log::trace!("[pid={:8}] => {:?} ", pid, res);
+        log::trace!("[pid={}] => {:?} ", pid, res);
 
         // Write result register values into the process stack
         if let SyscallResult::Continue(r) | SyscallResult::Switch(r, _) = res {

@@ -88,7 +88,7 @@ impl Attachment {
             let req = Request {
                 sender: Sender {
                     pid: closed_fc.process.expect("TODO? kernel"),
-                    f: unsafe { closed_fc.fd.as_u64() },
+                    f: closed_fc.fd.as_u64(),
                 },
                 operation: RequestFileOperation::Close,
             };
@@ -118,7 +118,7 @@ impl Attachment {
             let req = Request {
                 sender: Sender {
                     pid: reader_fc.process.expect("TODO? kernel"),
-                    f: unsafe { reader_fc.fd.as_u64() },
+                    f: reader_fc.fd.as_u64(),
                 },
                 operation: RequestFileOperation::Read(buf.len() as u64), // TODO: replace with correct size
             };
@@ -149,7 +149,7 @@ impl Attachment {
             let req = Request {
                 sender: Sender {
                     pid: reader_fc.process.expect("TODO? kernel"),
-                    f: unsafe { reader_fc.fd.as_u64() },
+                    f: reader_fc.fd.as_u64(),
                 },
                 operation: RequestFileOperation::Write(data.into_iter().collect()),
             };
@@ -254,9 +254,10 @@ impl FileOps for Attachment {
             let (response, rest): (Response, &[u8]) =
                 pinecone::take_from_bytes(buf).expect("Partial write from manager");
 
-            let client_fc = FileClientId::process(response.sender.pid, unsafe {
-                FileDescriptor::from_u64(response.sender.f)
-            });
+            let client_fc = FileClientId::process(
+                response.sender.pid,
+                FileDescriptor::from_u64(response.sender.f),
+            );
 
             let client_wakeup_event = match response.operation {
                 ResponseFileOperation::Read(data) => {

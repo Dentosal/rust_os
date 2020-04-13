@@ -11,7 +11,6 @@ extern crate libd7;
 
 use alloc::prelude::v1::*;
 
-use core::time::Duration;
 use d7net::{arp, ethernet, ipv4, tcp, EtherType, IpProtocol, Ipv4Addr, MacAddr};
 use libd7::{
     attachment,
@@ -24,6 +23,7 @@ struct NetState {
     pub nic: File,
     pub mac: MacAddr,
     pub ip: Ipv4Addr,
+    pub next_socket: u64,
 }
 impl NetState {
     pub fn new() -> Self {
@@ -38,8 +38,15 @@ impl NetState {
         Self {
             nic: File::open("/dev/nic").unwrap(),
             mac,
-            ip:Ipv4Addr([10, 0, 2, 15]) // Use fixed IP until DHCP is implemented
+            ip: Ipv4Addr([10, 0, 2, 15]), // Use fixed IP until DHCP is implemented
+            next_socket: 1,
         }
+    }
+
+    pub fn get_new_socket_name(&mut self) -> String {
+        let result = format!("socket{}", self.next_socket);
+        self.next_socket += 1;
+        result
     }
 
     pub fn on_event(&mut self) {
@@ -71,7 +78,8 @@ impl NetState {
                     })
                     .to_bytes();
 
-                    self.nic.write_all(&pinecone::to_vec(&OutboundPacket { packet: reply }).unwrap())
+                    self.nic
+                        .write_all(&pinecone::to_vec(&OutboundPacket { packet: reply }).unwrap())
                         .unwrap();
                 }
             }
@@ -100,27 +108,29 @@ fn main() -> ! {
 
     let mut net_state = NetState::new();
 
+    let mut a_root = attachment::StaticBranch::new("/srv/net").unwrap();
+    let mut a_sockets = a_root.add_branch("socket").unwrap();
+    let mut a_newsocket = a_root.add_branch("newsocket").unwrap();
 
-    let mut a_root = attachment::StaticBranch::new("/net").unwrap();
-    let mut a_udp = a_root.add_branch("udp").unwrap();
-    let mut a_tcp = a_root.add_branch("tcp").unwrap();
-
+    // Announce that we are running
+    File::open("/srv/service").unwrap().write_all(&[1]).unwrap();
 
     loop {
         println!("--> select!");
         select! {
-            ok net_state.nic.fd => net_state.on_event(),
-            ok a_root.inner.fd => a_root.process_one().unwrap(),
-            ok a_udp.fd => {
-                println!("--> udp");
-                let r = a_udp.next_request();
-                panic!("udp: {:?}", r);
+            one(net_state.nic.fd) => net_state.on_event(),
+            one(a_root.inner.fd) => a_root.process_one().unwrap(),
+            one(a_sockets.fd) => {
+                println!("--> sockets");
+                let r = a_sockets.next_request();
+                panic!("sockets: {:?}", r);
             },
-            ok a_tcp.fd => {
-                println!("--> tcp");
-                let r = a_tcp.next_request();
-                panic!("tcp: {:?}", r);
+            one(a_newsocket.fd) => {
+                println!("--> newsocket");
+                let r = a_newsocket.next_request();
+                panic!("newsocket: {:?}", r);
             },
+            error -> e => panic!("ERROR {:?}", e)
         };
     }
 }

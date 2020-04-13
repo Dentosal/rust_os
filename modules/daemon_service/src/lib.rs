@@ -39,7 +39,7 @@ struct ServiceDefinition {
     /// A (short) description of the service
     description: Option<String>,
     /// Requires these services to be running before starting
-    requires: HashSet<String>,
+    requires: HashSet<ServiceName>,
     /// Absolute path to the executable
     executable: String,
 }
@@ -95,8 +95,10 @@ impl Services {
 
     /// Check requirements
     fn are_requirements_up(&mut self, def: &ServiceDefinition) -> bool {
+        println!("REQS FOR {:?}", def.name);
         for req in &def.requires {
-            if self.get_running(&def.name).is_none() {
+            if self.get_running(&req).is_none() {
+                println!("REQ {:?} is down", req);
                 return false;
             }
         }
@@ -136,6 +138,7 @@ impl Services {
         for r in &mut self.running {
             if r.process.pid() == pid {
                 r.startup_complete = true;
+                return;
             }
         }
         println!("Process with returned fd was not running");
@@ -180,6 +183,7 @@ fn main() -> ! {
     let a = attachment::Leaf::new("/srv/service").unwrap();
 
     loop {
+        println!("STEP");
         let should_block = services.step();
 
         // Only block if there are no processes in startup queue

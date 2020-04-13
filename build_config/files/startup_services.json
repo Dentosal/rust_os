@@ -6,7 +6,7 @@
         "executable": "/mnt/staticfs/netd"
     },
     {
-        "name": "examples",
+        "name": "example",
         "description": "Example user binary",
         "requires": ["netd"],
         "executable": "/mnt/staticfs/examplebin"

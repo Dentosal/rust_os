@@ -325,7 +325,7 @@ macro_rules! rclearline {
 }
 macro_rules! rforce_unlock {
     () => {{
-        $crate::driver::vga_buffer::TERMINAL.force_unlock();
+        // $crate::driver::vga_buffer::TERMINAL.force_unlock();
     }};
 }
 macro_rules! panic_indicator {

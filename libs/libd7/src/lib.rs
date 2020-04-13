@@ -22,6 +22,7 @@ mod select;
 pub mod attachment;
 pub mod console;
 pub mod fs;
+pub mod net;
 pub mod process;
 pub mod syscall;
 

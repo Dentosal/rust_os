@@ -24,7 +24,7 @@ impl FileOps for NetworkDevice {
         let data = pinecone::to_vec(&net_event).expect("Couldn't serialize network event");
         assert!(data.len() <= buf.len(), "Buffer is too small"); // TODO: client error, not a kernel panic
         buf[..data.len()].copy_from_slice(&data);
-        IoResult::success(data.len()).with_events(events.into_iter())
+        IoResult::success(data.len()) // HERE TODO handle context
     }
 
     fn read_waiting_for(&mut self, _fc: FileClientId) -> WaitFor {

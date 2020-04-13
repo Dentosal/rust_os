@@ -93,8 +93,15 @@ impl<T> IoResult<T> {
         self
     }
 
-    pub fn separate_events(mut self) -> (IoResultPure<T>, Vec<ExplicitEventId>) {
-        (self.inner, self.events)
+    pub fn with_context(mut self, mut context: IoContext) -> Self {
+        self.events.extend(context.events.drain(..));
+        self
+    }
+
+    pub fn separate_events(mut self) -> (IoResultPure<T>, IoContext) {
+        (self.inner, IoContext {
+            events: self.events,
+        })
     }
 }
 
@@ -172,25 +179,56 @@ impl<T: fmt::Debug> IoResultPure<T> {
     }
 }
 
+/// IO operation context
+#[derive(Debug)]
+#[must_use = "IoContext must be handled to prevent dropping events"]
+pub struct IoContext {
+    events: Vec<ExplicitEventId>,
+}
+impl IoContext {
+    pub fn new() -> Self {
+        Self { events: Vec::new() }
+    }
+
+    /// No events (yet)
+    pub fn is_empty(&self) -> bool {
+        self.events.is_empty()
+    }
+
+    /// Take events from IoResult, purifying it
+    pub fn purify<T>(&mut self, r: IoResult<T>) -> IoResultPure<T> {
+        self.events.extend(r.events.into_iter());
+        r.inner
+    }
+}
+
+impl Drop for IoContext {
+    fn drop(&mut self) {
+        assert!(self.is_empty(), "Unhandled events in IoContext");
+    }
+}
+
 /// IO errors never contain a value, so the type is replaced with Missing
 pub struct Missing;
 
 impl<T> core::ops::Try for IoResult<T> {
-    type Ok = (T, Vec<ExplicitEventId>);
+    type Ok = (T, IoContext);
     type Error = IoResult<Missing>;
 
     fn into_result(self) -> Result<Self::Ok, Self::Error> {
         if let IoResultPure::Success(v) = self.inner {
-            Ok((v, self.events))
+            Ok((v, IoContext {
+                events: self.events,
+            }))
         } else {
             Err(self.erase_type())
         }
     }
 
-    fn from_ok((inner, events): Self::Ok) -> Self {
+    fn from_ok((inner, mut context): Self::Ok) -> Self {
         Self {
             inner: IoResultPure::Success(inner),
-            events,
+            events: context.events.drain(..).collect(),
         }
     }
 

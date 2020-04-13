@@ -6,16 +6,13 @@
 #![deny(overflowing_literals)]
 #![deny(safe_packed_borrows)]
 #![deny(unused_must_use)]
-#![allow(incomplete_features)]
 // Code style (development time)
 #![allow(unused_macros)]
 #![allow(dead_code)]
 // Code style (temp)
 #![allow(unused_variables)]
 #![allow(unused_imports)]
-#![allow(unused_parens)]
 #![allow(unused_mut)]
-#![allow(unused_unsafe)]
 #![allow(unreachable_code)]
 // Disable some clippy lints
 #![allow(clippy::cast_ptr_alignment)]
@@ -36,7 +33,6 @@
 #![feature(box_into_raw_non_null)]
 #![feature(box_syntax, box_patterns)]
 #![feature(const_fn)]
-#![feature(const_generics)]
 #![feature(core_intrinsics)]
 #![feature(integer_atomics)]
 #![feature(lang_items)]
@@ -147,6 +143,7 @@ pub extern "C" fn rust_main() -> ! {
     // Wait until the next clock tick interrupt,
     // after that the process scheduler takes over
     unsafe {
+        bochs_magic_bp!();
         interrupt::enable_external_interrupts();
         loop {
             asm!("hlt")

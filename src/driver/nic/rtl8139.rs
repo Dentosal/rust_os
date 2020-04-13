@@ -278,7 +278,9 @@ impl RTL8139 {
 
             let status = RxStatus::from_bits_truncate(status_bits);
 
+            log::error!("JUST BEFORE CRASH");
             log::debug!("receive status: {:?}", status);
+            log::error!("JUST AFTER CRASH");
 
             if !status.contains(RxStatus::OK) {
                 log::warn!("receive status not ok");

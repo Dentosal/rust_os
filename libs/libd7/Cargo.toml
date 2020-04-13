@@ -43,3 +43,6 @@ path = "../d7abi"
 
 [dependencies.d7keymap]
 path = "../d7keymap"
+
+[dependencies.d7net]
+path = "../d7net"

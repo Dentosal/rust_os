@@ -92,11 +92,12 @@ pub(super) unsafe fn exception_snp(stack_frame: &InterruptStackFrame, error_code
 /// In both cases idle and continue are equivalent
 pub(super) unsafe extern "C" fn exception_irq0() -> u128 {
     let next_process = time::SYSCLOCK.tick();
-    pic::PICS.lock().notify_eoi(0x20);
+    pic::PICS.try_lock().unwrap().notify_eoi(0x20);
     match next_process {
         ProcessSwitch::Switch(p) => return_process(p),
         ProcessSwitch::RepeatSyscall(p) => {
             if let Some(rp) = handle_repeat_syscall(p) {
+                log::trace!("retp {:?}", rp);
                 return_process(rp)
             } else {
                 0

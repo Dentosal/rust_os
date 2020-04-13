@@ -22,12 +22,12 @@ use alloc::prelude::v1::*;
 fn main() -> u64 {
     let pid = syscall::get_pid();
 
-    // let tcp_server = tcp::Socket::bind(SocketAddr {
-    //     host: IpAddr::V4(Ipv4Addr([0,0,0,0])),
-    //     port: 22,
-    // }).unwrap();
+    let tcp_server = tcp::Socket::bind(SocketAddr {
+        host: IpAddr::V4(Ipv4Addr([0,0,0,0])),
+        port: 22,
+    }).unwrap();
 
-    // loop {}
+    loop {}
 
     // Console
     let mut console = Console::open(

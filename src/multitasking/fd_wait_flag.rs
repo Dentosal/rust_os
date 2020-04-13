@@ -1,6 +1,6 @@
 use alloc::prelude::v1::Box;
 
-use crate::filesystem::error::IoResult;
+use crate::filesystem::result::IoResult;
 use crate::multitasking::{ExplicitEventId, WaitFor, SCHEDULER};
 
 /// Cross-process wait condition flag for file descriptor operations
@@ -25,7 +25,7 @@ impl FdWaitFlag {
     pub fn set_available<T>(&mut self, and_then: IoResult<T>) -> IoResult<T> {
         if let Some(event_id) = self.event.take() {
             log::trace!("set_available trigger {:?}", event_id);
-            IoResult::TriggerEvent(event_id, Box::new(and_then))
+            and_then.with_event(event_id)
         } else {
             log::trace!("set_available no trigger");
             and_then

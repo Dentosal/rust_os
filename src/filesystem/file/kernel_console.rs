@@ -9,7 +9,7 @@ use crate::driver::keyboard::KEYBOARD;
 use crate::multitasking::ExplicitEventId;
 use crate::multitasking::WaitFor;
 
-use super::super::{error::*, FileClientId};
+use super::super::{result::*, FileClientId};
 use super::{FileOps, Leafness};
 
 /// `/dev/console`
@@ -31,11 +31,11 @@ impl FileOps for KernelConsoleDevice {
     /// Reads from the physical keyboard
     fn read(&mut self, _fd: FileClientId, buf: &mut [u8]) -> IoResult<usize> {
         let mut kbd = KEYBOARD.try_lock().unwrap();
-        let event = kbd.event_queue.io_pop_event()?;
-        let data = pinecone::to_vec(&event).expect("Couldn't serialize keyboard event");
+        let (kbd_event, events) = kbd.event_queue.io_pop_event()?;
+        let data = pinecone::to_vec(&kbd_event).expect("Couldn't serialize keyboard event");
         assert!(data.len() <= buf.len(), "Buffer is too small"); // TODO: client error, not a kernel panic
         buf[..data.len()].copy_from_slice(&data);
-        IoResult::Success(data.len())
+        IoResult::success(data.len()).with_events(events.into_iter())
     }
 
     fn read_waiting_for(&mut self, _fc: FileClientId) -> WaitFor {
@@ -56,6 +56,6 @@ impl FileOps for KernelConsoleDevice {
             rprintln!("");
         }
 
-        IoResult::Success(buf.len())
+        IoResult::success(buf.len())
     }
 }

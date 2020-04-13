@@ -6,7 +6,7 @@ use d7abi::fs::protocol;
 
 use crate::multitasking::WaitFor;
 
-use super::super::{error::IoResult, node::NodeId, FileClientId};
+use super::super::{node::NodeId, result::IoResult, FileClientId};
 use super::{CloseAction, FileOps, Leafness};
 
 /// Branch that doesn't require attached process, but
@@ -66,7 +66,7 @@ impl FileOps for InternalBranch {
                 break;
             }
         }
-        IoResult::Success(count)
+        IoResult::success(count)
     }
 
     fn read_waiting_for(&mut self, fc: FileClientId) -> WaitFor {
@@ -93,7 +93,7 @@ impl FileOps for InternalBranch {
                     if !found {
                         self.children.push((node_id, node_name));
                     }
-                    IoResult::Success(buf.len())
+                    IoResult::success(buf.len())
                 },
                 Ok(InternalModification::Remove(node_id)) => {
                     // Remove child if it exists
@@ -107,7 +107,7 @@ impl FileOps for InternalBranch {
                     if let Some(i) = index {
                         self.children.remove(i);
                     }
-                    IoResult::Success(buf.len())
+                    IoResult::success(buf.len())
                 },
                 Err(pinecone::Error::DeserializeUnexpectedEnd) => unimplemented!("Partial request"),
                 Err(other) => panic!("Deser error {:?}", other),
@@ -120,7 +120,7 @@ impl FileOps for InternalBranch {
     /// Remove buffers when closing
     fn close(&mut self, fd: FileClientId) -> IoResult<CloseAction> {
         self.readers.remove(&fd);
-        IoResult::Success(CloseAction::Normal)
+        IoResult::success(CloseAction::Normal)
     }
 }
 

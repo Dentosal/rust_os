@@ -9,7 +9,7 @@ use x86_64::{PhysAddr, VirtAddr};
 
 use d7abi::fs::{FileDescriptor, FileInfo};
 
-use crate::filesystem::{error::*, FILESYSTEM};
+use crate::filesystem::{result::*, FILESYSTEM};
 use crate::memory::prelude::*;
 use crate::memory::{self, MemoryController};
 use crate::multitasking::{process, Process, ProcessId, Scheduler, WaitFor, SCHEDULER};
@@ -50,7 +50,7 @@ pub enum SyscallResult {
 
 impl core::ops::Try for SyscallResult {
     type Ok = Self;
-    type Error = IoResult<Missing>;
+    type Error = IoResultPure<Missing>;
 
     fn into_result(self) -> Result<Self, Self::Error> {
         unimplemented!("??")
@@ -62,19 +62,16 @@ impl core::ops::Try for SyscallResult {
 
     fn from_error(error: Self::Error) -> Self {
         match error {
-            IoResult::Success(_missing) => unimplemented!("Success is not error"),
-            IoResult::RepeatAfter(waitfor) => Self::RepeatAfter(waitfor),
-            IoResult::TriggerEvent(_, _) => {
-                unreachable!("TriggerEvent should have been processed earlier")
-            },
-            IoResult::Code(code) => Self::Continue(Err(code.into())),
+            IoResultPure::Success(_missing) => unimplemented!("Success is not error"),
+            IoResultPure::RepeatAfter(waitfor) => Self::RepeatAfter(waitfor),
+            IoResultPure::Error(code) => Self::Continue(Err(code.into())),
         }
     }
 }
 
 macro_rules! try_str {
     ($slice:expr) => {
-        ::core::str::from_utf8($slice).map_err(|_| IoResult::Code(ErrorCode::invalid_utf8))?
+        ::core::str::from_utf8($slice).map_err(|_| IoResultPure::Error(ErrorCode::invalid_utf8))?
     };
 }
 
@@ -95,8 +92,6 @@ fn syscall(
     let pid = process.id();
 
     if let Ok(sc) = SC::try_from(rsc.routine) {
-        log::trace!("[pid={:8}] {:?} ", pid, sc);
-
         match sc {
             SC::exit => SyscallResult::Terminate(process::ProcessResult::Completed(rsc.args.0)),
             SC::get_pid => SyscallResult::Continue(Ok(pid.as_u64())),
@@ -134,6 +129,7 @@ fn syscall(
                 if let Some((area, slice)) = unsafe { m.process_slice(process, path_len, path_ptr) }
                 {
                     let path = try_str!(slice);
+                    log::info!("[pid={:8}] fs_open {:?}", pid, path);
                     let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
                     let fc = fs.open(sched, pid, path)?;
                     unsafe { m.unmap_area(area) };
@@ -151,7 +147,7 @@ fn syscall(
                 if let Some((area, slice)) = unsafe { m.process_slice(process, path_len, path_ptr) }
                 {
                     let path = try_str!(slice);
-                    log::info!("[pid={:8}] exec {:?}", pid, path);
+                    log::info!("[pid={:8}] fs_exec {:?}", pid, path);
                     let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
                     let fc = fs.exec(m, sched, pid, path).expect("EXEC FAILED");
                     unsafe { m.unmap_area(area) };
@@ -169,6 +165,7 @@ fn syscall(
                 if let Some((area, slice)) = unsafe { m.process_slice(process, path_len, path_ptr) }
                 {
                     let path = try_str!(slice);
+                    log::info!("[pid={:8}] fs_attach {:?}", pid, path);
                     let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
                     // TODO: Proper conversion to boolean for is_leaf
                     let fc = fs
@@ -190,6 +187,7 @@ fn syscall(
                 if let Some((area, slice)) = unsafe { m.process_slice(process, path_len, path_ptr) }
                 {
                     let path = try_str!(slice);
+                    log::info!("[pid={:8}] fs_fileinfo {:?}", pid, path);
                     let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
                     let fileinfo: FileInfo = fs.fileinfo(path)?;
                     unsafe {
@@ -209,6 +207,7 @@ fn syscall(
                 let (fd, _, _, _) = rsc.args;
                 let fd = unsafe { FileDescriptor::from_u64(fd) };
                 let fc = FileClientId::process(pid, fd);
+                log::info!("[pid={:8}] fd_close {:?}", pid, fc);
                 let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
                 fs.close(sched, fc)?;
                 SyscallResult::Continue(Ok(0))
@@ -220,6 +219,7 @@ fn syscall(
                 let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
                 if let Some((area, slice)) = unsafe { m.process_slice_mut(process, count, buf) } {
                     let fc = FileClientId::process(pid, fd);
+                    log::info!("[pid={:8}] fd_read {:?}", pid, fc);
                     let read_count = fs.read(sched, fc, slice)?;
                     unsafe { m.unmap_area(area) };
                     m.free_virtual_area(area);
@@ -237,6 +237,7 @@ fn syscall(
                 let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
                 if let Some((area, slice)) = unsafe { m.process_slice(process, count, buf) } {
                     let fc = FileClientId::process(pid, fd);
+                    log::info!("[pid={:8}] fd_read {:?}", pid, fd);
                     let written_count = fs.write(sched, fc, slice)?;
                     unsafe { m.unmap_area(area) };
                     m.free_virtual_area(area);
@@ -388,6 +389,7 @@ pub fn handle_syscall(
             routine: reg_rax,
             args: (reg_rdi, reg_rsi, reg_rdx, reg_rcx),
         };
+        log::trace!("[pid={:8}] <= {:x} ", pid, rsc.routine);
         let res = syscall(mm, &mut sched, pid, rsc);
         log::trace!("[pid={:8}] => {:?} ", pid, res);
 

@@ -8,8 +8,8 @@ use d7abi::fs::FileInfo;
 
 use crate::multitasking::ExplicitEventId;
 
-use super::error::*;
 use super::file::{CloseAction, FileOps, Leafness};
+use super::result::*;
 use super::FileClientId;
 use super::Path;
 
@@ -77,7 +77,7 @@ impl Node {
         if refcount_positive {
             default_action
         } else {
-            IoResult::Success(CloseAction::Destroy)
+            IoResult::success(CloseAction::Destroy)
         }
     }
 

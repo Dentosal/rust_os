@@ -8,7 +8,9 @@ use alloc::prelude::v1::*;
 use hashbrown::HashMap;
 
 use crate::driver::disk_io::DISK_IO;
-use crate::filesystem::{error::*, CloseAction, FileClientId, FileOps, Leafness, Path, FILESYSTEM};
+use crate::filesystem::{
+    result::*, CloseAction, FileClientId, FileOps, Leafness, Path, FILESYSTEM,
+};
 use crate::multitasking::WaitFor;
 
 pub struct StaticFSLeaf {
@@ -60,7 +62,7 @@ impl FileOps for StaticFSLeaf {
         let count = (data.len() - offset).min(buf.len());
         buf[..count].copy_from_slice(&data[offset..offset + count]);
         self.readers.insert(fc, offset + count);
-        IoResult::Success(count)
+        IoResult::success(count)
     }
 
     fn read_waiting_for(&mut self, fc: FileClientId) -> WaitFor {
@@ -70,7 +72,7 @@ impl FileOps for StaticFSLeaf {
     /// Remove reader when closing
     fn close(&mut self, fc: FileClientId) -> IoResult<CloseAction> {
         self.readers.remove(&fc);
-        IoResult::Success(CloseAction::Normal)
+        IoResult::success(CloseAction::Normal)
     }
 }
 

@@ -13,14 +13,14 @@ use crate::multitasking::{
     ElfImage, Scheduler, WaitFor,
 };
 
-pub mod error;
 pub mod file;
 mod node;
 mod path;
+pub mod result;
 pub mod staticfs;
 
-use self::error::{ErrorCode, IoResult};
 use self::file::*;
+use self::result::{ErrorCode, IoResult, IoResultPure};
 
 pub use self::node::*;
 pub use self::path::{Path, PathBuf};
@@ -87,40 +87,39 @@ impl ProcessDescriptors {
 /// # Safety
 /// This is marked unsafe, as it discards data if an io error occurs during it.
 unsafe fn read_to_end(file: &mut dyn FileOps, fc: FileClientId) -> IoResult<Vec<u8>> {
-    const IO_BUFFER_SIZE: usize = 1024;
+    const IO_BUFFER_SIZE: usize = 4096;
 
     let mut result = Vec::new();
     let mut buffer = [0u8; IO_BUFFER_SIZE];
     loop {
-        let r = file.read(fc, &mut buffer);
-        if r.has_events() {
-            return r.erase_type();
-        }
-        let count = r?;
+        let (count, events) = file.read(fc, &mut buffer)?;
+        assert!(events.is_empty()); // TODO
         result.extend(buffer[..count].iter());
         if count < IO_BUFFER_SIZE {
             // EOF
             break;
         }
     }
-    IoResult::Success(result)
+    IoResult::success(result)
 }
 
 /// Write all bytes. Used when the kernel needs to write a fixed amount of data.
 /// # Safety
 /// This is marked unsafe, as it discards data if an io error occurs during it.
 unsafe fn write_all(file: &mut dyn FileOps, fc: FileClientId, data: &[u8]) -> IoResult<()> {
-    const IO_BUFFER_SIZE: usize = 1024;
+    const IO_BUFFER_SIZE: usize = 4096;
 
     let mut offset: usize = 0;
+    let mut events = Vec::new();
     while offset < data.len() {
-        let count = file.write(fc, &data[offset..])?;
+        let (count, new_events) = file.write(fc, &data[offset..])?;
+        events.extend(new_events.into_iter());
         offset += count;
         if count == 0 {
             panic!("Write failed");
         }
     }
-    IoResult::Success(())
+    IoResult::success(()).with_events(events.into_iter())
 }
 
 /// Serialize with Pinecone, and write all bytes
@@ -161,10 +160,13 @@ impl VirtualFS {
     fn resolve(&mut self, path: &Path) -> IoResult<NodeId> {
         assert!(path.is_absolute());
         let mut cursor: NodeId = ROOT_ID;
+        let mut events = Vec::new();
         for c in path.components() {
-            cursor = self.get_child(cursor, c)?;
+            let (new_cursor, new_events) = self.get_child(cursor, c)?;
+            cursor = new_cursor;
+            events.extend(new_events.into_iter())
         }
-        IoResult::Success(cursor)
+        IoResult::success(cursor).with_events(events.into_iter())
     }
 
     /// Node ancestry in order [node, ..., root], or None if not connected to root
@@ -178,7 +180,7 @@ impl VirtualFS {
                 break;
             }
         }
-        IoResult::Success(if *ancestry.last().unwrap() == ROOT_ID {
+        IoResult::success(if *ancestry.last().unwrap() == ROOT_ID {
             Some(ancestry)
         } else {
             None
@@ -209,7 +211,7 @@ impl VirtualFS {
                     }
                 }
                 todo!("???"); // FIXME: remove this?
-            // IoResult::Code(ErrorCode::fs_node_not_found)
+            // IoResult::error(ErrorCode::fs_node_not_found)
             } else {
                 break;
             }
@@ -217,28 +219,26 @@ impl VirtualFS {
         Some(pb)
     }
 
-    pub fn node(&self, id: NodeId) -> IoResult<&Node> {
+    pub fn node(&self, id: NodeId) -> IoResultPure<&Node> {
         if let Some(node) = self.nodes.get(&id) {
-            IoResult::Success(node)
+            IoResultPure::Success(node)
         } else {
-            IoResult::Code(ErrorCode::fs_file_destroyed)
+            IoResultPure::Error(ErrorCode::fs_file_destroyed)
         }
     }
 
-    pub fn node_mut(&mut self, id: NodeId) -> IoResult<&mut Node> {
+    pub fn node_mut(&mut self, id: NodeId) -> IoResultPure<&mut Node> {
         if let Some(node) = self.nodes.get_mut(&id) {
-            IoResult::Success(node)
+            IoResultPure::Success(node)
         } else {
-            IoResult::Code(ErrorCode::fs_file_destroyed)
+            IoResultPure::Error(ErrorCode::fs_file_destroyed)
         }
     }
 
     /// Create a new node
     pub fn create_node(&mut self, parent: NodeId, name: &str, new_node: Node) -> IoResult<NodeId> {
-        IoResult::Success(
-            self.create_node_with(parent, name, |_, _| (new_node, ()))?
-                .0,
-        )
+        self.create_node_with(parent, name, |_, _| (new_node, ()))
+            .map(|t| t.0)
     }
 
     /// Create a new node, with contents created using a closure
@@ -247,16 +247,17 @@ impl VirtualFS {
     ) -> IoResult<(NodeId, R)>
     where F: FnOnce(&mut Self, NodeId) -> (Node, R) {
         let new_node_id = self.next_node_id;
-        if self.has_child(parent, name)? {
-            IoResult::Code(ErrorCode::fs_node_exists)
+        let (exists, events) = self.has_child(parent, name)?;
+        if exists {
+            IoResult::error(ErrorCode::fs_node_exists).with_events(events.into_iter())
         } else if self.node(parent)?.leafness() == Leafness::Leaf {
-            IoResult::Code(ErrorCode::fs_node_is_leaf)
+            IoResult::error(ErrorCode::fs_node_is_leaf).with_events(events.into_iter())
         } else {
             self.add_child(parent, name, new_node_id)?;
             let (new_node, result) = f(self, new_node_id);
             self.nodes.insert(new_node_id, new_node);
             self.next_node_id = new_node_id.next();
-            IoResult::Success((new_node_id, result))
+            IoResult::success((new_node_id, result)).with_events(events.into_iter())
         }
     }
 
@@ -279,11 +280,11 @@ impl VirtualFS {
     /// will not be removed automatically
     fn create_static(&mut self, path: &Path, dev: Box<dyn FileOps>) -> IoResult<NodeId> {
         let parent_path = path.parent().expect("Path without parent?");
-        let parent: NodeId = self.resolve(parent_path)?;
+        let (parent, events1) = self.resolve(parent_path)?;
         let file_name = path.file_name().expect("Path without file_name?");
-        let id = self.create_node(parent, file_name, Node::new(Some(parent), dev))?;
+        let (id, events2) = self.create_node(parent, file_name, Node::new(Some(parent), dev))?;
         self.node_mut(id).unwrap().inc_ref();
-        IoResult::Success(id)
+        IoResult::success(id).with_events(events1.into_iter().chain(events2.into_iter()))
     }
 
     /// Create a new branch node, and give it one initial reference so it
@@ -292,66 +293,64 @@ impl VirtualFS {
         self.create_static(path, Box::new(InternalBranch::new()))
     }
 
-    /// File info (system call)
-    pub fn fileinfo(&mut self, path: &str) -> IoResult<FileInfo> {
-        let path = Path::new(path);
-        let id = self.resolve(path)?;
-        IoResult::Success(self.node(id)?.fileinfo())
-    }
-
     pub fn get_children(&mut self, node_id: NodeId) -> IoResult<Vec<(NodeId, String)>> {
         match self.node(node_id)?.leafness() {
-            Leafness::Leaf => IoResult::Code(ErrorCode::fs_node_is_leaf),
+            Leafness::Leaf => IoResult::error(ErrorCode::fs_node_is_leaf),
             Leafness::Branch => {
+                use d7abi::fs::protocol::attachment::ReadAttachmentBranch;
                 // Use `ReadAttachmentBranch` protocol.
                 // Note that this might result in event + repeat after request
                 let fc = self.take_kernel_fc();
                 let node = self.node_mut(node_id)?;
                 log::trace!("get_children (attachment)");
                 node.open(fc)?;
-                let bytes = unsafe { read_to_end(&mut *node.data, fc)? };
                 todo!();
             },
             Leafness::InternalBranch => {
                 // Use internal branch protocol.
-                let bytes = self.temp_open(node_id, |node, fc| unsafe {
+                let (bytes, events) = self.temp_open(node_id, |node, fc| unsafe {
                     read_to_end(&mut *node.data, fc)
                 })?;
-                IoResult::Success(
+                IoResult::success(
                     pinecone::from_bytes(&bytes)
-                        .expect("Failed to decode InternalBranch protocol message"),
+                        .expect("Failed to deserialize InternalBranch protocol message"),
                 )
+                .with_events(events.into_iter())
             },
         }
     }
 
     pub fn get_child(&mut self, node_id: NodeId, name: &str) -> IoResult<NodeId> {
-        IoResult::Success(
-            self.get_children(node_id)?
+        let (children, events) = self.get_children(node_id)?;
+        IoResult::success(
+            children
                 .iter()
                 .find(|(_, n_name)| n_name == name)
                 .map(|(id, _)| id)
                 .copied()
-                .ok_or(IoResult::Code(ErrorCode::fs_node_not_found))?,
+                .ok_or(IoResult::error(ErrorCode::fs_node_not_found))?,
         )
+        .with_events(events.into_iter())
     }
 
     pub fn has_child(&mut self, node_id: NodeId, name: &str) -> IoResult<bool> {
-        match self.get_child(node_id, name) {
-            IoResult::Success(_) => IoResult::Success(true),
-            IoResult::Code(ErrorCode::fs_node_not_found) => IoResult::Success(false),
+        let (child, events) = self.get_child(node_id, name).separate_events();
+        IoResult::success(match child {
+            IoResultPure::Success(_) => true,
+            IoResultPure::Error(ErrorCode::fs_node_not_found) => false,
             other => {
                 let _ = other?;
                 unreachable!()
             },
-        }
+        })
+        .with_events(events.into_iter())
     }
 
     /// Adds a child. This does not work with non-internal branches;
     /// they must be modified by userspace processes only.
     fn add_child(&mut self, parent_id: NodeId, child_name: &str, child_id: NodeId) -> IoResult<()> {
         match self.node(parent_id)?.leafness() {
-            Leafness::Leaf => IoResult::Code(ErrorCode::fs_node_is_leaf),
+            Leafness::Leaf => IoResult::error(ErrorCode::fs_node_is_leaf),
             Leafness::Branch => panic!("add_child only supports internal branches"),
             Leafness::InternalBranch => {
                 // Use internal branch protocol
@@ -369,9 +368,9 @@ impl VirtualFS {
 
     /// Removes a child. This does not work with non-internal branches;
     /// they must be modified by userspace processes only.
-    fn remove_child(&mut self, parent_id: NodeId, child_id: NodeId) -> IoResult<()> {
+    fn remove_child(&mut self, parent_id: NodeId, child_id: NodeId) -> IoResultPure<()> {
         match self.node(parent_id)?.leafness() {
-            Leafness::Leaf => IoResult::Code(ErrorCode::fs_node_is_leaf),
+            Leafness::Leaf => IoResultPure::Error(ErrorCode::fs_node_is_leaf),
             Leafness::Branch => panic!("remove_child only supports internal branches"),
             Leafness::InternalBranch => {
                 // Use internal branch protocol
@@ -383,6 +382,7 @@ impl VirtualFS {
                         &pinecone::to_vec(&data).expect("Failed to encode"),
                     )
                 })
+                .expect_events("remove_child doesn't support events")
             },
         }
     }
@@ -400,7 +400,7 @@ impl VirtualFS {
         let (keep, events) = node.close(fc).separate_events();
         let keep = keep.expect("close must not fail (temp_open)");
         assert!(keep == CloseAction::Normal, "Not possible");
-        result.add_events(events.into_iter())
+        result.with_events(events.into_iter())
     }
 
     /// Get process descriptors
@@ -413,27 +413,36 @@ impl VirtualFS {
         self.descriptors.get_mut(&pid).expect("No such process")
     }
 
+    /// File info (system call)
+    pub fn fileinfo(&mut self, path: &str) -> IoResultPure<FileInfo> {
+        let path = Path::new(path);
+        let id = self
+            .resolve(path)
+            .expect_events("TODO: support fs_fileinfo events")?;
+        IoResultPure::Success(self.node(id)?.fileinfo())
+    }
+
     /// Open a file (system call)
     pub fn open(
         &mut self, sched: &mut Scheduler, pid: ProcessId, path: &str,
-    ) -> IoResult<FileClientId> {
+    ) -> IoResultPure<FileClientId> {
         let path = Path::new(path);
-        log::info!("[pid={:8}] open {:?}", pid, path);
-        let node_id = self.resolve(path.clone())?;
+        let node_id = self.resolve(path.clone()).consume_events(sched)?;
         let process = self.process_mut(pid);
         let fd = process.create_id(node_id);
         let fc = FileClientId::process(pid, fd);
         self.node_mut(node_id)?.open(fc).consume_events(sched)?;
-        IoResult::Success(fc)
+        IoResultPure::Success(fc)
     }
 
     /// Exec a file (system call)
     pub fn exec(
         &mut self, mem_ctrl: &mut MemoryController, sched: &mut Scheduler, owner_pid: ProcessId,
         path: &str,
-    ) -> IoResult<FileClientId>
+    ) -> IoResultPure<FileClientId>
     {
         self.exec_optional_owner(mem_ctrl, sched, path, Some(owner_pid))
+            .consume_events(sched)
     }
 
     /// Exec a file without a parent process, i.e. init
@@ -449,11 +458,11 @@ impl VirtualFS {
     ) -> IoResult<FileClientId>
     {
         // Load elf image
-        let elfimage = self.load_module(mem_ctrl, path)?;
+        let elfimage = self.load_module(mem_ctrl, path).consume_events(sched)?;
 
         // Open the executable file for the owner of the process
         let path = Path::new(path);
-        let owner_node_id = self.resolve(path)?;
+        let owner_node_id = self.resolve(path).consume_events(sched)?;
         let fc = {
             if let Some(pid) = owner_pid {
                 let process = self.process_mut(pid);
@@ -470,11 +479,13 @@ impl VirtualFS {
 
         // Create a node and descriptors for the process
         let directory_id = self.resolve(Path::new("/prc")).expect("/prc missing");
-        let node_id = self.create_node(
-            directory_id,
-            &new_pid.to_string(),
-            Node::new(Some(directory_id), Box::new(ProcessFile::new(new_pid, fc))),
-        )?;
+        let node_id = self
+            .create_node(
+                directory_id,
+                &new_pid.to_string(),
+                Node::new(Some(directory_id), Box::new(ProcessFile::new(new_pid, fc))),
+            )
+            .consume_events(sched)?;
         self.descriptors
             .insert(new_pid, ProcessDescriptors::new(node_id));
 
@@ -491,7 +502,7 @@ impl VirtualFS {
         self.node_mut(node_id)?
             .open(fc)
             .expect("Unable to open node");
-        IoResult::Success(fc)
+        IoResult::success(fc)
     }
 
     /// Loads elf image to ram and returns it
@@ -505,7 +516,9 @@ impl VirtualFS {
         use crate::memory::Area;
         use crate::memory::{self, Page};
 
-        let bytes = self.read_file(path)?;
+        let bytes = self
+            .read_file(path)
+            .expect_events("load_module doesn't support events yet")?;
 
         let size_pages =
             memory::page_align(PhysAddr::new(bytes.len() as u64), true).as_u64() / Page::SIZE;
@@ -527,12 +540,12 @@ impl VirtualFS {
 
         let elf = unsafe { ElfImage::new(area) };
         elf.verify();
-        IoResult::Success(elf)
+        IoResult::success(elf)
     }
 
     /// Resolves file descriptor for a process
-    pub fn resolve_fc(&mut self, fc: FileClientId) -> IoResult<NodeId> {
-        IoResult::Success(
+    pub fn resolve_fc(&mut self, fc: FileClientId) -> IoResultPure<NodeId> {
+        IoResultPure::Success(
             self.process(fc.process.expect("Kernel not supported here"))
                 .resolve(fc.fd)
                 .expect("No such file descriptor for process"),
@@ -544,11 +557,13 @@ impl VirtualFS {
     /// this is used to create subnodes for attached branches
     pub fn attach(
         &mut self, sched: &mut Scheduler, pid: ProcessId, path: &str, is_leaf: bool,
-    ) -> IoResult<FileClientId> {
+    ) -> IoResultPure<FileClientId> {
         let (node_id, fc) = if !path.is_empty() {
             // Create with an attachment point
             let path = Path::new(path);
-            let parent = self.resolve(path.parent().expect("No parent?"))?;
+            let parent = self
+                .resolve(path.parent().expect("No parent?"))
+                .consume_events(sched)?;
             let file_name = path.file_name().expect("No file_name?");
             self.create_node_with(parent, file_name, |s, id| {
                 let process = s.process_mut(pid);
@@ -558,7 +573,8 @@ impl VirtualFS {
                     Node::new(Some(parent), Box::new(Attachment::new(fc, is_leaf))),
                     fc,
                 )
-            })?
+            })
+            .consume_events(sched)?
         } else {
             // Create unattached
             self.create_anon_node_with(|s, id| {
@@ -570,14 +586,14 @@ impl VirtualFS {
         };
 
         // Create new fd for the attachment
-        self.node_mut(node_id)?.open(fc)?;
-        IoResult::Success(fc)
+        self.node_mut(node_id)?.open(fc).consume_events(sched)?;
+        IoResultPure::Success(fc)
     }
 
     /// Close a file descriptor (system call)
     /// If the process owning the file descriptor is already
     /// dead, then the close request is simply ignored
-    pub fn close(&mut self, sched: &mut Scheduler, fc: FileClientId) -> IoResult<()> {
+    pub fn close(&mut self, sched: &mut Scheduler, fc: FileClientId) -> IoResultPure<()> {
         let fc_pid = fc.process.expect("Kernel not supported here");
         let pd = self
             .descriptors
@@ -603,13 +619,13 @@ impl VirtualFS {
                 trigger.run(sched, self);
             }
         }
-        IoResult::Success(())
+        IoResult::success(())
     }
 
     /// Read from file (system call)
     pub fn read(
         &mut self, sched: &mut Scheduler, fc: FileClientId, buf: &mut [u8],
-    ) -> IoResult<usize> {
+    ) -> IoResultPure<usize> {
         let node_id = self.resolve_fc(fc)?;
         let node = self.node_mut(node_id)?;
         node.read(fc, buf).consume_events(sched)
@@ -618,22 +634,22 @@ impl VirtualFS {
     /// Read waiting for (used by system call: fd_select)
     pub fn read_waiting_for(
         &mut self, sched: &mut Scheduler, fc: FileClientId,
-    ) -> IoResult<WaitFor> {
+    ) -> IoResultPure<WaitFor> {
         let node_id = self.resolve_fc(fc)?;
-        IoResult::Success((*self.node_mut(node_id)?.data).read_waiting_for(fc))
+        IoResultPure::Success((*self.node_mut(node_id)?.data).read_waiting_for(fc))
     }
 
     /// Write to file (system call)
     pub fn write(
         &mut self, sched: &mut Scheduler, fc: FileClientId, buf: &[u8],
-    ) -> IoResult<usize> {
+    ) -> IoResultPure<usize> {
         let node_id = self.resolve_fc(fc)?;
         let node = self.node_mut(node_id)?;
         node.write(fc, buf).consume_events(sched)
     }
 
     /// Get pid (system call)
-    pub fn get_pid(&mut self, fc: FileClientId) -> IoResult<ProcessId> {
+    pub fn get_pid(&mut self, fc: FileClientId) -> IoResultPure<ProcessId> {
         let node_id = self.resolve_fc(fc)?;
         let node = self.node(node_id)?;
         node.data.pid()
@@ -642,7 +658,8 @@ impl VirtualFS {
     /// Read a file for other kernel component
     /// Discards data on error.
     pub fn read_file(&mut self, path: &str) -> IoResult<Vec<u8>> {
-        let node_id = self.resolve(Path::new(path))?;
+        let (node_id, events) = self.resolve(Path::new(path))?;
+        assert!(events.is_empty()); // TODO: handle events
         self.temp_open(node_id, |node, fc| unsafe {
             read_to_end(&mut *node.data, fc)
         })
@@ -658,8 +675,8 @@ impl VirtualFS {
         if let Some(parent) = node.parent {
             let result = self.remove_child(parent, node_id);
             match result {
-                IoResult::Success(()) => {},
-                IoResult::Code(ErrorCode::fs_file_destroyed) => {},
+                IoResultPure::Success(()) => {},
+                IoResultPure::Error(ErrorCode::fs_file_destroyed) => {},
                 error => panic!("Child removal failed: {:?}", error),
             };
         }
@@ -724,7 +741,7 @@ fn create_fs(fs: &mut VirtualFS) -> IoResult<()> {
     fs.create_static(Path::new("/dev/nic"), Box::new(NetworkDevice))?;
     fs.create_static(Path::new("/dev/nic_mac"), Box::new(MacAddrDevice))?;
 
-    IoResult::Success(())
+    IoResult::success(())
 }
 
 pub fn init() {

@@ -7,7 +7,7 @@ use d7abi::fs::FileDescriptor;
 
 use crate::multitasking::{ExplicitEventId, FdWaitFlag, ProcessId, WaitFor};
 
-use super::super::{error::IoResult, node::NodeId, FileClientId};
+use super::super::{node::NodeId, result::IoResult, FileClientId};
 use super::{CloseAction, FileOps, Leafness, Trigger};
 
 /// # Attachment point
@@ -100,7 +100,7 @@ impl Attachment {
                 // TODO: Process error, not kernel panic
                 panic!("Target buffer not large enough");
             }
-            Some(IoResult::Success(bytes.len()))
+            Some(IoResult::success(bytes.len()))
         } else {
             None
         }
@@ -132,7 +132,7 @@ impl Attachment {
             }
             // Mark the read to be in progress
             self.reads_in_progress.insert(reader_fc, event_id);
-            Some(IoResult::Success(bytes.len()))
+            Some(IoResult::success(bytes.len()))
         } else {
             None
         }
@@ -163,7 +163,7 @@ impl Attachment {
             }
             // Mark the write to be in progress
             self.writes_in_progress.insert(reader_fc, event_id);
-            Some(IoResult::Success(bytes.len()))
+            Some(IoResult::success(bytes.len()))
         } else {
             None
         }
@@ -188,7 +188,7 @@ impl Attachment {
         } else {
             // No reads pending, wait until some other process tries to read
             let wait = self.manager_pending_data.expect_wait();
-            IoResult::RepeatAfter(wait)
+            IoResult::repeat_after(wait)
         }
     }
 
@@ -221,7 +221,7 @@ impl FileOps for Attachment {
             // Insert back
             self.reads_completed.insert(fc, data);
             // Return
-            IoResult::Success(i)
+            IoResult::success(i)
         } else {
             // New read operation
             let event_id = WaitFor::new_event_id();
@@ -229,7 +229,7 @@ impl FileOps for Attachment {
 
             log::trace!("Creating new read operation + wait {:?}", event_id);
 
-            let repeat = IoResult::RepeatAfter(WaitFor::Event(event_id));
+            let repeat = IoResult::repeat_after(WaitFor::Event(event_id));
             self.manager_pending_data.set_available(repeat)
         }
     }
@@ -275,13 +275,10 @@ impl FileOps for Attachment {
                 },
             };
 
-            IoResult::TriggerEvent(
-                client_wakeup_event,
-                Box::new(IoResult::Success(buf.len() - rest.len())),
-            )
+            IoResult::success(buf.len() - rest.len()).with_event(client_wakeup_event)
         } else if let Some(size) = self.writes_completed.remove(&fc) {
             // Write is complete, return to the client
-            IoResult::Success(size)
+            IoResult::success(size)
         } else {
             // Writes to attachments must be of type `d7abi::fs::protocol::attachment::Request`,
             // and the whole request must be written at once
@@ -296,7 +293,7 @@ impl FileOps for Attachment {
 
             log::trace!("Creating new write operation + wait {:?}", event_id);
 
-            let repeat = IoResult::RepeatAfter(WaitFor::Event(event_id));
+            let repeat = IoResult::repeat_after(WaitFor::Event(event_id));
             self.manager_pending_data.set_available(repeat)
         }
     }
@@ -305,7 +302,7 @@ impl FileOps for Attachment {
     /// When client closes the file, send close message
     fn close(&mut self, fc: FileClientId) -> IoResult<CloseAction> {
         if fc == self.manager {
-            return IoResult::Success(CloseAction::Destroy);
+            return IoResult::success(CloseAction::Destroy);
         }
 
         // Remove all ongoing reads for this client
@@ -325,7 +322,7 @@ impl FileOps for Attachment {
         // Inform the manager about close
         self.closed_pending.push_back(fc);
         self.manager_pending_data
-            .set_available(IoResult::Success(CloseAction::Normal))
+            .set_available(IoResult::success(CloseAction::Normal))
     }
 
     /// Trigger all waiting processes

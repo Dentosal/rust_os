@@ -5,7 +5,7 @@ use d7abi::process::{Error as ProcessError, ProcessId, ProcessResult};
 
 use crate::multitasking::{ExplicitEventId, Scheduler, WaitFor};
 
-use super::super::{error::*, path::Path, FileClientId, VirtualFS};
+use super::super::{path::Path, result::*, FileClientId, VirtualFS};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Leafness {
@@ -28,8 +28,8 @@ pub trait FileOps: Send {
     fn leafness(&self) -> Leafness;
 
     /// If this file is a process, return it's pid
-    fn pid(&self) -> IoResult<ProcessId> {
-        IoResult::Code(ErrorCode::fs_node_not_process)
+    fn pid(&self) -> IoResultPure<ProcessId> {
+        IoResultPure::Error(ErrorCode::fs_node_not_process)
     }
 
     /// Pull some bytes from this source into the buffer,
@@ -44,14 +44,14 @@ pub trait FileOps: Send {
     ///
     /// If not implemented, causes `fs_readonly` error.
     fn write(&mut self, fc: FileClientId, buf: &[u8]) -> IoResult<usize> {
-        IoResult::Code(ErrorCode::fs_readonly)
+        IoResult::error(ErrorCode::fs_readonly)
     }
 
     /// Allows device to perform some initialization when a new fc is opened.
     ///
     /// If not implemented, does nothing.
     fn open(&mut self, fc: FileClientId) -> IoResult<()> {
-        IoResult::Success(())
+        IoResult::success(())
     }
 
     /// Allows releasing resources when a fc is closed.
@@ -59,7 +59,7 @@ pub trait FileOps: Send {
     ///
     /// If not implemented, does nothing.
     fn close(&mut self, fc: FileClientId) -> IoResult<CloseAction> {
-        IoResult::Success(CloseAction::Normal)
+        IoResult::success(CloseAction::Normal)
     }
 
     /// Allows releasing resource when an instance is destroyed,
@@ -77,7 +77,7 @@ pub trait FileOps: Send {
     ///
     /// If not implemented, does nothing.
     fn synchronize(&mut self, fc: FileClientId) -> IoResult<()> {
-        IoResult::Success(())
+        IoResult::success(())
     }
 
     /// Request device-specific control information transfer.
@@ -96,7 +96,7 @@ pub trait FileOps: Send {
     /// // File now contains 1321
     /// ```
     fn control(&mut self, fc: FileClientId, function: u64) -> IoResult<()> {
-        IoResult::Code(ErrorCode::fs_unknown_control_function)
+        IoResult::error(ErrorCode::fs_unknown_control_function)
     }
 }
 

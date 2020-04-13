@@ -5,7 +5,7 @@ use crate::multitasking::{
     ExplicitEventId, WaitFor,
 };
 
-use super::super::{error::*, path::Path, FileClientId};
+use super::super::{path::Path, result::*, FileClientId};
 
 use super::{FileOps, Leafness, Trigger};
 
@@ -39,8 +39,8 @@ impl FileOps for ProcessFile {
         Leafness::Leaf
     }
 
-    fn pid(&self) -> IoResult<ProcessId> {
-        IoResult::Success(self.pid)
+    fn pid(&self) -> IoResultPure<ProcessId> {
+        IoResultPure::Success(self.pid)
     }
 
     /// Blocks until the process is complete, and the returns the result
@@ -56,9 +56,9 @@ impl FileOps for ProcessFile {
                 buf.len()
             );
             buf[..data.len()].copy_from_slice(&data);
-            IoResult::Success(data.len())
+            IoResult::success(data.len())
         } else {
-            IoResult::RepeatAfter(WaitFor::Process(self.pid))
+            IoResult::repeat_after(WaitFor::Process(self.pid))
         }
     }
 
@@ -75,10 +75,10 @@ impl FileOps for ProcessFile {
         if fc.is_kernel() {
             // Kernel writes set result code
             self.result = Some(pinecone::from_bytes(buf).unwrap());
-            IoResult::Success(buf.len())
+            IoResult::success(buf.len())
         } else {
             // Process writes are not allowed yet
-            IoResult::Code(ErrorCode::fs_readonly)
+            IoResult::error(ErrorCode::fs_readonly)
         }
     }
 

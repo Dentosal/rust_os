@@ -1,6 +1,6 @@
 use alloc::prelude::v1::Vec;
 
-use super::super::{error::*, path::Path, FileClientId};
+use super::super::{path::Path, result::*, FileClientId};
 use super::{FileOps, Leafness};
 
 /// Simplex FIFO communication channel,

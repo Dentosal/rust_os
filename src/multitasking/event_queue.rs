@@ -1,6 +1,6 @@
 use alloc::collections::VecDeque;
 
-use crate::filesystem::error::IoResult;
+use crate::filesystem::result::IoResult;
 use crate::multitasking::{ExplicitEventId, WaitFor, SCHEDULER};
 
 /// Queue with wakeup event blocking with max size
@@ -44,9 +44,9 @@ impl<T> EventQueue<T> {
     /// Soft blocking, to be used in IO contexts
     pub fn io_pop_event(&mut self) -> IoResult<T> {
         if let Some(event) = self.pop_event() {
-            IoResult::Success(event)
+            IoResult::success(event)
         } else {
-            IoResult::RepeatAfter(WaitFor::Event(self.get_event()))
+            IoResult::repeat_after(WaitFor::Event(self.get_event()))
         }
     }
 

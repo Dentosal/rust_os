@@ -121,8 +121,8 @@ pub unsafe extern "C" fn d7boot(a: u8) {
         }
     }
 
-    // Show message and jump to kernel
-    asm!("mov rax, 0x4f2d4f3e4f204f4b; mov [0xb8000], rax" ::: "rax", "memory" : "volatile", "intel");
+    // Show message ('-> K') and jump to kernel
+    asm!("mov rax, 0x0f4b0f200f3e0f2d; mov [0xb8000], rax" ::: "rax", "memory" : "volatile", "intel");
     asm!(concat!("push ", 0x100_0000, "; ret") :::: "volatile", "intel");
     core::hint::unreachable_unchecked();
 }

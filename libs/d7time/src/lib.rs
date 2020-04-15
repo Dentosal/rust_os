@@ -115,13 +115,8 @@ pub struct SystemTimeError(Duration);
 
 impl Instant {
     /// Used by the system clock as constructor
-    ///
-    /// # Safety
-    ///
-    /// Unsafe to prevent accidental use, as well as to remind about
-    /// the monotonicity guarantees
     #[inline]
-    pub unsafe fn create(ts: TimeSpec) -> Self {
+    pub fn create(ts: TimeSpec) -> Self {
         Self(ts)
     }
 

@@ -21,7 +21,7 @@ Begin    | Size  | Content
         0|   1000| IDT Descriptors (all used) (0x100 entries * 16 bytes per entry)
      1000|    100| GDT (some used, and after that reserved)
      2000|   1000| Boot stage memory map from BIOS (some used, and after that reserved)
-     4000|   1000| Bootloader ELF decompression tables (about 0x500 used, and after that reserved)
+     7bfe|      ?| Stack (grows downwards)
      8000|    400| Stage 2 bootloader (two sectors atm)
      A000|   4000| Disk load buffer
    1_0000|      ?| Kernel ELF image (Boot stage only) (size proabably around 0x10_0000)
@@ -38,7 +38,7 @@ Begin      | Size     |rwx| Content
       1_000|       100|rw-| GDT (some used, and after that reserved)
      20_000|     70000|rw-| DMA / VirtIO memory buffers (requires "low" memory)
      90_000|         ?|---| Reserved for EBDA, ROM, Video Memory and other stuff there.
-  1_000_000|         ?|+++| Kernel (Extended memory) (Size around 0x1_000_000, as each section is page_aligned)
+  1_000_000|         ?|+++| Kernel (Extended memory) (Size around 0x8_000_000, as each section is page_aligned)
  10_000_000| 1_000_000|rw-| Page tables, (0x200_000 used and after that reserved)
           ?|         ?|   | Free memory (must be allocated using the frame allocator)
  40_000_000|         ?|rw?| Heap allocator managed memory (This is 1GiB)
@@ -57,7 +57,6 @@ Begin       | Size    |rwx| Content
   10_000_000| 200_000 |rw-| Kernel page tables, identity mapped
   11_000_000| 200_000 |rw-| System call kernel stack (grows downwards)
  100_000_000|       ? |???| Allocated virtual memory for processes
-
 
 # Interrupts
 

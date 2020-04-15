@@ -388,7 +388,6 @@ def step_cli_tools(root_dir) -> Set[Step]:
         Step(cmd=cmd_cargo_build_bin(pdir=pdir, binary=target))
         for (pdir, target) in [
             (root_dir / "libs/d7staticfs/", "mkimg"),
-            (root_dir / "libs/d7elfpack/", "d7elfpack"),
             (root_dir / "libs/elf2bin/", "elf2bin"),
         ]
     }
@@ -422,19 +421,6 @@ def step_strip_kernel(root_dir) -> Tuple[Step]:
     )
 
 
-def step_compress_kernel(root_dir) -> Step:
-    input = root_dir / "build/kernel_stripped.elf"
-    output = root_dir / "build/kernel.elf"
-    return Step(
-        requires={step_strip_kernel, step_cli_tools},
-        cmd=Cmd(
-            cmd=[root_dir / "libs/d7elfpack/target/release/d7elfpack", input, output],
-            output=output,
-            inputs=[input],
-        ),
-    )
-
-
 def step_produce_dumps(root_dir) -> Set[Step]:
     return {
         Step(
@@ -455,9 +441,9 @@ def step_produce_dumps(root_dir) -> Set[Step]:
 def step_image_size(root_dir) -> Tuple[Step]:
     return (
         Step(
-            requires={step_compress_kernel},
+            requires={step_strip_kernel},
             cmd=lambda _: Expr(
-                name="imgsize", expr=(root_dir / "build/kernel.elf").stat().st_size
+                name="imgsize", expr=(root_dir / "build/kernel_stripped.elf").stat().st_size
             ),
         ),
         Step(
@@ -502,8 +488,8 @@ def step_create_disk(root_dir) -> Tuple[Union[Step, Set[Step]]]:
                 ),
             ),
             Step(
-                requires={step_compress_kernel},
-                cmd=cmd_dd_insert(disk_img, root_dir / "build/kernel.elf", offset=6),
+                requires={step_strip_kernel},
+                cmd=cmd_dd_insert(disk_img, root_dir / "build/kernel_stripped.elf", offset=6),
             ),
         },
     )

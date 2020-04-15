@@ -79,9 +79,8 @@ pub extern "C" fn rust_main() -> ! {
     rreset!();
     rprintln!("Initializing the system...\n");
 
+    // Logging
     syslog::enable();
-
-    // Finish system setup
 
     // Interrupt controller
     driver::pic::init();
@@ -143,7 +142,6 @@ pub extern "C" fn rust_main() -> ! {
     // Wait until the next clock tick interrupt,
     // after that the process scheduler takes over
     unsafe {
-        bochs_magic_bp!();
         interrupt::enable_external_interrupts();
         loop {
             asm!("hlt")
@@ -164,10 +162,16 @@ fn out_of_memory(_: Layout) -> ! {
     unsafe {
         asm!("cli"::::"intel","volatile");
         panic_indicator!(0x4f4D4f21); // !M as in "No memory"
-        asm!("jmp panic"::::"intel","volatile");
+        asm!("jmp panic_stop"::::"intel","volatile");
     }
     loop {}
 }
+
+use core::sync::atomic::{AtomicBool, Ordering};
+
+/// Tracks wheter a panic is already active, so that
+/// if panic printing itself panics, it can be skipped
+static PANIC_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 #[panic_handler]
 #[cfg(not(test))]
@@ -175,28 +179,33 @@ fn out_of_memory(_: Layout) -> ! {
 #[no_mangle]
 extern "C" fn panic(info: &PanicInfo) -> ! {
     unsafe {
-        // asm!("jmp panic"::::"intel","volatile");
-
         asm!("cli"::::"intel","volatile");
-        panic_indicator!(0x4f214f21); // !!
+        // panic_indicator!(0x4f214f21); // !!
 
-        rforce_unlock!();
+        if !PANIC_ACTIVE.load(Ordering::SeqCst) {
+            PANIC_ACTIVE.store(true, Ordering::SeqCst);
+            panic_indicator!(0x4f234f21); // !#
 
-        if let Some(location) = info.location() {
-            log::error!(
-                "\nKernel Panic: file: '{}', line: {}",
-                location.file(),
-                location.line()
-            );
+            rforce_unlock!();
+
+            if let Some(location) = info.location() {
+                log::error!(
+                    "\nKernel Panic: file: '{}', line: {}",
+                    location.file(),
+                    location.line()
+                );
+            } else {
+                log::error!("\nKernel Panic: Location unavailable");
+            }
+            if let Some(msg) = info.message() {
+                log::error!("  {:?}", msg);
+            } else {
+                log::error!("  Info unavailable");
+            }
+            asm!("jmp panic_stop"::::"intel","volatile");
         } else {
-            log::error!("\nKernel Panic: Location unavailable");
+            panic_indicator!(0x4f254f21); // !%
         }
-        if let Some(msg) = info.message() {
-            log::error!("  {:?}", msg);
-        } else {
-            log::error!("  Info unavailable");
-        }
-        asm!("jmp panic"::::"intel","volatile");
     }
     loop {}
 }

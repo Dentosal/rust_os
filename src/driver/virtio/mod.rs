@@ -347,8 +347,8 @@ impl VirtioDevice {
     pub fn notify(&mut self, queue_index: u16) {
         // TODO: are there separate queue and index variables?
 
-        let notify_target = (self.capability_addr(CapabilityType::Notify)
-            + self.notify_offsets.0 as u64 * self.notify_offsets.1[queue_index as usize] as u64);
+        let notify_target = self.capability_addr(CapabilityType::Notify)
+            + self.notify_offsets.0 as u64 * self.notify_offsets.1[queue_index as usize] as u64;
 
         unsafe {
             ptr::write_volatile(notify_target.as_u64() as *mut u16, queue_index);

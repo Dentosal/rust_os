@@ -57,17 +57,18 @@ impl BumpAllocator {
 unsafe impl<'a> AllocRef for &'a BumpAllocator {
     fn alloc(&mut self, layout: Layout, init: AllocInit) -> Result<MemoryBlock, AllocErr> {
         assert!(init == AllocInit::Uninitialized);
+        assert!(layout.size() > 0);
         loop {
             // load current state of the `next` field
-            let current_next = self.next.load(Ordering::Relaxed);
+            let current_next = self.next.load(Ordering::SeqCst);
             let alloc_start = align_up(current_next, layout.align() as u64);
             let alloc_end = alloc_start.saturating_add(layout.size() as u64);
 
-            if alloc_end <= self.heap_end {
+            if alloc_end < self.heap_end {
                 // update the `next` pointer if it still has the value `current_next`
                 let next_now =
                     self.next
-                        .compare_and_swap(current_next, alloc_end, Ordering::Relaxed);
+                        .compare_and_swap(current_next, alloc_end, Ordering::SeqCst);
                 if next_now == current_next {
                     // next address was successfully updated, allocation succeeded
                     return Ok(MemoryBlock {

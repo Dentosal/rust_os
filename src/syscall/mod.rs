@@ -274,7 +274,7 @@ fn syscall(
                         let condition = fs.read_waiting_for(sched, fc)?;
 
                         let node_id = fs.resolve_fc(fc).unwrap();
-                        let path = fs.debug_node_id_to_path(node_id).unwrap();
+                        let path = fs.debug_node_id_to_path(node_id);
                         log::trace!("* {:?} ({:?}) cond = {:?}", fc, path, condition);
 
                         if condition == WaitFor::None {

@@ -35,8 +35,7 @@ impl ProcessId {
 }
 impl fmt::Display for ProcessId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0) // XXX HERE?
-        // f.pad_integral(true, "", &format!("{}", self.0))
+        f.pad_integral(true, "", &format!("{}", self.0))
     }
 }
 

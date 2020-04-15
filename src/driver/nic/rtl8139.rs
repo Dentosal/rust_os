@@ -278,9 +278,7 @@ impl RTL8139 {
 
             let status = RxStatus::from_bits_truncate(status_bits);
 
-            log::error!("JUST BEFORE CRASH");
             log::debug!("receive status: {:?}", status);
-            log::error!("JUST AFTER CRASH");
 
             if !status.contains(RxStatus::OK) {
                 log::warn!("receive status not ok");
@@ -416,11 +414,11 @@ impl NIC for RTL8139 {
         loop {
             // Clear interrupt
             // https://wiki.osdev.org/RTL8139#ISR_Handler
-            let status = unsafe {
+            let status = IntFlags::from_bits_truncate(unsafe {
                 let value = r_isr.read();
                 r_isr.write(value);
-                IntFlags::from_bits_truncate(value)
-            };
+                value
+            });
 
             // No known flags on
             if !status.intersects(IntFlags::ALL_SUPPORTED) {
@@ -485,7 +483,7 @@ impl NIC for RTL8139 {
 
     fn mac_addr(&self) -> [u8; 6] {
         let mut result = [0; 6];
-        for i in (0..6) {
+        for i in 0..6 {
             unsafe {
                 let mut port = UnsafePort::<u8>::new(self.io_base + reg::MAC + i);
                 result[i as usize] = port.read();

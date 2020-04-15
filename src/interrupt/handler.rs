@@ -97,7 +97,6 @@ pub(super) unsafe extern "C" fn exception_irq0() -> u128 {
         ProcessSwitch::Switch(p) => return_process(p),
         ProcessSwitch::RepeatSyscall(p) => {
             if let Some(rp) = handle_repeat_syscall(p) {
-                log::trace!("retp {:?}", rp);
                 return_process(rp)
             } else {
                 0
@@ -110,8 +109,6 @@ pub(super) unsafe extern "C" fn exception_irq0() -> u128 {
 
 /// First ps/2 device, keyboard, sent data
 pub(super) unsafe fn exception_irq1() {
-    rforce_unlock!();
-    keyboard::KEYBOARD.force_unlock();
     let mut kbd = keyboard::KEYBOARD.try_lock().unwrap();
     if kbd.is_enabled() {
         kbd.notify();
@@ -157,7 +154,6 @@ pub(super) unsafe fn exception_irq_free(interrupt: u8) {
     use super::FREE_IRQ_HOOK;
     let irq_hook = FREE_IRQ_HOOK.try_lock().unwrap();
     if let Some(f) = irq_hook.by_int(interrupt) {
-        rforce_unlock!();
         log::trace!("Triggering free IRQ int={:02x}", interrupt);
         f();
     }
@@ -277,7 +273,6 @@ unsafe extern "C" fn process_interrupt_inner(
         },
         0x21 => {
             // Keyboard input
-            rforce_unlock!();
             let mut kbd = keyboard::KEYBOARD.try_lock().unwrap();
             kbd.notify();
             pic::PICS.lock().notify_eoi(0x21);

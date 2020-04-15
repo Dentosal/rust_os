@@ -47,8 +47,13 @@ pub unsafe fn init(elf_metadata: ELFData) -> PageMap {
     // Identity map IDT, GDT, DMA buffers, and the VGA text buffer
     let idt_frame = PhysFrame::containing_address(PhysAddr::new(idt::ADDRESS as u64));
     let vga_buffer_frame = PhysFrame::containing_address(VGA_BUFFER_PHYSADDR);
-
     assert_eq!(idt_frame, vga_buffer_frame);
+
+    let dma_start = PhysFrame::containing_address(DMA_MEMORY_START);
+    let dma_end = PhysFrame::containing_address(DMA_MEMORY_START + DMA_MEMORY_SIZE);
+    assert_eq!(dma_start, dma_end);
+
+    assert_eq!(idt_frame, dma_start);
     let lowmem_frame = idt_frame;
 
     unsafe {

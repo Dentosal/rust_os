@@ -13,6 +13,7 @@ use crate::filesystem::{
 };
 use crate::multitasking::WaitFor;
 
+#[derive(Debug)]
 pub struct StaticFSLeaf {
     /// Sector on disk
     start_sector: u32,

@@ -83,7 +83,7 @@ value = "0x2_0000"
 
 [[constant]]
 name = "DMA_MEMORY_SIZE"
-type = "PhysAddr"
+type = "size_bytes"
 value = "0x7_0000"
 
 # Kernel stack for system calls

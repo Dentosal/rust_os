@@ -6,10 +6,10 @@ use x86_64::{PhysAddr, VirtAddr};
 use super::super::constants::{DMA_MEMORY_SIZE, DMA_MEMORY_START};
 
 const DMA_BLOCK_SIZE: usize = 0x1000;
-const DMA_BLOCKS: usize = round_up_block(DMA_MEMORY_SIZE.as_u64() as usize);
+const DMA_BLOCKS: usize = round_up_block(DMA_MEMORY_SIZE as usize);
 
 const fn round_up_block(s: usize) -> usize {
-    ((s + (DMA_BLOCK_SIZE - 1)) / DMA_BLOCK_SIZE)
+    (s + (DMA_BLOCK_SIZE - 1)) / DMA_BLOCK_SIZE
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

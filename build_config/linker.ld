@@ -4,17 +4,13 @@ ENTRY(start)
 SECTIONS {
     . = 0x1000000;
 
-    /*
-    All sections are 0x200000 = 0x200_000 = 2MiB aligned,
-    as that is the correct huge-page boundary alignment.
+    /* All sections are 0x200000 = 0x200_000 = 2MiB aligned,
+    ** as that is the correct huge-page boundary alignment.
     */
 
-    /* ensure that the kernel entry code is at the beginning */
-    .entry : ALIGN(0x200000) {
-        KEEP(*(.entry))
-    }
-
     .text : ALIGN(0x200000) {
+        /* ensure that the kernel entry code is at the beginning */
+        KEEP(*(.entry))
         *(.text .text.*)
     }
 
@@ -22,11 +18,14 @@ SECTIONS {
         KEEP(*(.rodata .rodata.*))
     }
 
-    .data : ALIGN(0x200000) {
-        *(.data .data.*)
-    }
-
+    /* BSS contains stack, so in case of overflow (growing downwards) it
+    ** tries to write to .rodata section, which is conveniently read-only.
+    */
     .bss : ALIGN(0x200000) {
         *(.bss .bss.*)
+    }
+
+    .data : ALIGN(0x200000) {
+        *(.data .data.*)
     }
 }

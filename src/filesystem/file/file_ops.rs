@@ -27,7 +27,9 @@ pub trait FileOps: Send {
     /// Non-leaf nodes MUST conform to `ReadBranch` protocol.
     fn leafness(&self) -> Leafness;
 
-    /// If this file is a process, return it's pid
+    /// Get process id associated with this node.
+    /// For processes, this is the pid of the process
+    /// For attachments, this is the pid of the managing process
     fn pid(&self) -> IoResultPure<ProcessId> {
         IoResultPure::Error(ErrorCode::fs_node_not_process)
     }

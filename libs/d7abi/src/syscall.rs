@@ -47,7 +47,7 @@ pub enum SyscallErrorCode {
     /// File was destroyed while an operation was pending
     /// Normal files never do this, but processes, attachments and pipes do
     fs_file_destroyed,
-    /// File does is not a process, so it has no pid
+    /// File is (is not | does not have an associated) process
     fs_node_not_process,
     /// Invalid UTF-8
     invalid_utf8,

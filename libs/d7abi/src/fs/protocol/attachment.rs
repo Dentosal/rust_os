@@ -11,7 +11,7 @@ use crate::process::ProcessId;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Sender {
     /// Sender process, None for kernel
-    pub pid: ProcessId, // HERE/TODO: to option
+    pub pid: Option<ProcessId>,
     /// Sender identifier, unique per-process.
     /// Currently implemented as file descriptor,
     /// but this could be hashed to improve security.

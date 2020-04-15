@@ -195,10 +195,8 @@ impl IoContext {
         self.events.is_empty()
     }
 
-    /// Take events from IoResult, purifying it
-    pub fn purify<T>(&mut self, r: IoResult<T>) -> IoResultPure<T> {
-        self.events.extend(r.events.into_iter());
-        r.inner
+    pub fn consume(&mut self, mut other: IoContext) {
+        self.events.extend(other.events.drain(..));
     }
 }
 

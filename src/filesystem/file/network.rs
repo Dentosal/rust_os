@@ -20,11 +20,11 @@ impl FileOps for NetworkDevice {
 
     fn read(&mut self, _fd: FileClientId, buf: &mut [u8]) -> IoResult<usize> {
         let mut nw = NETWORK.try_lock().unwrap();
-        let (net_event, events) = nw.received_queue.io_pop_event()?;
+        let (net_event, ctx) = nw.received_queue.io_pop_event()?;
         let data = pinecone::to_vec(&net_event).expect("Couldn't serialize network event");
         assert!(data.len() <= buf.len(), "Buffer is too small"); // TODO: client error, not a kernel panic
         buf[..data.len()].copy_from_slice(&data);
-        IoResult::success(data.len()) // HERE TODO handle context
+        IoResult::success(data.len()).with_context(ctx)
     }
 
     fn read_waiting_for(&mut self, _fc: FileClientId) -> WaitFor {

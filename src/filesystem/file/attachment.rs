@@ -7,7 +7,11 @@ use d7abi::fs::FileDescriptor;
 
 use crate::multitasking::{ExplicitEventId, FdWaitFlag, ProcessId, WaitFor};
 
-use super::super::{node::NodeId, result::IoResult, FileClientId};
+use super::super::{
+    node::NodeId,
+    result::{IoResult, IoResultPure},
+    FileClientId,
+};
 use super::{CloseAction, FileOps, Leafness, Trigger};
 
 /// # Attachment point
@@ -87,7 +91,7 @@ impl Attachment {
             // The next client is trying to read
             let req = Request {
                 sender: Sender {
-                    pid: closed_fc.process.expect("TODO? kernel"),
+                    pid: closed_fc.process,
                     f: closed_fc.fd.as_u64(),
                 },
                 operation: RequestFileOperation::Close,
@@ -117,7 +121,7 @@ impl Attachment {
             // The next client is trying to read
             let req = Request {
                 sender: Sender {
-                    pid: reader_fc.process.expect("TODO? kernel"),
+                    pid: reader_fc.process,
                     f: reader_fc.fd.as_u64(),
                 },
                 operation: RequestFileOperation::Read(buf.len() as u64), // TODO: replace with correct size
@@ -148,7 +152,7 @@ impl Attachment {
         if let Some((reader_fc, event_id, data)) = self.writes_pending.pop_front() {
             let req = Request {
                 sender: Sender {
-                    pid: reader_fc.process.expect("TODO? kernel"),
+                    pid: reader_fc.process,
                     f: reader_fc.fd.as_u64(),
                 },
                 operation: RequestFileOperation::Write(data.into_iter().collect()),
@@ -205,6 +209,10 @@ impl FileOps for Attachment {
         }
     }
 
+    fn pid(&self) -> IoResultPure<ProcessId> {
+        IoResultPure::Success(self.manager.process.unwrap())
+    }
+
     fn read(&mut self, fc: FileClientId, buf: &mut [u8]) -> IoResult<usize> {
         if fc == self.manager {
             self.manager_get_event(fc, buf)
@@ -254,10 +262,10 @@ impl FileOps for Attachment {
             let (response, rest): (Response, &[u8]) =
                 pinecone::take_from_bytes(buf).expect("Partial write from manager");
 
-            let client_fc = FileClientId::process(
-                response.sender.pid,
-                FileDescriptor::from_u64(response.sender.f),
-            );
+            let client_fc = FileClientId {
+                process: response.sender.pid,
+                fd: FileDescriptor::from_u64(response.sender.f),
+            };
 
             let client_wakeup_event = match response.operation {
                 ResponseFileOperation::Read(data) => {

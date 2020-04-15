@@ -31,11 +31,11 @@ impl FileOps for KernelConsoleDevice {
     /// Reads from the physical keyboard
     fn read(&mut self, _fd: FileClientId, buf: &mut [u8]) -> IoResult<usize> {
         let mut kbd = KEYBOARD.try_lock().unwrap();
-        let (kbd_event, context) = kbd.event_queue.io_pop_event()?;
+        let (kbd_event, ctx) = kbd.event_queue.io_pop_event()?;
         let data = pinecone::to_vec(&kbd_event).expect("Couldn't serialize keyboard event");
         assert!(data.len() <= buf.len(), "Buffer is too small"); // TODO: client error, not a kernel panic
         buf[..data.len()].copy_from_slice(&data);
-        IoResult::success(data.len()) // HERE TODO handle context
+        IoResult::success(data.len()).with_context(ctx)
     }
 
     fn read_waiting_for(&mut self, _fc: FileClientId) -> WaitFor {

@@ -1,9 +1,8 @@
 use core::convert::TryFrom;
 use core::hint::unreachable_unchecked;
-use core::mem::MaybeUninit;
 
 use d7abi::{
-    fs::{FileDescriptor, FileInfo},
+    fs::FileDescriptor,
     SyscallErrorCode, SyscallNumber,
     process::ProcessId
 };
@@ -109,18 +108,6 @@ pub fn fs_attach(path: &str, is_leaf: bool) -> SyscallResult<FileDescriptor> {
         Ok(FileDescriptor::from_u64(
             syscall!(SyscallNumber::fs_attach; len, slice, is_leaf as u64)?,
         ))
-    }
-}
-
-pub fn fs_fileinfo(path: &str) -> SyscallResult<FileInfo> {
-    let len = path.len() as u64;
-    let slice = path.as_ptr() as u64;
-
-    let mut info: MaybeUninit<FileInfo> = MaybeUninit::uninit();
-
-    unsafe {
-        let _ = syscall!(SyscallNumber::fs_fileinfo; len, slice, info.as_mut_ptr() as u64)?;
-        Ok(info.assume_init())
     }
 }
 

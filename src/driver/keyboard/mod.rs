@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 
 use d7abi::fs::protocol::console::KeyboardEvent;
 
-use crate::multitasking::{EventQueue, ExplicitEventId, WaitFor, SCHEDULER};
+use crate::multitasking::{EventQueue, ExplicitEventId, QueueLimit, WaitFor, SCHEDULER};
 use crate::time::SYSCLOCK;
 use crate::util::io_wait;
 
@@ -45,7 +45,7 @@ impl Keyboard {
             status_port: UnsafePort::new(PS2_STATUS),
             command_port: UnsafePort::new(PS2_COMMAND),
             state: KeyboardState::new(),
-            event_queue: EventQueue::new("keyboard", EVENT_BUFFER_LIMIT),
+            event_queue: EventQueue::new("keyboard", QueueLimit::Soft(EVENT_BUFFER_LIMIT)),
         }
     }
 

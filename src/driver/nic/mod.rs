@@ -5,7 +5,7 @@ use spin::Mutex;
 use d7abi::fs::protocol::network::ReceivedPacket;
 use d7time::Instant;
 
-use crate::multitasking::{EventQueue, ExplicitEventId, WaitFor};
+use crate::multitasking::{EventQueue, ExplicitEventId, QueueLimit, WaitFor};
 use crate::time::SYSCLOCK;
 
 // mod ne2000;
@@ -54,7 +54,7 @@ impl NetworkController {
     pub fn new() -> NetworkController {
         NetworkController {
             driver: None,
-            received_queue: EventQueue::new("NIC", EVENT_BUFFER_LIMIT),
+            received_queue: EventQueue::new("NIC", QueueLimit::Soft(EVENT_BUFFER_LIMIT)),
         }
     }
 

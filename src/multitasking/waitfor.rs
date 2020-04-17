@@ -127,6 +127,7 @@ impl WaitFor {
     }
 }
 
+/// Manually triggerable event
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ExplicitEventId(u64);
 

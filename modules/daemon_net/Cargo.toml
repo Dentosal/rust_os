@@ -21,7 +21,3 @@ features = ["nightly", "inline-more", "serde"]
 [dependencies.libd7]
 version = "*"
 path = "../../libs/libd7"
-
-[dependencies.d7net]
-version = "*"
-path = "../../libs/d7net"

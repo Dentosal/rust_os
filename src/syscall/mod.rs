@@ -7,7 +7,7 @@ use hashbrown::HashSet;
 use x86_64::structures::paging::PageTableFlags as Flags;
 use x86_64::{PhysAddr, VirtAddr};
 
-use d7abi::fs::{FileDescriptor, FileInfo};
+use d7abi::fs::FileDescriptor;
 
 use crate::filesystem::{result::*, FILESYSTEM};
 use crate::memory::prelude::*;
@@ -180,36 +180,13 @@ fn syscall(
                     ))
                 }
             },
-            SC::fs_fileinfo => {
-                let (path_len, path_ptr, dst_ptr, _) = rsc.args;
-                let path_ptr = VirtAddr::new(path_ptr);
-                let dst_ptr = VirtAddr::new(dst_ptr);
-                if let Some((area, slice)) = unsafe { m.process_slice(process, path_len, path_ptr) }
-                {
-                    let path = try_str!(slice);
-                    log::info!("[pid={:8}] fs_fileinfo {:?}", pid, path);
-                    let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
-                    let fileinfo: FileInfo = fs.fileinfo(path)?;
-                    unsafe {
-                        m.process_write_value(process, fileinfo, dst_ptr);
-                        m.unmap_area(area)
-                    };
-                    m.free_virtual_area(area);
-
-                    SyscallResult::Continue(Ok(0))
-                } else {
-                    SyscallResult::Terminate(process::ProcessResult::Failed(
-                        process::Error::Pointer(path_ptr),
-                    ))
-                }
-            },
             SC::fd_close => {
                 let (fd, _, _, _) = rsc.args;
                 let fd = FileDescriptor::from_u64(fd);
                 let fc = FileClientId::process(pid, fd);
                 log::info!("[pid={:8}] fd_close {:?}", pid, fc);
                 let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
-                fs.close(sched, fc)?;
+                fs.close(sched, fc);
                 SyscallResult::Continue(Ok(0))
             },
             SC::fd_read => {
@@ -237,7 +214,7 @@ fn syscall(
                 let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
                 if let Some((area, slice)) = unsafe { m.process_slice(process, count, buf) } {
                     let fc = FileClientId::process(pid, fd);
-                    log::info!("[pid={:8}] fd_read {:?}", pid, fd);
+                    log::info!("[pid={:8}] fd_write {:?} (count={:?})", pid, fd, count);
                     let written_count = fs.write(sched, fc, slice)?;
                     unsafe { m.unmap_area(area) };
                     m.free_virtual_area(area);
@@ -271,11 +248,10 @@ fn syscall(
                             fd_bytes.try_into().unwrap(),
                         ));
                         let fc = FileClientId::process(pid, fd);
+                        log::trace!("* {:?} cond?", fc);
                         let condition = fs.read_waiting_for(sched, fc)?;
 
-                        let node_id = fs.resolve_fc(fc).unwrap();
-                        let path = fs.debug_node_id_to_path(node_id);
-                        log::trace!("* {:?} ({:?}) cond = {:?}", fc, path, condition);
+                        log::trace!("* {:?} cond = {:?}", fc, condition);
 
                         if condition == WaitFor::None {
                             unsafe { m.unmap_area(area) };
@@ -387,7 +363,11 @@ pub fn handle_syscall(
             routine: reg_rax,
             args: (reg_rdi, reg_rsi, reg_rdx, reg_rcx),
         };
-        log::trace!("[pid={}] <= {:x} ", pid, rsc.routine);
+        log::trace!(
+            "[pid={}] <= {:?} ",
+            pid,
+            d7abi::SyscallNumber::try_from(rsc.routine).ok()
+        );
         let res = syscall(mm, &mut sched, pid, rsc);
         log::trace!("[pid={}] => {:?} ", pid, res);
 

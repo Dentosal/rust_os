@@ -54,14 +54,15 @@ impl<T> IoResult<T> {
     }
 
     pub fn is_success(&self) -> bool {
-        matches!(self.inner, IoResultPure::Success(_))
+        self.inner.is_success()
     }
 
     pub fn has_events(&self) -> bool {
         self.events.is_empty()
     }
 
-    pub fn map<N>(self, f: fn(T) -> N) -> IoResult<N> {
+    pub fn map<F, N>(self, f: F) -> IoResult<N>
+    where F: Fn(T) -> N {
         IoResult {
             inner: match self.inner {
                 IoResultPure::Success(v) => IoResultPure::Success(f(v)),
@@ -106,11 +107,45 @@ impl<T> IoResult<T> {
 }
 
 impl<T> IoResultPure<T> {
+    pub fn is_success(&self) -> bool {
+        matches!(self, IoResultPure::Success(_))
+    }
+
     pub fn erase_type<N>(self) -> IoResultPure<N> {
         match self {
             Self::Success(_) => panic!("Cannot erase type of success"),
             Self::RepeatAfter(wf) => IoResultPure::RepeatAfter(wf),
             Self::Error(ec) => IoResultPure::Error(ec),
+        }
+    }
+
+    pub fn map<F, N>(self, f: F) -> IoResultPure<N>
+    where F: Fn(T) -> N {
+        match self {
+            IoResultPure::Success(v) => IoResultPure::Success(f(v)),
+            IoResultPure::RepeatAfter(wf) => IoResultPure::RepeatAfter(wf),
+            IoResultPure::Error(ec) => IoResultPure::Error(ec),
+        }
+    }
+
+    pub fn with_event(self, event: ExplicitEventId) -> IoResult<T> {
+        IoResult {
+            inner: self,
+            events: vec![event],
+        }
+    }
+
+    pub fn with_events(mut self, events: impl Iterator<Item = ExplicitEventId>) -> IoResult<T> {
+        IoResult {
+            inner: self,
+            events: events.collect(),
+        }
+    }
+
+    pub fn with_context(mut self, mut context: IoContext) -> IoResult<T> {
+        IoResult {
+            inner: self,
+            events: context.events.drain(..).collect(),
         }
     }
 }

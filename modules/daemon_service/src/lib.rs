@@ -95,10 +95,12 @@ impl Services {
 
     /// Check requirements
     fn are_requirements_up(&mut self, def: &ServiceDefinition) -> bool {
-        println!("REQS FOR {:?}", def.name);
         for req in &def.requires {
-            if self.get_running(&req).is_none() {
-                println!("REQ {:?} is down", req);
+            if let Some(service) = self.get_running(&req) {
+                if !service.startup_complete {
+                    return false;
+                }
+            } else {
                 return false;
             }
         }
@@ -128,6 +130,8 @@ impl Services {
             if self.are_requirements_up(&def) {
                 self.start(def);
                 return false;
+            } else {
+                self.start_queue.push_back(name);
             }
         }
 
@@ -159,14 +163,14 @@ impl Services {
     }
 }
 
-fn on_request(a: &attachment::Leaf, services: &mut Services) {
+fn on_request(a: &attachment::Attachment, services: &mut Services) {
     let req = a.next_request().unwrap();
     match &req.operation {
         RequestFileOperation::Write(data) => {
             // Any writes should (for now, at least)
             // be "service has started up" announcements
             assert!(data == &[1]);
-            services.on_process_up(req.sender.pid);
+            services.on_process_up(req.sender.pid.unwrap());
             a.reply(req.response(ResponseFileOperation::Write(1)))
                 .unwrap();
         }
@@ -180,10 +184,9 @@ fn main() -> ! {
     println!("Service daemon starting");
 
     let mut services = Services::new("/mnt/staticfs/startup_services.json").unwrap();
-    let a = attachment::Leaf::new("/srv/service").unwrap();
+    let a = attachment::Attachment::new_leaf("/srv/service").unwrap();
 
     loop {
-        println!("STEP");
         let should_block = services.step();
 
         // Only block if there are no processes in startup queue

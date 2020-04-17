@@ -3,15 +3,11 @@
 use crate::multitasking::WaitFor;
 
 use super::super::{path::Path, result::*, FileClientId};
-use super::{FileOps, Leafness};
+use super::FileOps;
 
 /// `/dev/null`
 pub struct NullDevice;
 impl FileOps for NullDevice {
-    fn leafness(&self) -> Leafness {
-        Leafness::Leaf
-    }
-
     /// Immediately provides EOF
     fn read(&mut self, _fd: FileClientId, _buf: &mut [u8]) -> IoResult<usize> {
         IoResult::success(0)
@@ -30,10 +26,6 @@ impl FileOps for NullDevice {
 /// `/dev/zero`
 pub struct ZeroDevice;
 impl FileOps for ZeroDevice {
-    fn leafness(&self) -> Leafness {
-        Leafness::Leaf
-    }
-
     /// Zeroes the buffer
     fn read(&mut self, _fd: FileClientId, buf: &mut [u8]) -> IoResult<usize> {
         for i in 0..buf.len() {
@@ -58,10 +50,6 @@ pub struct TestDevice {
     pub rounds: u8,
 }
 impl FileOps for TestDevice {
-    fn leafness(&self) -> Leafness {
-        Leafness::Leaf
-    }
-
     fn read(&mut self, _fd: FileClientId, _buf: &mut [u8]) -> IoResult<usize> {
         use crate::multitasking::WaitFor;
         use crate::time::SYSCLOCK;

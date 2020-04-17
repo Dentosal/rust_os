@@ -9,15 +9,11 @@ use crate::multitasking::ExplicitEventId;
 use crate::multitasking::WaitFor;
 
 use super::super::{result::*, FileClientId};
-use super::{FileOps, Leafness};
+use super::FileOps;
 
 /// `/dev/nic`
 pub struct NetworkDevice;
 impl FileOps for NetworkDevice {
-    fn leafness(&self) -> Leafness {
-        Leafness::Leaf
-    }
-
     fn read(&mut self, _fd: FileClientId, buf: &mut [u8]) -> IoResult<usize> {
         let mut nw = NETWORK.try_lock().unwrap();
         let (net_event, ctx) = nw.received_queue.io_pop_event()?;
@@ -45,10 +41,6 @@ impl FileOps for NetworkDevice {
 /// `/dev/nic_mac`
 pub struct MacAddrDevice;
 impl FileOps for MacAddrDevice {
-    fn leafness(&self) -> Leafness {
-        Leafness::Leaf
-    }
-
     fn read(&mut self, _fd: FileClientId, buf: &mut [u8]) -> IoResult<usize> {
         let mut nw = NETWORK.try_lock().unwrap();
         if let Some(mac) = nw.map(&mut |d| d.mac_addr()) {

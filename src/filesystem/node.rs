@@ -4,14 +4,12 @@ use core::ops::{Deref, DerefMut};
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 
-use d7abi::fs::FileInfo;
-
 use crate::multitasking::ExplicitEventId;
 
-use super::file::{CloseAction, FileOps, Leafness};
+use super::attachment::Attachment;
+use super::file::{CloseAction, FileOps};
 use super::result::*;
-use super::FileClientId;
-use super::Path;
+use super::{FileClientId, Path};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(transparent)]
@@ -29,61 +27,30 @@ impl NodeId {
 /// A node in the virtual filesystem tree.
 /// Somewhat analogous to Unix inode.
 #[derive(Debug)]
-pub struct Node {
-    /// Parent node id, None for root and anonymous nodes
-    pub(super) parent: Option<NodeId>,
+pub struct Leaf {
     /// Contents
-    pub(super) data: NodeData,
+    pub(super) data: LeafData,
     /// Open file descriptors pointing to this node
-    pub(super) fd_refcount: u64,
+    pub(super) fc_refcount: u64,
 }
-impl Node {
-    pub fn new(parent: Option<NodeId>, dev: Box<dyn FileOps>) -> Self {
+impl Leaf {
+    pub fn new(obj: Box<dyn FileOps>) -> Self {
         Self {
-            parent,
-            data: NodeData(dev),
-            fd_refcount: 0,
+            data: LeafData::FileObject(obj),
+            fc_refcount: 0,
         }
     }
 
-    pub fn leafness(&self) -> Leafness {
-        self.data.leafness()
-    }
-
-    pub fn fileinfo(&self) -> FileInfo {
-        FileInfo {
-            is_leaf: self.leafness() == Leafness::Leaf,
-        }
-    }
-
-    /// Calls handler and (on success) increases reference count
-    pub fn open(&mut self, fd: FileClientId) -> IoResult<()> {
-        let result = self.data.open(fd);
-        if result.is_success() {
-            self.inc_ref();
-        }
-        result
-    }
-
-    /// Calls handler that always always succeeds (can still trigger events),
-    /// amd then decreases reference count.
-    /// If refcout hits zero or the node requests self-destruction,
-    /// then returns `CloseAction::Destroy` to singal that.
-    #[must_use]
-    pub fn close(&mut self, fd: FileClientId) -> IoResult<CloseAction> {
-        assert_ne!(self.fd_refcount, 0, "close: fd refcount zero");
-        let default_action = self.data.close(fd);
-        let refcount_positive = self.dec_ref();
-        if refcount_positive {
-            default_action
-        } else {
-            IoResult::success(CloseAction::Destroy)
+    pub fn new_attachment(manager: FileClientId, is_leaf: bool) -> Self {
+        Self {
+            data: LeafData::Attachment(Attachment::new(manager, is_leaf)),
+            fc_refcount: 0,
         }
     }
 
     /// Increases reference count
     pub fn inc_ref(&mut self) {
-        self.fd_refcount += 1;
+        self.fc_refcount += 1;
     }
 
     /// Decreases reference count. If refcount hits zero,
@@ -91,40 +58,22 @@ impl Node {
     /// should be deleted
     #[must_use]
     pub fn dec_ref(&mut self) -> bool {
-        assert_ne!(self.fd_refcount, 0, "close: fd refcount zero");
-        self.fd_refcount -= 1;
-        self.fd_refcount > 0
-    }
-
-    /// Reads slice of data from this node,
-    /// and returns how many bytes were read
-    pub fn read(&mut self, fd: FileClientId, buf: &mut [u8]) -> IoResult<usize> {
-        self.data.read(fd, buf)
-    }
-
-    /// Writes slice of data from this node,
-    /// and returns how many bytes were written
-    pub fn write(&mut self, fd: FileClientId, buf: &[u8]) -> IoResult<usize> {
-        self.data.write(fd, buf)
+        assert_ne!(self.fc_refcount, 0, "close: fd refcount zero");
+        self.fc_refcount -= 1;
+        self.fc_refcount > 0
     }
 }
 
 /// Node contents
-pub struct NodeData(Box<dyn FileOps>);
-impl fmt::Debug for NodeData {
+pub enum LeafData {
+    FileObject(Box<dyn FileOps>),
+    Attachment(Attachment),
+}
+impl fmt::Debug for LeafData {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "NodeData(...)")
-    }
-}
-impl Deref for NodeData {
-    type Target = dyn FileOps;
-
-    fn deref(&self) -> &Self::Target {
-        self.0.as_ref()
-    }
-}
-impl DerefMut for NodeData {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.0.as_mut()
+        match self {
+            Self::FileObject(_) => write!(f, "LeafData::FileObject(...)"),
+            Self::Attachment(_) => write!(f, "LeafData::Attachment(...)"),
+        }
     }
 }

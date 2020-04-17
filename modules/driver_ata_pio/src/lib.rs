@@ -26,7 +26,7 @@ fn main() -> ! {
     assert!(drive_count > 0, "No drives found");
 
     let attachments: Vec<_> = (0..drive_count)
-        .map(|drive_index| Leaf::new(&format!("/dev/ata_pio_{}", drive_index)).unwrap())
+        .map(|drive_index| Attachment::new_leaf(&format!("/dev/ata_pio_{}", drive_index)).unwrap())
         .collect();
 
     let attachment_fds: Vec<_> = attachments.iter().map(|a| a.fd).collect();

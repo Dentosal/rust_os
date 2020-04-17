@@ -25,7 +25,7 @@ fn main() -> u64 {
     let tcp_server = tcp::Socket::bind(SocketAddr {
         host: IpAddr::V4(Ipv4Addr([0,0,0,0])),
         port: 22,
-    }).unwrap();
+    }).expect("Could not open socket");
 
     loop {}
 

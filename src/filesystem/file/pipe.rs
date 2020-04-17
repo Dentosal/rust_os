@@ -1,7 +1,7 @@
 use alloc::prelude::v1::Vec;
 
 use super::super::{path::Path, result::*, FileClientId};
-use super::{FileOps, Leafness};
+use super::FileOps;
 
 /// Simplex FIFO communication channel,
 /// which can be used for IPC messages.

@@ -1,11 +1,10 @@
 //! Interface types for `fs_attach` system call
 
 use alloc::prelude::v1::*;
-use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 
-use crate::fs::FileDescriptor;
 use crate::process::ProcessId;
+use crate::SyscallErrorCode;
 
 /// Sender identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -24,6 +23,8 @@ pub struct Sender {
 pub struct Request {
     /// Sender identifier
     pub sender: Sender,
+    /// Suffix, i.e. the path after the attachment point (for branch nodes)
+    pub suffix: Option<String>,
     /// Contents of the request
     pub operation: RequestFileOperation,
 }
@@ -32,8 +33,16 @@ impl Request {
     pub fn response(&self, operation: ResponseFileOperation) -> Response {
         Response {
             sender: self.sender,
+            suffix: self.suffix.clone(),
             operation,
         }
+    }
+
+    /// Converts request message to a reply by replacing the data
+    pub fn respond<F>(&self, f: F) -> Response
+    where F: FnOnce(&Self) -> ResponseFileOperation {
+        let r = f(self);
+        self.response(r)
     }
 }
 
@@ -43,11 +52,13 @@ impl Request {
 pub struct Response {
     /// Sender of the corresponding `Request` identifier
     pub sender: Sender,
+    /// Suffix, i.e. the path after the attachment point (for branch nodes)
+    pub suffix: Option<String>,
     /// Response data
     pub operation: ResponseFileOperation,
 }
 
-/// Currently open, control and waiting_for are not supported
+/// Currently control and waiting_for are not supported
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RequestFileOperation {
     /// Read n bytes
@@ -62,19 +73,7 @@ pub enum RequestFileOperation {
 /// There is no response for close
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ResponseFileOperation {
+    Error(SyscallErrorCode),
     Read(Vec<u8>),
     Write(u64),
-}
-
-
-/// How branches ("directories") return their contents to the kernel.
-/// The process MUST NOT return any data if the later reads would block,
-/// but must block on the first read call until they are ready.
-/// Note that this is not same as `ReadBranch` protocol,
-/// which is used to return folder contents to processes.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ReadAttachmentBranch {
-    /// File descriptors here must be ones created
-    /// by `fs_attach` system call.
-    pub items: HashMap<String, FileDescriptor>,
 }

@@ -8,9 +8,7 @@ use alloc::prelude::v1::*;
 use hashbrown::HashMap;
 
 use crate::driver::disk_io::DISK_IO;
-use crate::filesystem::{
-    result::*, CloseAction, FileClientId, FileOps, Leafness, Path, FILESYSTEM,
-};
+use crate::filesystem::{result::*, CloseAction, FileClientId, FileOps, Path, FILESYSTEM};
 use crate::multitasking::WaitFor;
 
 #[derive(Debug)]
@@ -52,10 +50,6 @@ impl StaticFSLeaf {
     }
 }
 impl FileOps for StaticFSLeaf {
-    fn leafness(&self) -> Leafness {
-        Leafness::Leaf
-    }
-
     fn read(&mut self, fc: FileClientId, buf: &mut [u8]) -> IoResult<usize> {
         self.ensure_loaded();
         let data = self.data.as_ref().unwrap();
@@ -145,9 +139,6 @@ fn load_file_entries() -> Vec<(FileEntry, u32)> {
 
 pub fn init() {
     let mut fs = FILESYSTEM.lock();
-    let _ = fs
-        .create_static_branch(Path::new("/mnt/staticfs"))
-        .expect("Could not create /dev/staticfs");
 
     for (file_entry, pos) in load_file_entries() {
         assert!(!file_entry.name.is_empty());

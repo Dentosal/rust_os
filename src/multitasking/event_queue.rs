@@ -3,17 +3,27 @@ use alloc::collections::VecDeque;
 use crate::filesystem::result::IoResult;
 use crate::multitasking::{ExplicitEventId, WaitFor, SCHEDULER};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QueueLimit {
+    /// No limit
+    None,
+    /// Drops events after limit
+    Soft(usize),
+    /// Panics after limit
+    Hard(usize),
+}
+
 /// Queue with wakeup event blocking with max size
-/// Silently drops events after maxsize has been reached
+#[derive(Debug)]
 pub struct EventQueue<T> {
     // Name used to identify the queue in logs
     name: &'static str,
     queue: VecDeque<T>,
     event: Option<ExplicitEventId>,
-    limit: usize,
+    limit: QueueLimit,
 }
 impl<T> EventQueue<T> {
-    pub fn new(name: &'static str, limit: usize) -> Self {
+    pub fn new(name: &'static str, limit: QueueLimit) -> Self {
         Self {
             name,
             queue: VecDeque::new(),
@@ -22,18 +32,40 @@ impl<T> EventQueue<T> {
         }
     }
 
+    /// Push in non-IO context, when scheduler is not locked
     pub fn push(&mut self, item: T) {
-        self.queue.push_back(item);
-
-        if let Some(event_id) = self.event.take() {
+        if let Some(event_id) = self._push(item) {
             let mut sched = SCHEDULER.try_lock().unwrap();
             sched.on_explicit_event(event_id);
         }
+    }
 
-        if self.queue.len() > self.limit {
-            self.queue.remove(0);
-            log::warn!("{}: Buffer full, discarding event", self.name);
+    /// Push in IO context, i.e. returns event if it occurs
+    pub fn push_io(&mut self, item: T) -> IoResult<()> {
+        if let Some(event) = self._push(item) {
+            IoResult::success(()).with_event(event)
+        } else {
+            IoResult::success(())
         }
+    }
+
+    #[inline]
+    pub fn _push(&mut self, item: T) -> Option<ExplicitEventId> {
+        self.queue.push_back(item);
+
+        let l = self.queue.len();
+        match self.limit {
+            QueueLimit::Soft(limit) if l > limit => {
+                self.queue.remove(0);
+                log::warn!("{}: Buffer full, discarding event", self.name);
+            },
+            QueueLimit::Hard(limit) if l > limit => {
+                panic!("{}: Buffer full (hard limit)", self.name);
+            },
+            _ => {},
+        }
+
+        self.event.take()
     }
 
     /// Nonblocking, returns None if the queue is empty

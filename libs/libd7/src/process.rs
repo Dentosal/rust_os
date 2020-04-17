@@ -3,10 +3,7 @@ use d7abi::process::ProcessResult;
 
 pub use d7abi::process::ProcessId;
 
-use crate::{
-    fs::File,
-    syscall::{self, SyscallResult},
-};
+use crate::syscall::{self, SyscallResult};
 
 /// A safe wrapper for processes
 #[derive(Debug)]

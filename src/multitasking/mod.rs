@@ -6,7 +6,7 @@ mod queues;
 mod scheduler;
 mod waitfor;
 
-pub use self::event_queue::EventQueue;
+pub use self::event_queue::{EventQueue, QueueLimit};
 pub use self::fd_wait_flag::FdWaitFlag;
 pub use self::loader::ElfImage;
 pub use self::process::{Process, ProcessId};

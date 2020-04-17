@@ -10,12 +10,16 @@ extern crate alloc;
 extern crate libd7;
 
 use alloc::prelude::v1::*;
+use hashbrown::{HashMap, HashSet};
 
-use d7net::{arp, ethernet, ipv4, tcp, EtherType, IpProtocol, Ipv4Addr, MacAddr};
 use libd7::{
     attachment,
-    d7abi::fs::protocol::network::{OutboundPacket, ReceivedPacket},
+    d7abi::{
+        fs::protocol::network::{OutboundPacket, ReceivedPacket},
+        SyscallErrorCode,
+    },
     fs::{self, File},
+    net::d7net::*,
     pinecone, select, syscall,
 };
 
@@ -23,6 +27,7 @@ struct NetState {
     pub nic: File,
     pub mac: MacAddr,
     pub ip: Ipv4Addr,
+    pub sockets: HashMap<u64, SocketAddr>,
     pub next_socket: u64,
 }
 impl NetState {
@@ -39,14 +44,16 @@ impl NetState {
             nic: File::open("/dev/nic").unwrap(),
             mac,
             ip: Ipv4Addr([10, 0, 2, 15]), // Use fixed IP until DHCP is implemented
+            sockets: HashMap::new(),
             next_socket: 1,
         }
     }
 
-    pub fn get_new_socket_name(&mut self) -> String {
-        let result = format!("socket{}", self.next_socket);
+    pub fn create_socket(&mut self, addr: SocketAddr) -> u64 {
+        let id = self.next_socket;
         self.next_socket += 1;
-        result
+        self.sockets.insert(id, addr);
+        id
     }
 
     pub fn on_event(&mut self) {
@@ -102,15 +109,84 @@ impl NetState {
     }
 }
 
+fn handle_attachment(a: &mut attachment::BufferedAttachment, net_state: &mut NetState) {
+    let r = match a.next_request() {
+        Some(v) => v,
+        None => return,
+    }.unwrap();
+    match &r.operation {
+        attachment::RequestFileOperation::Read(count) => a.reply(r.response({
+            if let Some(path) = r.suffix.clone() {
+                match path.as_ref() {
+                    "socket" => {
+                        // Read socket directory
+                        let mut hs = HashSet::new();
+                        for s in net_state.sockets.keys() {
+                            hs.insert(s.to_string());
+                        }
+                        attachment::ResponseFileOperation::Read(pinecone::to_vec(&hs).unwrap())
+                    }
+                    "newsocket" => attachment::ResponseFileOperation::Error(
+                        SyscallErrorCode::fs_operation_not_supported,
+                    ),
+                    other => todo!("????"),
+                }
+            } else {
+                // Read root branch
+                let mut hs = HashSet::new();
+                hs.insert("socket");
+                hs.insert("newsocket");
+                attachment::ResponseFileOperation::Read(pinecone::to_vec(&hs).unwrap())
+            }
+        })).unwrap(),
+        attachment::RequestFileOperation::Write(data) => {
+            if let Some(path) = r.suffix.clone() {
+                match path.as_ref() {
+                    "socket" => a.reply(r.response(attachment::ResponseFileOperation::Error(
+                        SyscallErrorCode::fs_operation_not_supported,
+                    ))).unwrap(),
+                    "newsocket" => {
+                        // Create a new socket
+                        let addr: SocketAddr = pinecone::from_bytes(&data).unwrap();
+                        let socket_id = net_state.create_socket(addr);
+                        let response_bytes = pinecone::to_vec(&socket_id).unwrap();
+                        a.reply(r.response(attachment::ResponseFileOperation::Write(
+                            response_bytes.len() as u64
+                        ))).unwrap();
+                        a.buffer_reply(r.response(attachment::ResponseFileOperation::Read(
+                            response_bytes
+                        )));
+                    }
+                    other => todo!("????"),
+                }
+            } else {
+                // Read root branch
+                let mut hs = HashSet::new();
+                hs.insert("socket");
+                hs.insert("newsocket");
+
+                a.reply(r.response(attachment::ResponseFileOperation::Error(
+                    SyscallErrorCode::fs_operation_not_supported,
+                ))).unwrap();
+            }
+        }
+        other => {
+            a.reply(r.response(attachment::ResponseFileOperation::Error(
+                SyscallErrorCode::fs_operation_not_supported,
+            ))).unwrap();
+        }
+    }
+}
+
 #[no_mangle]
 fn main() -> ! {
     syscall::debug_print("Network daemon starting");
 
     let mut net_state = NetState::new();
 
-    let mut a_root = attachment::StaticBranch::new("/srv/net").unwrap();
-    let mut a_sockets = a_root.add_branch("socket").unwrap();
-    let mut a_newsocket = a_root.add_branch("newsocket").unwrap();
+    let mut a = attachment::Attachment::new_branch("/srv/net")
+        .unwrap()
+        .buffered();
 
     // Announce that we are running
     File::open("/srv/service").unwrap().write_all(&[1]).unwrap();
@@ -119,17 +195,7 @@ fn main() -> ! {
         println!("--> select!");
         select! {
             one(net_state.nic.fd) => net_state.on_event(),
-            one(a_root.inner.fd) => a_root.process_one().unwrap(),
-            one(a_sockets.fd) => {
-                println!("--> sockets");
-                let r = a_sockets.next_request();
-                panic!("sockets: {:?}", r);
-            },
-            one(a_newsocket.fd) => {
-                println!("--> newsocket");
-                let r = a_newsocket.next_request();
-                panic!("newsocket: {:?}", r);
-            },
+            one(a.inner.fd) => handle_attachment(&mut a, &mut net_state),
             error -> e => panic!("ERROR {:?}", e)
         };
     }

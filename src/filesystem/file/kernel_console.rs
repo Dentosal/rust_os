@@ -10,7 +10,7 @@ use crate::multitasking::ExplicitEventId;
 use crate::multitasking::WaitFor;
 
 use super::super::{result::*, FileClientId};
-use super::{FileOps, Leafness};
+use super::FileOps;
 
 /// `/dev/console`
 pub struct KernelConsoleDevice {
@@ -24,10 +24,6 @@ impl KernelConsoleDevice {
     }
 }
 impl FileOps for KernelConsoleDevice {
-    fn leafness(&self) -> Leafness {
-        Leafness::Leaf
-    }
-
     /// Reads from the physical keyboard
     fn read(&mut self, _fd: FileClientId, buf: &mut [u8]) -> IoResult<usize> {
         let mut kbd = KEYBOARD.try_lock().unwrap();

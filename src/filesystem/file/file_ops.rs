@@ -7,26 +7,9 @@ use crate::multitasking::{ExplicitEventId, Scheduler, WaitFor};
 
 use super::super::{path::Path, result::*, FileClientId, VirtualFS};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Leafness {
-    /// Leaf node
-    Leaf,
-    /// Branch node managed by an attachment
-    Branch,
-    /// Internal branching node, that does not
-    /// use normal ReadBranch protocol, but
-    /// transmits internal ids instead
-    InternalBranch,
-}
-
 /// Operations on an opened file (from perspective of the owner)
 #[allow(unused_variables)]
 pub trait FileOps: Send {
-    /// Can this file have children in the filesystem.
-    /// This check must not fail.
-    /// Non-leaf nodes MUST conform to `ReadBranch` protocol.
-    fn leafness(&self) -> Leafness;
-
     /// Get process id associated with this node.
     /// For processes, this is the pid of the process
     /// For attachments, this is the pid of the managing process
@@ -44,16 +27,16 @@ pub trait FileOps: Send {
 
     /// Write a buffer into file, returning how many bytes were written
     ///
-    /// If not implemented, causes `fs_readonly` error.
+    /// If not implemented, causes `fs_operation_not_supported` error.
     fn write(&mut self, fc: FileClientId, buf: &[u8]) -> IoResult<usize> {
-        IoResult::error(ErrorCode::fs_readonly)
+        IoResult::error(ErrorCode::fs_operation_not_supported)
     }
 
     /// Allows device to perform some initialization when a new fc is opened.
     ///
     /// If not implemented, does nothing.
-    fn open(&mut self, fc: FileClientId) -> IoResult<()> {
-        IoResult::success(())
+    fn open(&mut self, fc: FileClientId) -> IoResultPure<()> {
+        IoResultPure::Success(())
     }
 
     /// Allows releasing resources when a fc is closed.

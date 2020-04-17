@@ -1,9 +1,10 @@
 use alloc::prelude::v1::*;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct Path(str);
 impl Path {
     pub fn new<S: AsRef<str> + ?Sized>(s: &S) -> &Self {
+        assert!(!s.as_ref().is_empty());
         unsafe { &*(s.as_ref() as *const str as *const Self) }
     }
 
@@ -12,6 +13,10 @@ impl Path {
     }
 
     pub fn to_path_buf(&self) -> PathBuf {
+        PathBuf(self.0.to_owned())
+    }
+
+    pub fn to_owned(&self) -> PathBuf {
         PathBuf(self.0.to_owned())
     }
 
@@ -59,6 +64,30 @@ impl Path {
         }
     }
 
+    /// Convert absolute path to relative by removing the leading slash
+    pub fn to_relative(&self) -> &Self {
+        assert!(self.is_absolute());
+        Self::new(&self.0[1..])
+    }
+
+    /// Split leftmost component off a relative path
+    pub fn split_left(&self) -> (&str, Option<&Self>) {
+        assert!(self.is_relative());
+        assert!(!self.0.is_empty());
+
+        match self.0.find('/') {
+            Some(i) => {
+                let (head, tail) = self.0.split_at(i);
+                if tail.is_empty() {
+                    (head, None)
+                } else {
+                    (head, Some(Self::new(&tail[1..])))
+                }
+            },
+            None => (&self.0, None),
+        }
+    }
+
     /// Iterate over components of a path, discarding absoluteness
     pub fn components(&self) -> Components {
         Components {
@@ -87,7 +116,7 @@ impl Path {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PathBuf(String);
 
 impl PathBuf {
@@ -97,6 +126,10 @@ impl PathBuf {
 
     pub fn push<S: AsRef<str> + ?Sized>(&mut self, other: &S) {
         self.0 = self.add(other).0.to_owned();
+    }
+
+    pub fn to_string(&self) -> String {
+        self.0.clone()
     }
 }
 

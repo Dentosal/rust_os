@@ -1,6 +1,4 @@
-mod attachment;
 mod file_ops;
-mod internal_branch;
 mod kernel_console;
 mod network;
 mod pipe;
@@ -14,6 +12,4 @@ pub use network::{MacAddrDevice, NetworkDevice};
 pub use pipe::Pipe;
 pub use special_files::*;
 
-pub(super) use attachment::*;
-pub(super) use internal_branch::*;
 pub(super) use process::*;

@@ -7,7 +7,7 @@ use crate::multitasking::{
 
 use super::super::{path::Path, result::*, FileClientId};
 
-use super::{FileOps, Leafness, Trigger};
+use super::{FileOps, Trigger};
 
 /// # Process
 /// Reading a process blocks until the process is
@@ -35,10 +35,6 @@ impl ProcessFile {
     }
 }
 impl FileOps for ProcessFile {
-    fn leafness(&self) -> Leafness {
-        Leafness::Leaf
-    }
-
     fn pid(&self) -> IoResultPure<ProcessId> {
         IoResultPure::Success(self.pid)
     }
@@ -78,7 +74,7 @@ impl FileOps for ProcessFile {
             IoResult::success(buf.len())
         } else {
             // Process writes are not allowed yet
-            IoResult::error(ErrorCode::fs_readonly)
+            IoResult::error(ErrorCode::fs_operation_not_supported)
         }
     }
 

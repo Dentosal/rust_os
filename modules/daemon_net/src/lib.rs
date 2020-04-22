@@ -58,10 +58,10 @@ impl NetState {
     pub fn on_event(&mut self, packet: &[u8]) {
         let frame = ethernet::Frame::from_bytes(&packet);
 
-        println!(&format!(
+        println!(
             "Received {:?} packet from {:?}",
             frame.header.ethertype, frame.header.src_mac
-        ));
+        );
 
         match frame.header.ethertype {
             EtherType::ARP => {
@@ -85,12 +85,12 @@ impl NetState {
             }
             EtherType::Ipv4 => {
                 let ip_packet = ipv4::Packet::from_bytes(&frame.payload);
-                println!(&format!("{:?}", ip_packet));
+                println!("{:?}", ip_packet);
 
                 match ip_packet.header.protocol {
                     IpProtocol::TCP => {
                         let tcp_packet = tcp::Segment::from_bytes(&ip_packet.payload);
-                        println!(&format!("{:?}", tcp_packet));
+                        println!("{:?}", tcp_packet);
                     }
                     _ => {}
                 }

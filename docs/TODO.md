@@ -1,7 +1,3 @@
-# Active
-
-* Make netd work again
-
 # Backlog
 
 * Move keyboard IRQ handler to generic pluggable system

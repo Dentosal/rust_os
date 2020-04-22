@@ -183,12 +183,17 @@ impl RTL8139 {
             rx_offset: 0,
         };
 
+        let io_base = (pci_device.get_bar(0) & (!1u32)) as u16;
+        let irq = pci_device
+            .get_interrupt_line()
+            .expect("Missing interrupt line");
+
+        super::irq_handler::set_irq_handler(irq, io_base + reg::ISR);
+
         let mut device = RTL8139 {
             pci_device,
-            irq: pci_device
-                .get_interrupt_line()
-                .expect("Missing interrupt line"),
-            io_base: (pci_device.get_bar(0) & (!1u32)) as u16,
+            irq,
+            io_base,
             buffers,
             link_up: false,
         };

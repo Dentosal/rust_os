@@ -18,6 +18,7 @@ use libd7::net::d7net::MacAddr;
 use libd7::{ipc, process::ProcessId, select, syscall};
 
 mod dma;
+mod irq_handler;
 mod rtl8139;
 
 #[no_mangle]

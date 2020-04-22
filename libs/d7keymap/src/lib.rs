@@ -18,6 +18,10 @@ use serde::{de, Deserialize, Deserializer};
 #[serde(transparent)]
 pub struct KeySymbol(String);
 impl KeySymbol {
+    pub fn new(s: &str) -> Self {
+        Self(s.to_owned())
+    }
+
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -69,9 +73,13 @@ pub struct KeyMap {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum KeyAction {
+    /// Product text (prefix from dead-key buffer if any and normalize)
     Text(String),
+    /// Insert to dead-key buffer
     Buffer(String),
+    /// Remap to another key symbol
     Remap(KeySymbol),
+    /// Ignore this keypress
     Ignore,
 }
 

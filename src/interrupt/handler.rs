@@ -1,7 +1,6 @@
 use x86_64::structures::idt::{InterruptStackFrame, InterruptStackFrameValue, PageFaultErrorCode};
 use x86_64::{PhysAddr, VirtAddr};
 
-use crate::driver::keyboard;
 use crate::driver::pic;
 use crate::multitasking::{process, Process, ProcessId, ProcessSwitch, SCHEDULER};
 use crate::syscall::RawSyscall;
@@ -10,7 +9,7 @@ use crate::time;
 /// Breakpoint handler
 pub(super) unsafe fn exception_bp(stack_frame: &InterruptStackFrame) {
     rforce_unlock!();
-    rprintln!(
+    log::warn!(
         "Breakpoint at {:?}\n{:?}",
         (*stack_frame).instruction_pointer,
         *stack_frame
@@ -107,12 +106,27 @@ pub(super) unsafe extern "C" fn exception_irq0() -> u128 {
     }
 }
 
-/// First ps/2 device, keyboard, sent data
+/// First ps/2 device, keyboard, sent data.
+/// Read the byte and then send it to the keyboard driver.
 pub(super) unsafe fn exception_irq1() {
-    let mut kbd = keyboard::KEYBOARD.try_lock().unwrap();
-    if kbd.is_enabled() {
-        kbd.notify();
+    let mut port_ps2_data = cpuio::UnsafePort::<u8>::new(0x60);
+    let mut port_ps2_status = cpuio::UnsafePort::<u8>::new(0x64);
+
+    // Wait until ready
+    loop {
+        if (port_ps2_status.read() & 0x1) != 0 {
+            break;
+        }
     }
+
+    // Read byte
+    let byte = port_ps2_data.read();
+
+    // Send to driver
+    let mut sched = SCHEDULER.try_lock().unwrap();
+    crate::ipc::kernel_publish(&mut sched, "irq/keyboard", &byte);
+
+    // Interrupt over
     pic::PICS.lock().notify_eoi(0x21);
 }
 
@@ -149,14 +163,27 @@ pub(super) unsafe fn exception_irq15() {
 }
 
 /// Free IRQs, i.e. {9,10,11} for peripherals
-/// These can be hooked by devices
 pub(super) unsafe fn exception_irq_free(interrupt: u8) {
-    use super::FREE_IRQ_HOOK;
-    let irq_hook = FREE_IRQ_HOOK.try_lock().unwrap();
-    if let Some(f) = irq_hook.by_int(interrupt) {
-        log::trace!("Triggering free IRQ int={:02x}", interrupt);
-        f();
+    let irq = interrupt - 0x20;
+    log::info!("Triggering free IRQ {:02x}", irq);
+
+    let value: u64;
+
+    // TODO: implment pluggable handlers (SYSCALL::set_irq_handler)
+    if irq == 11 {
+        unsafe {
+            let mut r_isr: cpuio::UnsafePort<u16> = cpuio::UnsafePort::new(0xc000 + 0x3e);
+            let v = r_isr.read();
+            r_isr.write(v);
+            log::trace!("v = {:#x}", v);
+            value = v as u64;
+        };
+    } else {
+        value = 0;
     }
+
+    let mut sched = SCHEDULER.try_lock().unwrap();
+    crate::ipc::kernel_publish(&mut sched, &format!("irq/{}", irq), &value);
 
     let mut pics = pic::PICS.try_lock().unwrap();
     pics.notify_eoi(interrupt);
@@ -271,15 +298,8 @@ unsafe extern "C" fn process_interrupt_inner(
             pic::PICS.lock().notify_eoi(interrupt);
             handle_switch!(next_process);
         },
-        0x21 => {
-            // Keyboard input
-            let mut kbd = keyboard::KEYBOARD.try_lock().unwrap();
-            kbd.notify();
-            pic::PICS.lock().notify_eoi(0x21);
-        },
-        0x27 => {
-            exception_irq7();
-        },
+        0x21 => exception_irq1(),
+        0x27 => exception_irq7(),
         0x22..=0x26 | 0x28 | 0x2c..=0x2d => {
             // pic::PICS.lock().notify_eoi(interrupt);
             panic!("Unhandled interrupt: {:02x}", interrupt);
@@ -326,11 +346,9 @@ fn fail(pid: ProcessId, error: process::Error) -> ! {
 
 /// Terminate the give process and switch to the next one
 fn terminate(pid: ProcessId, result: process::ProcessResult) -> ! {
-    use crate::filesystem::FILESYSTEM;
     let next_process = unsafe {
         let mut sched = SCHEDULER.try_lock().expect("Sched unlock");
-        let mut vfs = FILESYSTEM.try_lock().expect("VFS unlock");
-        sched.terminate_and_switch(&mut *vfs, pid, result)
+        sched.terminate_and_switch(pid, result)
     };
 
     match next_process {

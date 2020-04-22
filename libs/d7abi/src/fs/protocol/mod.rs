@@ -5,8 +5,6 @@ use alloc::prelude::v1::*;
 use serde::{Deserialize, Serialize};
 
 pub mod attachment;
-pub mod console;
-pub mod network;
 
 /// Branch ("directory") contents
 /// Note that this is not same as `ReadAttachmentBranch` protocol.

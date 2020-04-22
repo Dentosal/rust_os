@@ -14,6 +14,7 @@
 #![allow(unused_imports)]
 #![allow(unused_mut)]
 #![allow(unreachable_code)]
+#![allow(unused_unsafe)]
 // Disable some clippy lints
 #![allow(clippy::cast_ptr_alignment)]
 #![allow(clippy::empty_loop)]
@@ -64,10 +65,12 @@ mod driver;
 
 // Everything else
 mod cpuid;
-mod filesystem;
+mod initrd;
 mod interrupt;
+mod ipc;
 mod memory;
 mod multitasking;
+mod services;
 mod syscall;
 mod syslog;
 mod time;
@@ -79,64 +82,28 @@ pub extern "C" fn rust_main() -> ! {
     rreset!();
     rprintln!("Initializing the system...\n");
 
-    // Logging
     syslog::enable();
-
-    // Interrupt controller
     driver::pic::init();
-    // apic::init();
-
-    // Interrupt system
     interrupt::init();
-
-    // Memory allocation and paging
     memory::init();
-
-    // More interrupts controls
     interrupt::init_after_memory();
-
-    // PIT
     driver::pit::init();
-
-    // CPU data
     cpuid::init();
-
-    // Filesystem
-    filesystem::init();
-
-    // Keyboard
-    driver::keyboard::init();
-
-    // PCI
-    driver::pci::init();
-
-    // Disk IO (ATA, IDE, VirtIO)
-    interrupt::enable_external_interrupts();
-    driver::disk_io::init();
-    interrupt::disable_external_interrupts();
-
-    // StaticFS requires disk drivers for now
-    filesystem::staticfs::init();
-
-    // Memory init late phase
-    memory::init_late();
-
-    // NICs
-    driver::nic::init();
+    services::init();
 
     rreset!();
-    log::info!("Kernel initialized.\n");
+    log::info!("Kernel initialized.");
+
+    syslog::disable_direct_vga();
 
     // Start service daemon
     crate::memory::configure(|mut mem_ctrl| {
-        use crate::filesystem::FILESYSTEM;
         use crate::multitasking::SCHEDULER;
-
-        let mut fs = FILESYSTEM.lock();
         let mut sched = SCHEDULER.lock();
 
-        fs.kernel_exec(&mut mem_ctrl, &mut sched, "/mnt/staticfs/serviced")
-            .expect("Could not spawn");
+        let bytes = crate::initrd::read("serviced").expect("serviced missing from initrd");
+        let elfimage = multitasking::process::load_elf(mem_ctrl, bytes);
+        sched.spawn(mem_ctrl, elfimage);
     });
 
     // Wait until the next clock tick interrupt,
@@ -179,8 +146,9 @@ static PANIC_ACTIVE: AtomicBool = AtomicBool::new(false);
 #[no_mangle]
 extern "C" fn panic(info: &PanicInfo) -> ! {
     unsafe {
+        bochs_magic_bp!();
         asm!("cli"::::"intel","volatile");
-        // panic_indicator!(0x4f214f21); // !!
+        panic_indicator!(0x4f214f21); // !!
 
         if !PANIC_ACTIVE.load(Ordering::SeqCst) {
             PANIC_ACTIVE.store(true, Ordering::SeqCst);

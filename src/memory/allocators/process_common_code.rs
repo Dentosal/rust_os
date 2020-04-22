@@ -1,7 +1,7 @@
+use core::intrinsics::copy_nonoverlapping;
 use core::ptr;
 use x86_64::structures::paging::PageTableFlags as Flags;
 
-use crate::filesystem::FILESYSTEM;
 use crate::memory::{self, prelude::*};
 
 use super::super::MemoryController;
@@ -14,10 +14,7 @@ pub static mut PROCESS_IDT_PHYS_ADDR: u64 = 0;
 unsafe fn load_common_code(mem_ctrl: &mut MemoryController) {
     let common_addr = VirtAddr::new_unchecked(COMMON_ADDRESS_VIRT);
 
-    let bytes = FILESYSTEM
-        .lock()
-        .read_file("/mnt/staticfs/p_commoncode")
-        .expect("p_commoncode: file unavailable");
+    let bytes = crate::initrd::read("p_commoncode").expect("p_commoncode missing from initrd");
     assert!(bytes.len() <= (PAGE_SIZE_BYTES as usize));
 
     let frame = mem_ctrl
@@ -36,9 +33,7 @@ unsafe fn load_common_code(mem_ctrl: &mut MemoryController) {
         .flush();
 
     let base: *mut u8 = common_addr.as_mut_ptr();
-    for (offset, byte) in bytes.into_iter().enumerate() {
-        ptr::write(base.add(offset), byte);
-    }
+    copy_nonoverlapping(bytes.as_ptr(), base, bytes.len());
 
     mem_ctrl
         .page_map

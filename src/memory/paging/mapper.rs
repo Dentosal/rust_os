@@ -62,7 +62,7 @@ macro_rules! pt_flags {
 #[derive(Debug, Clone)]
 pub struct PageMap {
     /// Physical address of the page table, and by extension, the P4 table
-    phys_addr: PhysAddr,
+    pub phys_addr: PhysAddr,
     /// Next table will be placed to `PAGE_TABLE_AREA + PAGE_SIZE * table_count`,
     /// where `PAGE_SIZE` is `0x1000`.
     table_count: u64,

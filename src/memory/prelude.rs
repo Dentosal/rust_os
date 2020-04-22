@@ -11,6 +11,16 @@ pub use x86_64::{PhysAddr, VirtAddr};
 pub type PageSizeType = pg::Size2MiB;
 pub const PAGE_SIZE_BYTES: u64 = 0x200_000;
 
+/// Convert bytes to pages, rounding up
+pub const fn to_pages_round_up(bytes: u64) -> u64 {
+    (bytes + (PAGE_SIZE_BYTES - 1)) / PAGE_SIZE_BYTES
+}
+
+/// Page-align, roungin upwards
+pub const fn page_align_up(bytes: u64) -> u64 {
+    to_pages_round_up(bytes) * PAGE_SIZE_BYTES
+}
+
 pub type Page = pg::Page<PageSizeType>;
 pub type PageRange = pg::page::PageRange<PageSizeType>;
 pub type PhysFrame = pg::PhysFrame<PageSizeType>;

@@ -7,9 +7,9 @@ use hashbrown::HashSet;
 use x86_64::structures::paging::PageTableFlags as Flags;
 use x86_64::{PhysAddr, VirtAddr};
 
-use d7abi::fs::FileDescriptor;
+use d7abi::SyscallErrorCode as ErrorCode;
 
-use crate::filesystem::{result::*, FILESYSTEM};
+use crate::ipc;
 use crate::memory::prelude::*;
 use crate::memory::{self, MemoryController};
 use crate::multitasking::{process, Process, ProcessId, Scheduler, WaitFor, SCHEDULER};
@@ -48,30 +48,27 @@ pub enum SyscallResult {
     Terminate(process::ProcessResult),
 }
 
-impl core::ops::Try for SyscallResult {
-    type Ok = Self;
-    type Error = IoResultPure<Missing>;
-
-    fn into_result(self) -> Result<Self, Self::Error> {
-        unimplemented!("??")
-    }
-
-    fn from_ok(ok: Self) -> Self {
-        ok
-    }
-
-    fn from_error(error: Self::Error) -> Self {
-        match error {
-            IoResultPure::Success(_missing) => unimplemented!("Success is not error"),
-            IoResultPure::RepeatAfter(waitfor) => Self::RepeatAfter(waitfor),
-            IoResultPure::Error(code) => Self::Continue(Err(code.into())),
+macro_rules! try_str {
+    ($slice:expr) => {{
+        // Sanity check
+        assert!($slice.len() < 1000, "String length sanity check"); // TODO: client error
+        match ::core::str::from_utf8($slice) {
+            Ok(value) => value,
+            Err(err) => {
+                return SyscallResult::Continue(Err(ErrorCode::invalid_utf8.into()));
+            },
         }
-    }
+    }};
 }
 
-macro_rules! try_str {
-    ($slice:expr) => {
-        ::core::str::from_utf8($slice).map_err(|_| IoResultPure::Error(ErrorCode::invalid_utf8))?
+macro_rules! try_ipc {
+    ($ipc_result:expr) => {
+        match $ipc_result {
+            Ok(value) => value,
+            Err(error) => {
+                return SyscallResult::Continue(Err(error.into()));
+            },
+        }
     };
 }
 
@@ -85,8 +82,6 @@ fn syscall(
     m: &mut MemoryController, sched: &mut Scheduler, pid: ProcessId, rsc: RawSyscall,
 ) -> SyscallResult {
     use d7abi::SyscallNumber as SC;
-
-    use crate::filesystem::FileClientId;
 
     let process = sched.process_by_id_mut(pid).expect("Process not found");
     let pid = process.id();
@@ -123,140 +118,314 @@ fn syscall(
                     _ => unimplemented!("OutOfMemory case not implmented yet"),
                 }
             },
-            SC::fs_open => {
-                let (path_len, path_ptr, _, _) = rsc.args;
-                let path_ptr = VirtAddr::new(path_ptr);
-                if let Some((area, slice)) = unsafe { m.process_slice(process, path_len, path_ptr) }
+            SC::exec => {
+                let (image_len, image_ptr, _, _) = rsc.args;
+                let image_ptr = VirtAddr::new(image_ptr);
+                if let Some((area, slice)) =
+                    unsafe { m.process_slice(process, image_len, image_ptr) }
                 {
-                    let path = try_str!(slice);
-                    log::info!("[pid={:8}] fs_open {:?}", pid, path);
-                    let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
-                    let fc = fs.open(sched, pid, path)?;
+                    log::debug!("[pid={:8}] exec len={:?}", pid, slice.len());
+
+                    let elfimage = crate::multitasking::process::load_elf(m, slice);
+                    let pid = sched.spawn(m, elfimage);
+
                     unsafe { m.unmap_area(area) };
                     m.free_virtual_area(area);
-                    SyscallResult::Continue(Ok(unsafe { fc.fd.as_u64() }))
+
+                    SyscallResult::Continue(Ok(unsafe { pid.as_u64() }))
                 } else {
                     SyscallResult::Terminate(process::ProcessResult::Failed(
-                        process::Error::Pointer(path_ptr),
+                        process::Error::Pointer(image_ptr),
                     ))
                 }
             },
-            SC::fs_exec => {
-                let (path_len, path_ptr, _, _) = rsc.args;
-                let path_ptr = VirtAddr::new(path_ptr);
-                if let Some((area, slice)) = unsafe { m.process_slice(process, path_len, path_ptr) }
+            SC::sched_yield => {
+                let (_, _, _, _) = rsc.args;
+                SyscallResult::Switch(Ok(0), WaitFor::None)
+            },
+            SC::sched_sleep_ns => {
+                let (time_ns, _, _, _) = rsc.args;
+                let now = SYSCLOCK.instant();
+                SyscallResult::Switch(Ok(0), WaitFor::Time(now + Duration::from_nanos(time_ns)))
+            },
+            SC::ipc_subscribe => {
+                let (filter_len, filter_ptr, exact, reliable) = rsc.args;
+                let exact = exact != 0;
+                let reliable = reliable != 0;
+                let filter_ptr = VirtAddr::new(filter_ptr);
+                if let Some((area, slice)) =
+                    unsafe { m.process_slice(process, filter_len, filter_ptr) }
                 {
-                    let path = try_str!(slice);
-                    log::info!("[pid={:8}] fs_exec {:?}", pid, path);
-                    let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
-                    let fc = fs.exec(m, sched, pid, path).expect("EXEC FAILED");
+                    let filter_str = try_str!(slice);
+                    let filter = try_ipc!(ipc::TopicFilter::try_new(filter_str, exact));
+
+                    log::trace!("[pid={:8}] ipc_subscribe {:?}", pid, filter);
+
+                    let mut ipc_manager = ipc::IPC.try_lock().expect("IPC LOCKED");
+                    let sub_id = try_ipc!(ipc_manager.subscribe(pid, filter, reliable));
+
                     unsafe { m.unmap_area(area) };
                     m.free_virtual_area(area);
-                    SyscallResult::Continue(Ok(unsafe { fc.fd.as_u64() }))
+                    SyscallResult::Continue(Ok(sub_id.as_u64()))
                 } else {
                     SyscallResult::Terminate(process::ProcessResult::Failed(
-                        process::Error::Pointer(path_ptr),
+                        process::Error::Pointer(filter_ptr),
                     ))
                 }
             },
-            SC::fs_attach => {
-                let (path_len, path_ptr, is_leaf, _) = rsc.args;
-                let path_ptr = VirtAddr::new(path_ptr);
-                if let Some((area, slice)) = unsafe { m.process_slice(process, path_len, path_ptr) }
-                {
-                    let path = try_str!(slice);
-                    log::info!("[pid={:8}] fs_attach {:?}", pid, path);
-                    let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
-                    // TODO: Proper conversion to boolean for is_leaf
-                    let fc = fs
-                        .attach(sched, pid, path, is_leaf != 0)
-                        .expect("ATTACH FAILED");
-                    unsafe { m.unmap_area(area) };
-                    m.free_virtual_area(area);
-                    SyscallResult::Continue(Ok(fc.fd.as_u64()))
-                } else {
-                    SyscallResult::Terminate(process::ProcessResult::Failed(
-                        process::Error::Pointer(path_ptr),
-                    ))
-                }
-            },
-            SC::fd_close => {
-                let (fd, _, _, _) = rsc.args;
-                let fd = FileDescriptor::from_u64(fd);
-                let fc = FileClientId::process(pid, fd);
-                log::info!("[pid={:8}] fd_close {:?}", pid, fc);
-                let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
-                fs.close(sched, fc);
+            SC::ipc_unsubscribe => {
+                let (sub_id, _, _, _) = rsc.args;
+                let sub_id = ipc::SubscriptionId::from_u64(sub_id);
+
+                log::trace!("[pid={:8}] ipc_unsubscribe {:?}", pid, sub_id);
+
+                let mut ipc_manager = ipc::IPC.try_lock().expect("IPC LOCKED");
+                try_ipc!(ipc_manager.unsubscribe(pid, sub_id).consume_events(sched));
+
                 SyscallResult::Continue(Ok(0))
             },
-            SC::fd_read => {
-                let (fd, buf, count, _) = rsc.args;
-                let fd = FileDescriptor::from_u64(fd);
-                let buf = VirtAddr::new(buf);
-                let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
-                if let Some((area, slice)) = unsafe { m.process_slice_mut(process, count, buf) } {
-                    let fc = FileClientId::process(pid, fd);
-                    log::info!("[pid={:8}] fd_read {:?}", pid, fc);
-                    let read_count = fs.read(sched, fc, slice)?;
-                    unsafe { m.unmap_area(area) };
-                    m.free_virtual_area(area);
-                    SyscallResult::Continue(Ok(read_count as u64))
-                } else {
-                    SyscallResult::Terminate(process::ProcessResult::Failed(
-                        process::Error::Pointer(buf),
-                    ))
-                }
-            },
-            SC::fd_write => {
-                let (fd, buf, count, _) = rsc.args;
-                let fd = FileDescriptor::from_u64(fd);
-                let buf = VirtAddr::new(buf);
-                let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
-                if let Some((area, slice)) = unsafe { m.process_slice(process, count, buf) } {
-                    let fc = FileClientId::process(pid, fd);
-                    log::info!("[pid={:8}] fd_write {:?} (count={:?})", pid, fd, count);
-                    let written_count = fs.write(sched, fc, slice)?;
-                    unsafe { m.unmap_area(area) };
-                    m.free_virtual_area(area);
-                    SyscallResult::Continue(Ok(written_count as u64))
-                } else {
-                    SyscallResult::Terminate(process::ProcessResult::Failed(
-                        process::Error::Pointer(buf),
-                    ))
-                }
-            },
-            SC::fd_select => {
-                let (fds_len, fds, nonblocking, _) = rsc.args;
+            SC::ipc_publish => {
+                let (topic_len, topic_ptr, data_len, data_ptr) = rsc.args;
+                let topic_ptr = VirtAddr::new(topic_ptr);
+                let data_ptr = VirtAddr::new(data_ptr);
+                if let Some((topic_area, topic_slice)) =
+                    unsafe { m.process_slice(process, topic_len, topic_ptr) }
+                {
+                    let result = if let Some((data_area, data_slice)) =
+                        unsafe { m.process_slice(process, data_len, data_ptr) }
+                    {
+                        let topic_str = try_str!(topic_slice);
+                        let topic = try_ipc!(ipc::Topic::try_new(topic_str));
 
-                if fds_len == 0 {
+                        log::trace!(
+                            "[pid={:8}] ipc_publish topic={:?} len={:?}",
+                            pid,
+                            topic,
+                            data_len
+                        );
+
+                        let mut ipc_manager = ipc::IPC.try_lock().expect("IPC LOCKED");
+                        try_ipc!(ipc_manager.publish(topic, data_slice).consume_events(sched));
+
+                        unsafe { m.unmap_area(data_area) };
+                        m.free_virtual_area(data_area);
+                        SyscallResult::Continue(Ok(0))
+                    } else {
+                        SyscallResult::Terminate(process::ProcessResult::Failed(
+                            process::Error::Pointer(data_ptr),
+                        ))
+                    };
+                    unsafe { m.unmap_area(topic_area) };
+                    m.free_virtual_area(topic_area);
+                    result
+                } else {
+                    SyscallResult::Terminate(process::ProcessResult::Failed(
+                        process::Error::Pointer(topic_ptr),
+                    ))
+                }
+            },
+            SC::ipc_deliver => {
+                let (topic_len, topic_ptr, data_len, data_ptr) = rsc.args;
+                let topic_ptr = VirtAddr::new(topic_ptr);
+                let data_ptr = VirtAddr::new(data_ptr);
+
+                let mut ipc_manager = ipc::IPC.try_lock().expect("IPC LOCKED");
+
+                // Delivery complete
+                if ipc_manager.delivery_complete(pid) {
+                    log::trace!("[pid={:8}] ipc_deliver complete", pid);
+
+                    try_ipc!(ipc_manager.after_delivery(pid).consume_events(sched));
+                    return SyscallResult::Continue(Ok(0));
+                }
+
+                if let Some((topic_area, topic_slice)) =
+                    unsafe { m.process_slice(process, topic_len, topic_ptr) }
+                {
+                    let result = if let Some((data_area, data_slice)) =
+                        unsafe { m.process_slice(process, data_len, data_ptr) }
+                    {
+                        let topic_str = try_str!(topic_slice);
+                        let topic = try_ipc!(ipc::Topic::try_new(topic_str));
+                        log::trace!(
+                            "[pid={:8}] ipc_deliver topic={:?} len={:?}",
+                            pid,
+                            topic,
+                            data_len
+                        );
+
+                        let deliver = try_ipc!(
+                            ipc_manager
+                                .deliver(pid, topic, data_slice)
+                                .consume_events(sched)
+                        );
+
+                        unsafe { m.unmap_area(data_area) };
+                        m.free_virtual_area(data_area);
+
+                        match deliver {
+                            ipc::Deliver::Process(event) => {
+                                SyscallResult::RepeatAfter(WaitFor::Event(event))
+                            },
+                            ipc::Deliver::Kernel => SyscallResult::Continue(Ok(0)),
+                        }
+                    } else {
+                        SyscallResult::Terminate(process::ProcessResult::Failed(
+                            process::Error::Pointer(data_ptr),
+                        ))
+                    };
+                    unsafe { m.unmap_area(topic_area) };
+                    m.free_virtual_area(topic_area);
+                    result
+                } else {
+                    SyscallResult::Terminate(process::ProcessResult::Failed(
+                        process::Error::Pointer(topic_ptr),
+                    ))
+                }
+            },
+            SC::ipc_deliver_reply => {
+                let (topic_len, topic_ptr, data_len, data_ptr) = rsc.args;
+                let topic_ptr = VirtAddr::new(topic_ptr);
+                let data_ptr = VirtAddr::new(data_ptr);
+
+                let mut ipc_manager = ipc::IPC.try_lock().expect("IPC LOCKED");
+
+                if let Some((topic_area, topic_slice)) =
+                    unsafe { m.process_slice(process, topic_len, topic_ptr) }
+                {
+                    let result = if let Some((data_area, data_slice)) =
+                        unsafe { m.process_slice(process, data_len, data_ptr) }
+                    {
+                        let topic_str = try_str!(topic_slice);
+                        let topic = try_ipc!(ipc::Topic::try_new(topic_str));
+                        log::trace!(
+                            "[pid={:8}] ipc_deliver_reply topic={:?} len={:?}",
+                            pid,
+                            topic,
+                            data_len
+                        );
+
+                        let result = ipc_manager
+                            .deliver_reply(pid, topic, data_slice)
+                            .consume_events(sched);
+
+                        unsafe { m.unmap_area(data_area) };
+                        m.free_virtual_area(data_area);
+
+                        try_ipc!(result);
+                        SyscallResult::Continue(Ok(0))
+                    } else {
+                        SyscallResult::Terminate(process::ProcessResult::Failed(
+                            process::Error::Pointer(data_ptr),
+                        ))
+                    };
+                    unsafe { m.unmap_area(topic_area) };
+                    m.free_virtual_area(topic_area);
+                    result
+                } else {
+                    SyscallResult::Terminate(process::ProcessResult::Failed(
+                        process::Error::Pointer(topic_ptr),
+                    ))
+                }
+            },
+            SC::ipc_receive => {
+                let (sub_id, buf_len, buf_ptr, _) = rsc.args;
+                let sub_id = ipc::SubscriptionId::from_u64(sub_id);
+                let buf_ptr = VirtAddr::new(buf_ptr);
+                if let Some((area, slice)) =
+                    unsafe { m.process_slice_mut(process, buf_len, buf_ptr) }
+                {
+                    log::trace!(
+                        "[pid={:8}] ipc_receive sub={:?} len={:?}",
+                        pid,
+                        sub_id,
+                        buf_len
+                    );
+
+                    let mut ipc_manager = ipc::IPC.try_lock().expect("IPC LOCKED");
+                    let message_or_event =
+                        try_ipc!(ipc_manager.receive(pid, sub_id).consume_events(sched));
+
+                    let msg = match message_or_event {
+                        Ok(msg) => msg,
+                        Err(event) => {
+                            return SyscallResult::RepeatAfter(WaitFor::Event(event));
+                        },
+                    };
+
+                    let ser_msg = pinecone::to_vec(&msg).unwrap();
+
+                    if ser_msg.len() > slice.len() {
+                        panic!(
+                            "Buffer too small msg_len={} buf_len={}",
+                            ser_msg.len(),
+                            slice.len()
+                        ); // TODO: client error
+                    }
+
+                    slice[..ser_msg.len()].copy_from_slice(&ser_msg);
+
+                    unsafe { m.unmap_area(area) };
+                    m.free_virtual_area(area);
+                    SyscallResult::Continue(Ok(ser_msg.len() as u64))
+                } else {
+                    SyscallResult::Terminate(process::ProcessResult::Failed(
+                        process::Error::Pointer(buf_ptr),
+                    ))
+                }
+            },
+            SC::ipc_acknowledge => {
+                let (sub_id, ack_id, positive, _) = rsc.args;
+                let sub_id = ipc::SubscriptionId::from_u64(sub_id);
+                let ack_id = ipc::AcknowledgeId::from_u64(ack_id);
+                let positive = positive != 0;
+
+                log::trace!(
+                    "[pid={:8}] ipc_acknowledge sub={:?} ack_id={:?} positive={:?}",
+                    pid,
+                    sub_id,
+                    ack_id,
+                    positive
+                );
+
+                let mut ipc_manager = ipc::IPC.try_lock().expect("IPC LOCKED");
+                try_ipc!(
+                    ipc_manager
+                        .acknowledge(sub_id, ack_id, positive)
+                        .consume_events(sched)
+                );
+                SyscallResult::Continue(Ok(0))
+            },
+            SC::ipc_select => {
+                let (subs_len, subs, nonblocking, _) = rsc.args;
+
+                if subs_len == 0 {
                     return SyscallResult::Continue(Err(ErrorCode::empty_list_argument.into()));
                 }
 
-                let fds = VirtAddr::new(fds);
-                let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
-                let size = mem::size_of::<FileDescriptor>() as u64;
+                let subs = VirtAddr::new(subs);
+                let mut ipc_manager = ipc::IPC.try_lock().expect("IPC LOCKED");
+                let size = mem::size_of::<ipc::SubscriptionId>() as u64;
                 let blocking = nonblocking == 0;
 
-                log::trace!("fd_select n={} blocking={}", fds_len, blocking);
+                log::trace!("ipc_select n={} blocking={}", subs_len, blocking);
 
-                if let Some((area, fds_slice)) =
-                    unsafe { m.process_slice_mut(process, fds_len * size, fds) }
+                if let Some((area, subs_slice)) =
+                    unsafe { m.process_slice(process, subs_len * size, subs) }
                 {
                     let mut conditions = Vec::new();
-                    for fd_bytes in fds_slice.chunks_exact(8) {
-                        let fd = FileDescriptor::from_u64(u64::from_le_bytes(
-                            fd_bytes.try_into().unwrap(),
+                    for sub_bytes in subs_slice.chunks_exact(8) {
+                        let sub_id = ipc::SubscriptionId::from_u64(u64::from_le_bytes(
+                            sub_bytes.try_into().unwrap(),
                         ));
-                        let fc = FileClientId::process(pid, fd);
-                        log::trace!("* {:?} cond?", fc);
-                        let condition = fs.read_waiting_for(sched, fc)?;
-
-                        log::trace!("* {:?} cond = {:?}", fc, condition);
+                        let condition = ipc_manager.waiting_for(sub_id);
+                        log::trace!("* {:?} condition = {:?}", sub_id, condition);
 
                         if condition == WaitFor::None {
                             unsafe { m.unmap_area(area) };
-                            return SyscallResult::Continue(Ok(fd.as_u64()));
+                            return SyscallResult::Continue(Ok(sub_id.as_u64()));
                         }
+
                         conditions.push(condition);
                     }
 
@@ -267,41 +436,136 @@ fn syscall(
                         return SyscallResult::Continue(Err(ErrorCode::would_block.into()));
                     }
 
-                    match sched.try_resolve_waitfor(WaitFor::FirstOf(conditions.clone())) {
-                        Ok(pid) => {
-                            unimplemented!("Conditions {:?}", conditions)
-                            // SyscallResult::Continue(Ok(unsafe { fd.as_u64() }))
-                        },
-                        Err(waitfor) => SyscallResult::RepeatAfter(waitfor),
-                    }
+                    SyscallResult::RepeatAfter(WaitFor::FirstOf(conditions))
                 } else {
                     SyscallResult::Terminate(process::ProcessResult::Failed(
-                        process::Error::Pointer(fds),
+                        process::Error::Pointer(subs),
                     ))
                 }
             },
-            SC::fd_get_pid => {
-                let (fd, _, _, _) = rsc.args;
-                let fd = FileDescriptor::from_u64(fd);
-                let fc = FileClientId::process(pid, fd);
-                let mut fs = FILESYSTEM.try_lock().expect("FILESYSTEM LOCKED");
-                let pid = fs.get_pid(fc)?;
-                SyscallResult::Continue(Ok(pid.as_u64()))
+            SC::kernel_log_read => {
+                let (buf_len, buf_ptr, _, _) = rsc.args;
+                let buf_ptr = VirtAddr::new(buf_ptr);
+                if let Some((area, slice)) =
+                    unsafe { m.process_slice_mut(process, buf_len, buf_ptr) }
+                {
+                    let count = crate::syslog::syscall_read(slice);
+                    unsafe { m.unmap_area(area) };
+                    m.free_virtual_area(area);
+                    SyscallResult::Continue(Ok(count as u64))
+                } else {
+                    SyscallResult::Terminate(process::ProcessResult::Failed(
+                        process::Error::Pointer(buf_ptr),
+                    ))
+                }
             },
-            SC::sched_yield => {
-                let (_, _, _, _) = rsc.args;
-                SyscallResult::Switch(Ok(0), WaitFor::None)
+            SC::irq_set_handler => {
+                let (ird, image_len, image_ptr, _) = rsc.args;
+                todo!();
+                // let image_ptr = VirtAddr::new(image_ptr);
+                // if let Some((area, slice)) =
+                //     unsafe { m.process_slice(process, image_len, image_ptr) }
+                // {
+                //     log::debug!("[pid={:8}] exec len={:?}", pid, slice.len());
+
+                //     let elfimage = crate::multitasking::process::load_elf(m, slice);
+                //     let pid = sched.spawn(m, elfimage);
+
+                //     unsafe { m.unmap_area(area) };
+                //     m.free_virtual_area(area);
+
+                //     SyscallResult::Continue(Ok(unsafe { pid.as_u64() }))
+                // } else {
+                //     SyscallResult::Terminate(process::ProcessResult::Failed(
+                //         process::Error::Pointer(image_ptr),
+                //     ))
+                // }
             },
-            SC::sched_sleep_ns => {
-                let (time_ns, _, _, _) = rsc.args;
-                let now = SYSCLOCK.now();
-                SyscallResult::Switch(Ok(0), WaitFor::Time(now + Duration::from_nanos(time_ns)))
+            SC::mmap_physical => {
+                use d7abi::MemoryProtectionFlags as PFlags;
+                use x86_64::structures::paging::page_table::PageTableFlags;
+
+                let (len, phys_addr, virt_addr, flags) = rsc.args;
+                let phys_addr = PhysAddr::new(phys_addr);
+                let virt_addr = VirtAddr::new(virt_addr);
+
+                // Read flags
+                let writable = if let Some(flags) = PFlags::from_bits(flags as u8) {
+                    if flags == PFlags::READ {
+                        false
+                    } else if flags == (PFlags::READ | PFlags::WRITE) {
+                        true
+                    } else {
+                        return SyscallResult::Continue(Err(
+                            ErrorCode::mmap_invalid_protection_flags.into(),
+                        ));
+                    }
+                } else {
+                    return SyscallResult::Continue(Err(
+                        ErrorCode::mmap_invalid_protection_flags.into()
+                    ));
+                };
+
+                log::debug!(
+                    "[pid={:8}] mmap_physical {:?} -> {:?} len={:#x} writable={}",
+                    pid,
+                    phys_addr,
+                    virt_addr,
+                    len,
+                    writable
+                );
+
+                let flags = if writable {
+                    PageTableFlags::PRESENT | PageTableFlags::NO_EXECUTE | PageTableFlags::WRITABLE
+                } else {
+                    PageTableFlags::PRESENT | PageTableFlags::NO_EXECUTE
+                };
+
+                // Check pointers for page-alignment
+                if !virt_addr.is_aligned(PAGE_SIZE_BYTES) {
+                    log::warn!("mmap_phyiscal: virt_addr is not page-aligned");
+                    return SyscallResult::Continue(Err(ErrorCode::ptr_unaligned.into()));
+                }
+                if !phys_addr.is_aligned(PAGE_SIZE_BYTES) {
+                    log::warn!("mmap_phyiscal: phys_addr is not page-aligned");
+                    return SyscallResult::Continue(Err(ErrorCode::ptr_unaligned.into()));
+                }
+
+                let frames = PhysFrameRangeInclusive {
+                    start: PhysFrame::containing_address(phys_addr),
+                    end: PhysFrame::containing_address(phys_addr + len),
+                };
+
+                let process = sched.process_by_id_mut(pid).unwrap();
+                unsafe {
+                    process.modify_tables(m, |pt, curr_addr| {
+                        for (i, frame) in frames.enumerate() {
+                            pt.map_to(
+                                curr_addr,
+                                Page::from_start_address(virt_addr + (i as u64) * PAGE_SIZE_BYTES)
+                                    .unwrap(),
+                                frame,
+                                flags,
+                            )
+                            .ignore();
+                        }
+                    });
+                }
+
+                SyscallResult::Continue(Ok(0))
             },
-            other => unimplemented!(
-                "System call {:?} (0x{:02x}) not implemented yet",
-                other,
-                rsc.routine
-            ),
+            SC::dma_allocate => {
+                let (len, _, _, _) = rsc.args;
+                assert!(len != 0); // TODO: client error
+                log::debug!("[pid={:8}] dma_allocate len={}", pid, len);
+                let region = m.dma_allocator.allocate(len as usize);
+                SyscallResult::Continue(Ok(region.start.as_u64()))
+            },
+            SC::dma_free => {
+                log::warn!("Ignoring syscall dma_free");
+                // TODO
+                SyscallResult::Continue(Ok(0))
+            },
         }
     } else {
         SyscallResult::Terminate(process::ProcessResult::Failed(
@@ -364,12 +628,12 @@ pub fn handle_syscall(
             args: (reg_rdi, reg_rsi, reg_rdx, reg_rcx),
         };
         log::trace!(
-            "[pid={}] <= {:?} ",
+            "[pid={:8}] <= {:?} ",
             pid,
             d7abi::SyscallNumber::try_from(rsc.routine).ok()
         );
         let res = syscall(mm, &mut sched, pid, rsc);
-        log::trace!("[pid={}] => {:?} ", pid, res);
+        log::trace!("[pid={:8}] => {:?} ", pid, res);
 
         // Write result register values into the process stack
         if let SyscallResult::Continue(r) | SyscallResult::Switch(r, _) = res {

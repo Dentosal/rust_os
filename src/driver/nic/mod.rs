@@ -6,7 +6,6 @@ use d7abi::fs::protocol::network::ReceivedPacket;
 use d7time::Instant;
 
 use crate::multitasking::{EventQueue, ExplicitEventId, QueueLimit, WaitFor};
-use crate::time::SYSCLOCK;
 
 // mod ne2000;
 // mod virtio;
@@ -110,15 +109,10 @@ lazy_static::lazy_static! {
 /// and it will be forwarded to it
 fn notify_irq() {
     // Collect timestamp as early as possible
-    let timestamp = SYSCLOCK.now();
-
     let mut nw = NETWORK.try_lock().unwrap();
     if let Some(packets) = nw.map(&mut |nic| nic.notify_irq()) {
         for packet in packets {
-            nw.on_receive_packet(ReceivedPacket {
-                packet: packet.0,
-                timestamp,
-            });
+            nw.on_receive_packet(ReceivedPacket(packet: packet.0));
         }
     }
 }

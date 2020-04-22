@@ -1,21 +1,25 @@
-# Dimension 7 - An operating system
+# D7 - An operating system
 
-Dimension 7 is an operating system kernel written in Rust. It aims to be an event-driven quasi-microkernel. By design, it runs only on x86-64. The system is in fairly early stage, and is developed by fearlessly breaking things, trying new stuff before older stubs are even working and most importantly experimenting with weird ideas.
+D7 is an operating system written in Rust. It aims to be an event-driven quasi-microkernel. By design, it runs only on x86-64. The system is in fairly early stage, and is developed by fearlessly breaking things, trying new stuff before older stubs are even working and most importantly experimenting with weird ideas.
 
 ## Current features:
 * Multitasking: event-driven round-robin scheduler
 * Executable programs, in ELF format
-* Virtual filesystem, following everything-is-a-file principle
+* PubSub-based IPC
 * Keyboard input
+* Virtual TTYs
 * Disk IO:
     * ATA PIO (Read only)
     * VirtIO-blk (Read only)
 * Networking:
     * RTL8139 driver
-    * Usable TCP/IP stack
+* Services
+    * Serviced - startup and service status queries
+    * Netd - ARP responsder, manages network sockets
 
-## Planned in near future:
-* A shell (with virtual TTYs!)
+## Planned in the near future:
+* Usable TCP/IP stack
+* Shell
 * More filesystems and writing to disk
 
 ## Not-in-so-near future features:

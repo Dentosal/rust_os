@@ -264,16 +264,6 @@ pub fn print(fmt: ::core::fmt::Arguments) {
         .unwrap();
 }
 
-/// Print with color
-pub fn printc(fmt: ::core::fmt::Arguments, color: CellColor) {
-    use core::fmt::Write;
-    let mut t = TERMINAL.try_lock().expect("TERMINAL LOCKED");
-    let old_color = t.get_color();
-    t.set_color(color);
-    t.write_fmt(fmt).unwrap();
-    t.set_color(old_color);
-}
-
 // Create static pointer mutex with spinlock to make TERMINAL thread-safe
 pub static TERMINAL: Mutex<Terminal> = Mutex::new(Terminal {
     output_color: CellColor::new(Color::White, Color::Black),
@@ -291,36 +281,12 @@ macro_rules! rprintln {
     ($fmt:expr) => (rprint!(concat!($fmt, "\n")));
     ($fmt:expr, $($arg:tt)*) => (rprint!(concat!($fmt, "\n"), $($arg)*));
 }
-macro_rules! rprintc {
-    ($fg:expr, $bg:expr ; $($arg:tt)*) => ({
-        use $crate::driver::vga_buffer::CellColor;
-        $crate::driver::vga_buffer::printc(
-            format_args!($($arg)*),
-            CellColor::new($fg, $bg)
-        );
-    });
-
-}
-macro_rules! rprintlnc {
-    ($fg:expr, $bg:expr ; $fmt:expr, $($arg:tt)*) => (rprintc!( $fg, $bg; concat!($fmt, "\n"), $($arg)*));
-    ($fg:expr ; $fmt:expr, $($arg:tt)*) => (rprintlnc!($fg, Color::Black ; $fmt, $($arg)*));
-    ($fg:expr, $bg:expr ; $fmt:expr) => (rprintc!( $fg, $bg ; concat!($fmt, "\n")));
-    ($fg:expr ; $fmt:expr) => (rprintlnc!($fg, Color::Black ; $fmt));
-}
 macro_rules! rreset {
     () => {{
         $crate::driver::vga_buffer::TERMINAL
             .try_lock()
             .expect("TERMINAL LOCKED")
             .reset();
-    }};
-}
-macro_rules! rclearline {
-    () => {{
-        $crate::driver::vga_buffer::TERMINAL
-            .try_lock()
-            .expect("TERMINAL LOCKED")
-            .clear_line();
     }};
 }
 macro_rules! rforce_unlock {

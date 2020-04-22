@@ -1,7 +1,7 @@
 Troubleshooting help tips:
 
 * Check stack size at `src/entry.asm`
-* Check stack amount of sectors loaded from disk at `src/boot/boot_stage0.asm`
+* Check the amount of sectors loaded from the disk at `src/boot/boot_stage0.asm`
 * Check that `plan.md` is in sync with bootloader constants, FrameAllocator, and others
 
 

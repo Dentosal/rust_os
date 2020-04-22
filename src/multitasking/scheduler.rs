@@ -5,7 +5,6 @@ use x86_64::{PhysAddr, VirtAddr};
 
 use d7time::{Duration, Instant};
 
-use crate::filesystem::VirtualFS;
 use crate::memory;
 use crate::memory::MemoryController;
 use crate::multitasking::{loader::ElfImage, ExplicitEventId};
@@ -81,10 +80,7 @@ impl Scheduler {
     }
 
     /// Creates a new process, and returns its pid
-    /// # Safety
-    /// This should only be called by the filesystem,
-    /// as it handles the new process creation process
-    pub unsafe fn spawn(&mut self, m: &mut MemoryController, elf: ElfImage) -> ProcessId {
+    pub fn spawn(&mut self, m: &mut MemoryController, elf: ElfImage) -> ProcessId {
         let pid = self.next_pid;
         self.next_pid = self.next_pid.next();
         let process = unsafe { Process::create(m, pid, elf) };
@@ -96,9 +92,7 @@ impl Scheduler {
     /// Terminates process if it's alive.
     /// Doesn't attempt to switch to a new process.
     /// Used to terminate processes when e.g. their owner process dies.
-    pub fn terminate(&mut self, vfs: &mut VirtualFS, target: ProcessId, status: ProcessResult) {
-        use crate::filesystem::FILESYSTEM;
-
+    pub fn terminate(&mut self, target: ProcessId, status: ProcessResult) {
         if let Some(process) = self.processes.remove(&target) {
             log::info!("Stopping pid {} with status {:?}", target, status);
 
@@ -106,11 +100,25 @@ impl Scheduler {
                 log::info!(" [system call was pending]");
             }
 
-            // Schedule processes waiting for the termination
+            // Do not scheduler this process again, and wake up all
+            // processes waiting for the termination of this one
             self.queues.on_process_over(process.id());
 
-            // Close open file pointers
-            vfs.on_process_over(self, process.id(), status);
+            // Close open ipc subscriptions and mailboxes
+            {
+                let mut ipc_manager = crate::ipc::IPC.try_lock().expect("IPC locked");
+                ipc_manager.on_process_over(self, process.id(), status.clone());
+            }
+
+            // Publish the death of the process
+            crate::ipc::kernel_publish(
+                self,
+                "process/terminated",
+                &d7abi::ipc::protocol::ProcessTerminated {
+                    pid: process.id(),
+                    result: status,
+                },
+            );
 
             // TODO: Remove process data:
             // * Free stack frames, etc.
@@ -125,12 +133,10 @@ impl Scheduler {
     /// Returns the data for the process to switch to, if any.
     /// Will never return `ProcessSwitch::Continue`.
     pub fn terminate_and_switch(
-        &mut self, vfs: &mut VirtualFS, target: ProcessId, status: ProcessResult,
+        &mut self, target: ProcessId, status: ProcessResult,
     ) -> ProcessSwitch {
-        use crate::filesystem::FILESYSTEM;
-
         let is_current = self.running == Some(target);
-        self.terminate(vfs, target, status);
+        self.terminate(target, status);
 
         unsafe {
             if is_current {

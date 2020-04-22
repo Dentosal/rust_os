@@ -22,12 +22,12 @@ features = ["nightly", "inline-more", "serde"]
 version = "*"
 path = "../../libs/libd7"
 
-[dependencies.serde]            # Serde
+[dependencies.serde]
 version = "1.0"
 default-features = false
 features = ["alloc", "derive"]
 
-[dependencies.serde_json]       # JSON support
+[dependencies.serde_json]
 version = "1.0"
 default-features = false
 features = ["alloc"]

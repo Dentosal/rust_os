@@ -1,33 +1,23 @@
-use d7abi::fs::FileDescriptor;
-use d7abi::process::ProcessResult;
+use alloc::prelude::v1::*;
 
-pub use d7abi::process::ProcessId;
+pub use d7abi::process::{ProcessId, ProcessResult};
 
 use crate::syscall::{self, SyscallResult};
+use crate::ipc;
 
-/// A safe wrapper for processes
-#[derive(Debug)]
+/// A safe wrapper for a process
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct Process {
-    pub fd: FileDescriptor,
-    pub pid: ProcessId,
+    pid: ProcessId,
 }
 impl Process {
     pub fn spawn(path: &str) -> SyscallResult<Self> {
-        let fd = syscall::fs_exec(path)?;
-        Ok(Self {
-            fd,
-            pid: syscall::fd_get_pid(fd)?,
-        })
+        let image: Vec<u8> = ipc::request("initrd/read", path)?;
+        let pid = syscall::exec(&image)?;
+        Ok(Process { pid })
     }
 
     pub fn pid(&self) -> ProcessId {
         self.pid
-    }
-
-    pub fn wait(self) -> SyscallResult<ProcessResult> {
-        let mut buffer = [0; 9];
-        let bytes = syscall::fd_read(self.fd, &mut buffer)?;
-        debug_assert!(bytes == buffer.len());
-        Ok(pinecone::from_bytes(&buffer[..bytes]).unwrap())
     }
 }

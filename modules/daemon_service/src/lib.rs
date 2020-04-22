@@ -1,10 +1,12 @@
-//! Provides the following services:
-//! * Starts processes on startup
-//! * Program status annoncements
-//! * Program running status queries
+//! Provides the following functionality:
+//! * Starts services on startup
+//! * Service status annoncements
+//! * Service running status queries
+//! * Service registration/discovery
 
 #![no_std]
 #![feature(alloc_prelude)]
+#![feature(drain_filter)]
 #![deny(unused_must_use)]
 
 #[macro_use]
@@ -13,23 +15,21 @@ extern crate alloc;
 #[macro_use]
 extern crate libd7;
 
-use alloc::collections::VecDeque;
 use alloc::prelude::v1::*;
-use hashbrown::HashSet;
+use hashbrown::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 
 use libd7::{
-    attachment::{self, RequestFileOperation, ResponseFileOperation},
-    d7abi::fs::FileDescriptor,
-    fs, pinecone,
+    d7abi::{
+        ipc::protocol::{service::*, ProcessTerminated},
+        process::ProcessResult,
+    },
+    ipc::{self, AcknowledgeContext, SubscriptionId},
+    pinecone,
     process::{Process, ProcessId},
     select,
     syscall::SyscallResult,
 };
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
-#[serde(transparent)]
-pub struct ServiceName(String);
 
 /// Analogous to systemd service files
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -40,39 +40,40 @@ struct ServiceDefinition {
     description: Option<String>,
     /// Requires these services to be running before starting
     requires: HashSet<ServiceName>,
+    /// Executable points to initrd
+    from_initrd: bool,
     /// Absolute path to the executable
     executable: String,
 }
 
 #[derive(Debug)]
-struct RunningService {
-    name: ServiceName,
-    process: Process,
-    startup_complete: bool,
-}
-
-#[derive(Debug)]
 struct Services {
+    /// Definitions for managed services
     definitions: Vec<ServiceDefinition>,
-    start_queue: VecDeque<ServiceName>,
-    running: Vec<RunningService>,
+    /// Queue of managed services to start
+    start_queue: Vec<ServiceName>,
+    /// Running managed services
+    managed: HashMap<ProcessId, (Process, ServiceName)>,
+    /// Services that are running, and bool for oneshot status.
+    /// I.e. if the bool is true, never remove the item
+    discovery: HashMap<ServiceName, bool>,
+    waiting_for_all: Vec<(HashSet<ServiceName>, AcknowledgeContext)>,
+    waiting_for_any: Vec<(HashSet<ServiceName>, AcknowledgeContext)>,
 }
 impl Services {
     pub fn new(path: &str) -> SyscallResult<Self> {
-        let s = fs::read(path)?;
+        let s: Vec<u8> = ipc::request("initrd/read", path.to_string())?;
         let definitions: Vec<ServiceDefinition> = serde_json::from_slice(&s).unwrap();
         let start_queue = definitions.iter().map(|s| s.name.clone()).collect();
 
         Ok(Self {
             definitions,
             start_queue,
-            running: Vec::new(),
+            managed: HashMap::new(),
+            discovery: HashMap::new(),
+            waiting_for_all: Vec::new(),
+            waiting_for_any: Vec::new(),
         })
-    }
-
-    // All descriptors. Used for `select!`.
-    fn fds(&self) -> HashSet<FileDescriptor> {
-        self.running.iter().map(|r| r.process.fd).collect()
     }
 
     fn definition_by_name(&self, name: &ServiceName) -> Option<ServiceDefinition> {
@@ -84,98 +85,96 @@ impl Services {
         return None;
     }
 
-    fn get_running(&mut self, name: &ServiceName) -> Option<&RunningService> {
-        for r in &self.running {
-            if r.name == *name {
-                return Some(&r);
-            }
-        }
-        return None;
+    fn is_registered(&self, name: &ServiceName) -> bool {
+        self.discovery.contains_key(name)
     }
 
     /// Check requirements
-    fn are_requirements_up(&mut self, def: &ServiceDefinition) -> bool {
-        for req in &def.requires {
-            if let Some(service) = self.get_running(&req) {
-                if !service.startup_complete {
-                    return false;
-                }
-            } else {
-                return false;
-            }
-        }
-        return true;
+    fn are_requirements_up(&self, def: &ServiceDefinition) -> bool {
+        def.requires.iter().all(|reg| self.is_registered(&reg))
     }
 
     /// Start a service if it's not already running
     /// The requirements MUST BE met before calling this
-    fn start(&mut self, def: ServiceDefinition) {
-        if self.get_running(&def.name).is_some() {
-            return;
-        }
-
+    fn start(&mut self, def: &ServiceDefinition) {
+        println!("Spawning process: {}", def.name);
+        assert!(
+            def.from_initrd,
+            "Non-initrd executables are not supported yet"
+        );
         let process = Process::spawn(&def.executable).unwrap();
-        self.running.push(RunningService {
-            name: def.name,
-            process,
-            startup_complete: false,
-        });
+        self.managed
+            .insert(process.pid(), (process, def.name.clone()));
     }
 
-    /// Returns true if no more if the called should block
-    /// TODO: ^ better explanation
-    fn step(&mut self) -> bool {
-        if let Some(name) = self.start_queue.pop_front() {
+    fn step(&mut self) {
+        let mut start_indices = Vec::new();
+        for (i, name) in self.start_queue.iter().enumerate() {
             let def = self.definition_by_name(&name).unwrap();
             if self.are_requirements_up(&def) {
-                self.start(def);
-                return false;
-            } else {
-                self.start_queue.push_back(name);
+                start_indices.push(i);
             }
         }
-
-        return true;
+        while let Some(i) = start_indices.pop() {
+            let name = self.start_queue.remove(i);
+            let def = self.definition_by_name(&name).unwrap();
+            self.start(&def);
+        }
     }
 
-    fn on_process_up(&mut self, pid: ProcessId) {
-        for r in &mut self.running {
-            if r.process.pid() == pid {
-                r.startup_complete = true;
-                return;
+    /// Ack if name is free, otherwise deny
+    fn on_register(&mut self, (ack_ctx, reg): (AcknowledgeContext, Registration)) {
+        if self.discovery.contains_key(&reg.name) {
+            ack_ctx.nack().unwrap();
+        } else {
+            self.discovery.insert(reg.name, reg.oneshot);
+            ack_ctx.ack().unwrap();
+
+            // Update waiting processes
+            let mut completed = Vec::new();
+            for (i, (set, _)) in self.waiting_for_all.iter().enumerate() {
+                if set.iter().all(|s| self.is_registered(s)) {
+                    completed.push(i);
+                }
+            }
+            while let Some(i) = completed.pop() {
+                let (_, ack_ctx) = self.waiting_for_all.remove(i);
+                ack_ctx.ack().unwrap();
+                println!("WAKEUP");
+            }
+
+            let mut completed = Vec::new();
+            for (i, (set, _)) in self.waiting_for_any.iter().enumerate() {
+                if set.iter().any(|s| self.is_registered(s)) {
+                    completed.push(i);
+                }
+            }
+            while let Some(i) = completed.pop() {
+                let (_, ack_ctx) = self.waiting_for_any.remove(i);
+                ack_ctx.ack().unwrap();
+                println!("WAKEUP");
             }
         }
-        println!("Process with returned fd was not running");
     }
 
-    fn on_process_completed(&mut self, completed_fd: FileDescriptor) {
-        let index = self
-            .running
-            .iter()
-            .position(|r| r.process.fd == completed_fd)
-            .expect("Process with returned fd was not running");
-
-        let service = self.running.remove(index);
-        todo!("PROC WAIT {:?}", service.name);
-        let result = service.process.wait();
-
-        todo!("Process over, result {:?}", result);
+    /// Ack only after any of the services is available
+    fn on_waitfor_any(&mut self, (ack_ctx, names): (AcknowledgeContext, HashSet<ServiceName>)) {
+        self.waiting_for_any.push((names, ack_ctx));
     }
-}
 
-fn on_request(a: &attachment::Attachment, services: &mut Services) {
-    let req = a.next_request().unwrap();
-    match &req.operation {
-        RequestFileOperation::Write(data) => {
-            // Any writes should (for now, at least)
-            // be "service has started up" announcements
-            assert!(data == &[1]);
-            services.on_process_up(req.sender.pid.unwrap());
-            a.reply(req.response(ResponseFileOperation::Write(1)))
-                .unwrap();
+    /// Ack only after all of the services are available
+    fn on_waitfor_all(&mut self, (ack_ctx, names): (AcknowledgeContext, HashSet<ServiceName>)) {
+        self.waiting_for_all.push((names, ack_ctx));
+    }
+
+    fn on_process_completed(&mut self, terminated: ProcessTerminated) {
+        if let Some((process, name)) = self.managed.remove(&terminated.pid) {
+            if let Some(oneshot) = self.discovery.get(&name) {
+                if !(*oneshot && matches!(terminated.result, ProcessResult::Completed(0))) {
+                    self.discovery.remove(&name);
+                }
+            }
         }
-        RequestFileOperation::Close => {}
-        other => panic!("Unsupported operation to a netd ({:?})", other),
     }
 }
 
@@ -183,24 +182,29 @@ fn on_request(a: &attachment::Attachment, services: &mut Services) {
 fn main() -> ! {
     println!("Service daemon starting");
 
-    let mut services = Services::new("/mnt/staticfs/startup_services.json").unwrap();
-    let a = attachment::Attachment::new_leaf("/srv/service").unwrap();
+    let mut services = Services::new("startup_services.json").unwrap();
+
+    // For managed services to register themselves
+    let register = ipc::ReliableSubscription::<Registration>::exact("serviced/register").unwrap();
+
+    // Wait until a service comes online
+    let waitfor_any =
+        ipc::ReliableSubscription::<HashSet<ServiceName>>::exact("serviced/waitfor/any").unwrap();
+    let waitfor_all =
+        ipc::ReliableSubscription::<HashSet<ServiceName>>::exact("serviced/waitfor/all").unwrap();
+
+    // Subscripbe for process termination messages
+    let terminated =
+        ipc::UnreliableSubscription::<ProcessTerminated>::exact("process/terminated").unwrap();
 
     loop {
-        let should_block = services.step();
-
-        // Only block if there are no processes in startup queue
-        if should_block {
-            select! {
-                any(services.fds()) -> fd => services.on_process_completed(fd),
-                one(a.fd) => on_request(&a, &mut services)
-            };
-        } else {
-            select! {
-                any(services.fds()) -> fd => services.on_process_completed(fd),
-                one(a.fd) => on_request(&a, &mut services),
-                would_block => {}
-            };
-        }
+        println!("STEP");
+        services.step();
+        select! {
+            one(terminated) => services.on_process_completed(terminated.receive().unwrap()),
+            one(register) => services.on_register(register.receive().unwrap()),
+            one(waitfor_any) => services.on_waitfor_any(waitfor_any.receive().unwrap()),
+            one(waitfor_all) => services.on_waitfor_all(waitfor_all.receive().unwrap())
+        };
     }
 }

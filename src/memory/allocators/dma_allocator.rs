@@ -64,18 +64,8 @@ impl Allocator {
     }
 }
 
-/// Identity-mapped memory region
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DMARegion {
-    start: PhysAddr,
+    pub start: PhysAddr,
     size_blocks: usize,
-}
-impl DMARegion {
-    pub fn virt_addr(self) -> VirtAddr {
-        VirtAddr::new_unchecked(self.start.as_u64())
-    }
-
-    pub fn start_addr_u32(self) -> u32 {
-        self.start.as_u64() as u32
-    }
 }

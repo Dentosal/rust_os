@@ -1,0 +1,26 @@
+# Misc
+README.md=README.md
+
+# Kernel files
+p_commoncode=build/process_common.bin
+
+# Services
+serviced=build/modules/daemon_service.elf
+syslogd=build/modules/daemon_syslog.elf
+consoled=build/modules/daemon_console.elf
+netd=build/modules/daemon_net.elf
+
+# Drivers
+driver_ata_pio=build/modules/driver_ata_pio.elf
+driver_ps2=build/modules/driver_ps2.elf
+driver_pci=build/modules/driver_pci.elf
+driver_rtl8139=build/modules/driver_rtl8139.elf
+
+# Applications
+examplebin=build/modules/examplebin.elf
+
+# Configuration files
+startup_services.json=build_config/files/startup_services.json
+pci_devices.json=build_config/files/pci_devices.json
+keycodes.json=build_config/files/keycodes.json
+keymap.json=build_config/files/keymap.json

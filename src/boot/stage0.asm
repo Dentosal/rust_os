@@ -6,11 +6,9 @@
 ; locate stage1 at 0x7e00->
 %define stage1_loadpoint 0x7e00
 
-; kernel size in sectors
-%define kernel_size_sectors 0x400
-
 ; 0x7f is max for most platforms, including Qemu
-%define sectors_per_operation 0x20
+%define sectors_per_operation 1
+;0x20
 
 ; disk load buffer for kernel
 %define disk_load_buffer 0xa000
@@ -39,7 +37,7 @@ boot:
     mov ss, ax
 
     ; initialize stack
-    mov sp, 0x7bfe
+    mov sp, 0x7c00
 
     ; save boot drive
     mov [bootdrive], dl
@@ -53,6 +51,12 @@ boot:
     xor ax, ax
     mov ds, ax
     mov es, ax
+
+    ; save kernel/initrd split and end sectors
+    mov eax, [initrd_split]
+    mov [BOOT_TMP_KERNEL_SPLIT_ADDR], eax
+    mov eax, [initrd_end]
+    mov [BOOT_TMP_KERNEL_END_ADDR], eax
 
     ; Test that extended lba reading is enabled
     ; http://wiki.osdev.org/ATA_in_x86_RealMode_(BIOS)#LBA_in_Extended_Mode
@@ -89,22 +93,18 @@ boot:
     pop ds ; Restore old segment
 
     ; Load sectors
-    ; Stages 1 and 2
-    mov dword [da_packet.lba_low],  1
-    mov dword [da_packet.lba_high], 0
-    mov  word [da_packet.count],    (BOOTLOADER_SECTOR_COUNT - 1)
-    mov  word [da_packet.address],  stage1_loadpoint
-    mov  word [da_packet.segment],  0
-
+    ; Rest of the bootloader (da_packet already set up)
     mov ah, 0x42
     mov si, da_packet
-    mov dl, 0x80        ; FIXME: actual boot device?
+    mov dl, [bootdrive]
     int 0x13
     mov al, 'D'
     jc print_error
 
+    jmp .afterkernel
+
     ; Load the kernel
-    mov ecx, BOOTLOADER_SECTOR_COUNT ; LBA
+    mov ecx, BOOTLOADER_SECTOR_COUNT ; LBA, first sector
 
 .load_loop:
 
@@ -118,7 +118,7 @@ boot:
 
         mov ah, 0x42
         mov si, da_packet
-        mov dl, 0x80        ; FIXME: actual boot device?
+        mov dl, [bootdrive]
         int 0x13
         mov al, '*'
         jc print_error
@@ -143,8 +143,15 @@ boot:
 
     ; Test if all loaded
     add ecx, sectors_per_operation
-    cmp ecx, (kernel_size_sectors - BOOTLOADER_SECTOR_COUNT)
+    mov edx, [initrd_end]
+    add edx, BOOTLOADER_SECTOR_COUNT
+
+
+    ; xchg bx, bx
+
+    cmp ecx, edx
     jle .load_loop
+.afterkernel:
 
     ; hide cursor by moving it out of the screen
     mov bh, 0
@@ -189,17 +196,17 @@ enable_A20:
 .done:
     ret
 
-; disk address packet
+; disk address packet, set up for the first transfer (rest of the bootloacder)
 ALIGN 4
 da_packet:
     db 16               ; size of this packet (constant)
     db 0                ; reserved (always zero)
 .count:
-    dw 1                ; count (how many sectors) (127 might be a limit here, still 0xFF on most BIOSes)
-.address:
+    dw (BOOTLOADER_SECTOR_COUNT - 1)    ; count (how many sectors)
+.address:                               ; ^ (127 might be a limit here, still 0xFF on most BIOSes)
     dw stage1_loadpoint ; offset (where)
 .segment:
-    dw 0x0000           ; segment
+    dw 0                ; segment
 .lba_low:
     dq 1                ; lba low (position on disk)
 .lba_high:
@@ -297,6 +304,7 @@ gdt_unreal:
 .end:
 
 
-times (0x200 - 0x6) - ($ - $$) db 0
-dd 0xd7cafed7 ; D7StaticFS pointer placeholder
+times (0x200 - 10) - ($ - $$) db 0
+initrd_split: dd 0xd7cafed7 ; placeholder: d7initrd start
+initrd_end:   dd 0xd7cafed7 ; placeholder: d7initrd end
 dw 0xaa55 ; Boot signature

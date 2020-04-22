@@ -2,7 +2,6 @@ use alloc::prelude::v1::*;
 use core::sync::atomic::{AtomicU64, Ordering};
 use hashbrown::HashSet;
 
-use d7abi::fs::FileDescriptor;
 use d7time::Instant;
 
 use crate::multitasking::ProcessId;

@@ -55,9 +55,9 @@ path = "libs/d7abi"
 version = "*"
 path = "libs/d7alloc"
 
-[dependencies.d7staticfs]
+[dependencies.d7initrd]
 version = "*"
-path = "libs/d7staticfs"
+path = "libs/d7initrd"
 
 [dependencies.d7time]
 version = "*"

@@ -1,4 +1,5 @@
 use alloc::prelude::v1::*;
+use core::intrinsics::copy_nonoverlapping;
 use core::ptr;
 use serde::{Deserialize, Serialize};
 use x86_64::structures::idt::{InterruptStackFrameValue, PageFaultErrorCode};
@@ -49,7 +50,7 @@ pub struct Process {
     metadata: ProcessMetadata,
 }
 impl Process {
-    pub const fn new(
+    fn new(
         id: ProcessId, page_table: PageMap, stack_pointer: VirtAddr, stack_frames: Vec<PhysFrame>,
     ) -> Self {
         Self {
@@ -65,6 +66,11 @@ impl Process {
         }
     }
 
+    /// Creates a new process
+    pub unsafe fn create(mm: &mut MemoryController, pid: ProcessId, elf: ElfImage) -> Self {
+        create_process(mm, pid, elf)
+    }
+
     pub fn metadata(&self) -> ProcessMetadata {
         self.metadata.clone()
     }
@@ -73,9 +79,29 @@ impl Process {
         self.metadata.id
     }
 
-    /// Creates a new process
-    pub unsafe fn create(mm: &mut MemoryController, pid: ProcessId, elf: ElfImage) -> Self {
-        create_process(mm, pid, elf)
+    /// Kernel page tables must be active when this is called.
+    /// Tables will be flushed after the parameter function has been called.
+    pub unsafe fn modify_tables<F, R>(&mut self, mm: &mut MemoryController, f: F) -> R
+    where F: FnOnce(&mut PageMap, VirtAddr) -> R {
+        // Mapping in the kernel space
+        let pt_area = mm.alloc_virtual_area(1);
+
+        // Map table to kernel space
+        mm.page_map
+            .map_to(
+                PT_VADDR,
+                Page::from_start_address(pt_area.start).unwrap(),
+                PhysFrame::from_start_address(self.page_table.phys_addr).unwrap(),
+                Flags::PRESENT | Flags::WRITABLE,
+            )
+            .flush();
+
+        let result = f(&mut self.page_table, pt_area.start);
+
+        // Unmap the process page table from the kernel page tables
+        mm.unmap_area(pt_area);
+
+        result
     }
 }
 
@@ -154,6 +180,8 @@ unsafe fn create_process(mm: &mut MemoryController, pid: ProcessId, elf: ElfImag
                 .flush();
         }
     }
+
+    // TODO: do processes need larger-than-one-page page tables?
 
     // Allocate own page table for the process
     let pt_frame = mm.alloc_frames(1)[0];
@@ -240,8 +268,34 @@ unsafe fn create_process(mm: &mut MemoryController, pid: ProcessId, elf: ElfImag
         }
     }
 
-    // TODO: Unmap process structures from kernel page map
-    // ^ at least the process page table is not unmapped yet
+    // Unmap the process page table from the kernel page tables
+    mm.unmap_area(pt_area);
+
+    // TODO: Unmap process structures from kernel page map (if any?)
 
     Process::new(pid, pm, rsp, stack_frames)
+}
+
+/// Loads elf image to ram and returns it
+pub fn load_elf(mem_ctrl: &mut MemoryController, bytes: &[u8]) -> ElfImage {
+    use core::ptr;
+    use x86_64::structures::paging::PageTableFlags as Flags;
+
+    use crate::memory::prelude::*;
+    use crate::memory::Area;
+    use crate::memory::{self, Page};
+
+    let size_pages =
+        memory::page_align(PhysAddr::new(bytes.len() as u64), true).as_u64() / Page::SIZE;
+
+    // Allocate load buffer
+    let area = mem_ctrl.alloc_pages(size_pages as usize, Flags::PRESENT | Flags::WRITABLE);
+
+    unsafe {
+        copy_nonoverlapping(bytes.as_ptr(), area.start.as_mut_ptr(), bytes.len());
+    }
+
+    let elf = unsafe { ElfImage::new(area) };
+    elf.verify();
+    elf
 }

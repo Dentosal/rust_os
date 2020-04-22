@@ -13,6 +13,7 @@ panic = "abort"
 
 [dependencies]
 serde-big-array = "0.2.0"       # Big array support for serde
+bitflags = "1.2"
 
 [dependencies.serde]
 version = "1.0"

@@ -7,9 +7,9 @@ Begin | Size  | Content
 ------|-------|--------
     0 |   200 | Stage 0 (Master boot record) / `boot_stage0`
   200 |   200 | Stage 1 / `boot_stage1`
-  400 |   200 | Stage 2 / `boot_stage2`
-  600 |     ? | Kernel
-    ? |     ? | Filesystem
+  400 |   400 | Stage 2 / `d7boot`
+  800 |     ? | Kernel
+    ? |     ? | InitRD
 
 
 # Kernel Memory Layout
@@ -21,12 +21,12 @@ Begin    | Size  | Content
         0|   1000| IDT Descriptors (all used) (0x100 entries * 16 bytes per entry)
      1000|    100| GDT (some used, and after that reserved)
      2000|   1000| Boot stage memory map from BIOS (some used, and after that reserved)
+     3000|      4| Kernel/InitRD split sector number
      7bfe|      ?| Stack (grows downwards)
      8000|    400| Stage 2 bootloader (two sectors atm)
-     A000|   4000| Disk load buffer
-   1_0000|      ?| Kernel ELF image (Boot stage only) (size proabably around 0x10_0000)
-  20_0000|   3000| Page tables (Boot stage only)
-1_000_000|      ?| Relocated and expanded kernel from ELF image (will be huge)
+   1_0000|   3000| Page tables (Boot stage only)
+  10_0000|      ?| Kernel ELF image + InitRD (Boot stage only) (size probably around 0x10_0000)
+ 100_0000|      ?| Relocated and expanded kernel from ELF image (will be huge)
 
 ## Final layout
 
@@ -35,25 +35,23 @@ Using 2MiB pages here.
 Begin      | Size     |rwx| Content
 -----------|----------|---|--------
           0|      1000|rw-| IDT Descriptors (all used) (0x100 entries * 16 bytes per entry)
-      1_000|       100|rw-| GDT (some used, and after that reserved)
-     20_000|     70000|rw-| DMA / VirtIO memory buffers (requires "low" memory)
-     90_000|         ?|---| Reserved for EBDA, ROM, Video Memory and other stuff there.
-  1_000_000|         ?|+++| Kernel (Extended memory) (Size around 0x8_000_000, as each section is page_aligned)
- 10_000_000| 1_000_000|rw-| Page tables, (0x200_000 used and after that reserved)
+       1000|       100|rw-| GDT (some used, and after that reserved)
+     2_0000|     70000|rw-| DMA / VirtIO memory buffers (requires "low" memory)
+     8_0000|         ?|---| Reserved for EBDA, ROM, Video Memory and other stuff there.
+   100_0000|         ?|+++| Kernel + InitRD (Size around 0x800_0000, each section is page_aligned)
+  1000_0000|  100_0000|rw-| Page tables, (0x200_000 used and after that reserved)
           ?|         ?|   | Free memory (must be allocated using the frame allocator)
- 40_000_000|         ?|rw?| Heap allocator managed memory (This is 1GiB)
+  4000_0000|         ?|rw?| Heap allocator managed memory (This is 1GiB)
 
 TODO: Bump allocator
 
 ## Virtual address space
 
-TODO: Higher half kernel
-TODO: Proper virtual memory map
-
 Begin       | Size    |rwx| Content
 ------------|---------|---|---------
            0| 200_000 |r--| IDT, GDT, Global pointers, DMA buffers
      200_000| 200_000 |r-x| Common code for process switching
+   1_000_000|       ? |+++| Kernel (ELF image)
   10_000_000| 200_000 |rw-| Kernel page tables, identity mapped
   11_000_000| 200_000 |rw-| System call kernel stack (grows downwards)
  100_000_000|       ? |???| Allocated virtual memory for processes
@@ -66,7 +64,7 @@ Numbers     | Description
 0x20..=0x2f | PIC interrupts
 0xd7        | System call
 
-# Process Memory Layout
+# Process Virtual Memory Layout
 
 Begin         | Size    |rwx| Content
 --------------|---------|---|---------
@@ -74,7 +72,7 @@ Begin         | Size    |rwx| Content
        20_0000| 20_0000 |r-x| Common code for process switching
        40_0000| 40_0000 |rw-| Process stack
       100_0000|       ? |+++| Process elf image
- 100_0000_0000|*dynamic*|rw-| Process dynamic memory (At 1 TiB)
+ 100_0000_0000|*dynamic*|rw-| Process heap (At 1 TiB)
 
 
 

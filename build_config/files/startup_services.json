@@ -1,14 +1,44 @@
 [
     {
+        "name": "driver_ps2",
+        "description": "PS/2 keyboard driver",
+        "requires": [],
+        "from_initrd": true,
+        "executable": "driver_ps2"
+    },
+    {
+        "name": "driver_pci",
+        "description": "PCI driver",
+        "requires": [],
+        "from_initrd": true,
+        "executable": "driver_pci"
+    },
+    {
+        "name": "consoled",
+        "description": "Text GUI on VGA console",
+        "requires": ["driver_ps2"],
+        "from_initrd": true,
+        "executable": "consoled"
+    },
+    {
+        "name": "syslogd",
+        "description": "System log daemon",
+        "requires": ["consoled"],
+        "from_initrd": true,
+        "executable": "syslogd"
+    },
+    {
         "name": "netd",
         "description": "Network daemon",
         "requires": [],
-        "executable": "/mnt/staticfs/netd"
+        "from_initrd": true,
+        "executable": "netd"
     },
     {
         "name": "example",
         "description": "Example user binary",
-        "requires": ["netd"],
-        "executable": "/mnt/staticfs/examplebin"
+        "requires": ["consoled", "netd"],
+        "from_initrd": true,
+        "executable": "examplebin"
     }
 ]

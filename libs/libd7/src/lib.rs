@@ -15,22 +15,25 @@
 #![feature(const_fn)]
 #![feature(integer_atomics)]
 #![feature(panic_info_message)]
+#![feature(trait_alias)]
+#![feature(never_type)]
 
 mod allocator;
-mod select;
 
-pub mod attachment;
-pub mod console;
-pub mod fs;
+// pub mod attachment;
+// pub mod console;
+pub mod ipc;
 pub mod net;
 pub mod process;
 pub mod syscall;
+pub mod service;
 
 use core::alloc::Layout;
 use core::panic::PanicInfo;
 
 pub use d7abi;
 pub use pinecone;
+pub use x86_64::{self, PhysAddr, VirtAddr};
 
 #[macro_use]
 extern crate alloc;
@@ -49,21 +52,17 @@ pub extern "C" fn _start() {
 #[no_mangle]
 extern "C" fn panic(info: &PanicInfo) -> ! {
     use self::syscall::debug_print;
-    if let Some(location) = info.location() {
-        let _ = debug_print(&format!(
-            "Error: file '{}', line {}",
-            location.file(),
-            location.line()
-        ));
-    } else {
-        let _ = debug_print("Error: (location unavailable)");
-    }
 
-    if let Some(msg) = info.message() {
-        let _ = debug_print(&format!("  {:?}", msg));
-    } else {
-        let _ = debug_print("  Info unavailable");
-    }
+    let no_location = format!("(location unavailable)");
+    let location = info
+        .location()
+        .map(|l| format!("file '{}', line {}", l.file(), l.line()))
+        .unwrap_or(no_location);
+
+    let no_args = format_args!("(message unavailable)");
+    let message = format!("  {:?}", info.message().unwrap_or(&no_args));
+
+    let _ = debug_print(&format!("Error: {}\n  {}", location, message));
 
     syscall::exit(1)
 }

@@ -1,0 +1,46 @@
+[package]
+name = "d7_daemon_console"
+version = "0.1.0"
+authors = ["Hannes Karppila <hannes.karppila@gmail.com>"]
+publish = false
+edition = "2018"
+
+[lib]
+crate-type = ["staticlib"]
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+
+[dependencies]
+volatile = "0.2.6"
+unicode-segmentation = "1.6.0"
+
+[dependencies.hashbrown]
+version = "0.7"
+features = ["nightly", "inline-more", "serde"]
+
+[dependencies.unicode-normalization]
+git = "https://github.com/unicode-rs/unicode-normalization"
+default-features = false
+
+[dependencies.serde]
+version = "1.0"
+default-features = false
+features = ["alloc", "derive"]
+
+[dependencies.serde_json]
+version = "1.0"
+default-features = false
+features = ["alloc"]
+
+[dependencies.libd7]
+version = "*"
+path = "../../libs/libd7"
+
+[dependencies.d7keymap]
+version = "*"
+path = "../../libs/d7keymap"
+

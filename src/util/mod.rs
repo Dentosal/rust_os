@@ -75,20 +75,3 @@ macro_rules! no_interrupts {
 macro_rules! sizeof {
     ($t:ty) => {{ ::core::mem::size_of::<$t>() }};
 }
-
-pub fn io_wait() {
-    unsafe {
-        let mut io_wait_port: Port<u8> = Port::new(0x80);
-        io_wait_port.write(0);
-    }
-}
-
-pub unsafe fn inb(port: u16) -> u8 {
-    let mut port: Port<u8> = Port::new(port);
-    port.read()
-}
-
-pub unsafe fn outb(port: u16, data: u8) {
-    let mut port: Port<u8> = Port::new(port);
-    port.write(data)
-}

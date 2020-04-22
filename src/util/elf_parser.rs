@@ -1,6 +1,6 @@
 // Represents useful attributes from 64-bit elf file
 
-const KERNEL_ELF_IMAGE_POSITION: usize = 0x10_000; // must match with plan.md
+const KERNEL_ELF_IMAGE_POSITION: usize = 0x10_0000; // must match with plan.md
 const MAX_PH_ENTRY_COUNT: usize = 20;
 
 const ELF_MAGIC: u32 = 0x464c457f;
@@ -14,6 +14,16 @@ const ELF_PH_TABLE_ENTRY_SIZE: u16 = 56;
 pub struct ELFData {
     pub header: ELFHeader,
     pub ph_table: [Option<ELFProgramHeader>; MAX_PH_ENTRY_COUNT],
+}
+impl ELFData {
+    pub fn last_addr(&self) -> u64 {
+        self.ph_table
+            .iter()
+            .copied()
+            .filter_map(|p| Some(p?.virtual_address + p?.size_in_memory))
+            .max()
+            .unwrap()
+    }
 }
 
 bitflags! {

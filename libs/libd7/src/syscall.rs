@@ -1,11 +1,14 @@
 use core::convert::TryFrom;
 use core::hint::unreachable_unchecked;
+use x86_64::{PhysAddr, VirtAddr};
 
 use d7abi::{
-    fs::FileDescriptor,
-    SyscallErrorCode, SyscallNumber,
-    process::ProcessId
+    ipc::{AcknowledgeId, SubscriptionId},
+    process::ProcessId,
+    SyscallNumber,
 };
+
+pub use d7abi::{MemoryProtectionFlags, SyscallErrorCode};
 
 macro_rules! syscall {
     ($n:expr; $a0:expr, $a1:expr, $a2:expr, $a3:expr) => {
@@ -56,8 +59,8 @@ pub fn exit(return_code: u64) -> ! {
 }
 
 /// This system call never fails
-pub fn get_pid() -> u64 {
-    unsafe { syscall!(SyscallNumber::get_pid).unwrap() }
+pub fn get_pid() -> ProcessId {
+    ProcessId::from_u64(unsafe { syscall!(SyscallNumber::get_pid).unwrap() })
 }
 
 /// This system call never fails
@@ -76,89 +79,16 @@ pub unsafe fn mem_set_size(new_size_bytes: u64) -> SyscallResult<u64> {
     syscall!(SyscallNumber::mem_set_size; new_size_bytes)
 }
 
-pub fn fs_open(path: &str) -> SyscallResult<FileDescriptor> {
-    let len = path.len() as u64;
-    let slice = path.as_ptr() as u64;
+/// Start a new process from an ELF image
+pub fn exec(image: &[u8]) -> SyscallResult<ProcessId> {
+    let len = image.len() as u64;
+    let slice = image.as_ptr() as u64;
 
     unsafe {
-        Ok(FileDescriptor::from_u64(
-            syscall!(SyscallNumber::fs_open; len, slice)?,
+        Ok(ProcessId::from_u64(
+            syscall!(SyscallNumber::exec; len, slice)?,
         ))
     }
-}
-
-/// Like fs_open, but executes the file instead
-pub fn fs_exec(path: &str) -> SyscallResult<FileDescriptor> {
-    let len = path.len() as u64;
-    let slice = path.as_ptr() as u64;
-
-    unsafe {
-        Ok(FileDescriptor::from_u64(
-            syscall!(SyscallNumber::fs_exec; len, slice)?,
-        ))
-    }
-}
-
-/// Like fs_open, but attaches to the file instead
-pub fn fs_attach(path: &str, is_leaf: bool) -> SyscallResult<FileDescriptor> {
-    let len = path.len() as u64;
-    let slice = path.as_ptr() as u64;
-
-    unsafe {
-        Ok(FileDescriptor::from_u64(
-            syscall!(SyscallNumber::fs_attach; len, slice, is_leaf as u64)?,
-        ))
-    }
-}
-
-pub fn fd_close(fd: FileDescriptor) -> SyscallResult<()> {
-    unsafe {
-        let _ = syscall!(SyscallNumber::fd_close; fd.as_u64())?;
-        Ok(())
-    }
-}
-
-/// Returns `count_bytes`, zero on EOF
-pub fn fd_read(fd: FileDescriptor, buf: &mut [u8]) -> SyscallResult<usize> {
-    unsafe {
-        Ok(syscall!(
-            SyscallNumber::fd_read;
-            fd.as_u64(), buf.as_mut_ptr() as u64, buf.len() as u64
-        )? as usize)
-    }
-}
-
-pub fn fd_write(fd: FileDescriptor, buf: &[u8]) -> SyscallResult<usize> {
-    unsafe {
-        Ok(syscall!(
-            SyscallNumber::fd_write;
-            fd.as_u64(), buf.as_ptr() as u64, buf.len() as u64
-        )? as usize)
-    }
-}
-
-/// Select first available file descriptor from a list
-pub fn fd_select(fds: &[FileDescriptor], nonblocking: bool) -> SyscallResult<FileDescriptor> {
-    if fds.is_empty() {
-        panic!("Cannot fd_select from an empty list");
-    }
-
-    unsafe {
-        Ok(FileDescriptor::from_u64(syscall!(
-            SyscallNumber::fd_select;
-            fds.len() as u64,
-            fds.as_ptr() as u64,
-            nonblocking as u64
-        )?))
-    }
-}
-
-/// Get process id. Only to be used with (child) processes
-pub fn fd_get_pid(fd: FileDescriptor) -> SyscallResult<ProcessId> {
-    Ok(unsafe {ProcessId::from_u64(syscall!(
-        SyscallNumber::fd_get_pid;
-        fd.as_u64()
-    )?)})
 }
 
 /// This system call never fails, and does not return anything
@@ -169,4 +99,202 @@ pub fn sched_yield() {
 /// Max sleep time is 2**64 ns, about 584 years.
 pub fn sched_sleep_ns(ns: u64) -> SyscallResult<()> {
     unsafe { syscall!(SyscallNumber::sched_sleep_ns; ns).map(|_| ()) }
+}
+
+/// Subscribes to message by a filter. If exact is false, filter is used as a prefix.
+pub fn ipc_subscribe(filter: &str, exact: bool, reliable: bool) -> SyscallResult<SubscriptionId> {
+    let len = filter.len() as u64;
+    let slice = filter.as_ptr() as u64;
+    unsafe {
+        Ok(SubscriptionId::from_u64(syscall!(
+            SyscallNumber::ipc_subscribe;
+            len, slice,
+            exact as u64,
+            reliable as u64
+        )?))
+    }
+}
+
+/// Unsubscribes from messages
+pub fn ipc_unsubscribe(sub_id: SubscriptionId) -> SyscallResult<()> {
+    unsafe {
+        syscall!(
+            SyscallNumber::ipc_unsubscribe;
+            sub_id.as_u64()
+        )
+        .map(|_| ())
+    }
+}
+
+/// Publish unreliable message (asynchronous)
+pub fn ipc_publish(topic: &str, data: &[u8]) -> SyscallResult<()> {
+    let len = topic.len() as u64;
+    let slice = topic.as_ptr() as u64;
+    unsafe {
+        syscall!(
+            SyscallNumber::ipc_publish;
+            len, slice,
+            data.len() as u64, data.as_ptr() as u64
+        )
+        .map(|_| ())
+    }
+}
+
+/// Deliver reliable message (blocking)
+pub fn ipc_deliver(topic: &str, data: &[u8]) -> SyscallResult<()> {
+    let len = topic.len() as u64;
+    let slice = topic.as_ptr() as u64;
+    unsafe {
+        syscall!(
+            SyscallNumber::ipc_deliver;
+            len, slice,
+            data.len() as u64, data.as_ptr() as u64
+        )
+        .map(|_| ())
+    }
+}
+
+/// Deliver a reply to a reliable message
+pub fn ipc_deliver_reply(topic: &str, data: &[u8]) -> SyscallResult<()> {
+    let len = topic.len() as u64;
+    let slice = topic.as_ptr() as u64;
+    unsafe {
+        syscall!(
+            SyscallNumber::ipc_deliver_reply;
+            len, slice,
+            data.len() as u64, data.as_ptr() as u64
+        )
+        .map(|_| ())
+    }
+}
+
+/// Receive a message (blocking)
+pub fn ipc_receive(sub_id: SubscriptionId, buf: &mut [u8]) -> SyscallResult<usize> {
+    unsafe {
+        syscall!(
+            SyscallNumber::ipc_receive;
+            sub_id.as_u64(),
+            buf.len() as u64, buf.as_ptr() as u64
+        )
+        .map(|count| count as usize)
+    }
+}
+
+/// Acknowledge a reliable message
+pub fn ipc_acknowledge(
+    sub_id: SubscriptionId,
+    ack_id: AcknowledgeId,
+    positive: bool,
+) -> SyscallResult<()> {
+    unsafe {
+        syscall!(
+            SyscallNumber::ipc_acknowledge;
+            sub_id.as_u64(),
+            ack_id.as_u64(),
+            positive as u64
+        )
+        .map(|_| ())
+    }
+}
+
+/// Select first available message from a list of subscriptions
+pub fn ipc_select(sub_ids: &[SubscriptionId], nonblocking: bool) -> SyscallResult<SubscriptionId> {
+    if sub_ids.is_empty() {
+        panic!("Cannot ipc_select from an empty list");
+    }
+
+    unsafe {
+        Ok(SubscriptionId::from_u64(syscall!(
+            SyscallNumber::ipc_select;
+            sub_ids.len() as u64,
+            sub_ids.as_ptr() as u64,
+            nonblocking as u64
+        )?))
+    }
+}
+
+/// Read (and clear) kernel log buffer. Nonblocking.
+pub fn kernel_log_read(buffer: &mut [u8]) -> SyscallResult<usize> {
+    if buffer.is_empty() {
+        panic!("Cannot ipc_select from an empty list");
+    }
+
+    unsafe {
+        Ok(syscall!(
+            SyscallNumber::kernel_log_read;
+            buffer.len() as u64,
+            buffer.as_ptr() as u64
+        )? as usize)
+    }
+}
+
+/// Assigns code to be ran on interrupt handler.
+/// Code must be an executable sequence of instructions,
+/// modifies no registers except `rax`, that will be sent
+/// to the device driver when publishing the event.
+///
+/// # Safety
+///
+/// Will lead to kernel crash or silent data corruption when misused.
+pub unsafe fn irq_set_handler(irq: u8, code: &mut [u8]) -> SyscallResult<()> {
+    let len = code.len() as u64;
+    let ptr = code.as_ptr() as u64;
+
+    syscall!(SyscallNumber::irq_set_handler; irq as u64, len, ptr)?;
+    Ok(())
+}
+
+/// Map a physical address block to this process.
+///
+/// # Safety
+///
+/// Extremely unsafe.
+/// Can override process address mappings.
+/// Can override kernel data.
+pub unsafe fn mmap_physical(
+    phys_addr: PhysAddr,
+    virt_addr: VirtAddr,
+    len: u64,
+    flags: MemoryProtectionFlags,
+) -> SyscallResult<*mut u8> {
+    if len == 0 {
+        panic!("Cannot mmap_physical an empty region");
+    }
+
+    Ok(syscall!(
+        SyscallNumber::mmap_physical;
+        len,
+        phys_addr.as_u64(),
+        virt_addr.as_u64(),
+        flags.bits() as u64
+    )? as *mut u8)
+}
+
+/// Allocate DMA-accessible region of the physical memory.
+/// Doesn't map the memory to process
+pub fn dma_allocate(len: u64) -> SyscallResult<PhysAddr> {
+    if len == 0 {
+        panic!("Cannot dma_allocate an empty region");
+    }
+
+    Ok(PhysAddr::new(unsafe {
+        syscall!(
+            SyscallNumber::dma_allocate;
+            len
+        )?
+    }))
+}
+
+/// Must be only used with a valid address.
+pub unsafe fn dma_free(phys_addr: PhysAddr, len: u64) -> SyscallResult<()> {
+    if len == 0 {
+        panic!("Cannot dma_free an empty region");
+    }
+
+    syscall!(
+        SyscallNumber::dma_free;
+        len,
+        phys_addr.as_u64()
+    )?;
+    Ok(())
 }

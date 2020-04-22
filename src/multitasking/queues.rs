@@ -2,7 +2,6 @@ use alloc::collections::VecDeque;
 use alloc::prelude::v1::*;
 use hashbrown::{HashMap, HashSet};
 
-use d7abi::fs::FileDescriptor;
 use d7time::Instant;
 
 use crate::multitasking::ProcessId;

@@ -65,11 +65,14 @@ impl SystemClock {
         (*uc_lock).store(false, SeqCst);
 
         // Update multitasking scheduler
-        SCHEDULER.try_lock().expect("SCHED LOCKED").tick(self.now())
+        SCHEDULER
+            .try_lock()
+            .expect("SCHED LOCKED")
+            .tick(self.instant())
     }
 
-    /// Gets current time
-    pub fn now(&self) -> Instant {
+    /// Gets current time as `Instant`
+    pub fn instant(&self) -> Instant {
         unsafe {
             let uc_sec = self.sec.get();
             let uc_nsec = self.nsec.get();
@@ -100,9 +103,9 @@ pub fn init() {
 }
 
 pub fn busy_sleep_until(until: Instant) {
-    while SYSCLOCK.now() < until {}
+    while SYSCLOCK.instant() < until {}
 }
 
 pub fn sleep_ms(ms: u64) {
-    busy_sleep_until(SYSCLOCK.now() + Duration::from_millis(ms));
+    busy_sleep_until(SYSCLOCK.instant() + Duration::from_millis(ms));
 }

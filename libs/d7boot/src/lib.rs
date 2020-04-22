@@ -4,14 +4,6 @@
 // #![deny(unused_assignments)]
 // Code style (development time)
 #![allow(unused_macros)]
-#![allow(dead_code)]
-// Code style (temp)
-#![allow(unused_variables)]
-#![allow(unused_imports)]
-#![allow(unused_parens)]
-#![allow(unused_mut)]
-#![allow(unused_unsafe)]
-#![allow(unreachable_code)]
 // Use std only in tests
 #![cfg_attr(not(test), no_std)]
 // Safety
@@ -23,14 +15,15 @@
 #![feature(lang_items)]
 #![feature(naked_functions)]
 
-#[cfg(not(test))]
-use core::{mem, panic::PanicInfo, ptr};
-#[cfg(test)]
-use std::{mem, panic::PanicInfo, ptr};
+use core::intrinsics::copy_nonoverlapping;
+use core::{panic::PanicInfo, ptr};
 
+mod ata_pio;
 
 macro_rules! sizeof {
-    ($t:ty) => {{ ::core::mem::size_of::<$t>() }};
+    ($t:ty) => {{
+        ::core::mem::size_of::<$t>()
+    }};
 }
 
 macro_rules! panic_indicator {
@@ -42,8 +35,18 @@ macro_rules! panic_indicator {
     });
 }
 
-// Keep in sync with src/asm_routines/constants.asm
-const ELF_LOADPOINT: usize = 0x10_000;
+// Keep in sync with plan.md and constants/1_boot.toml
+const ELF_LOADPOINT: usize = 0x10_0000;
+const INITRD_SPLIT_SECTOR_PTR: usize = 0x3000;
+const INITRD_END_SECTOR_PTR: usize = 0x3004;
+const KERNEL_ENTRY_POINT: u64 = 0x100_0000;
+const PAGE_SIZE_BYTES: u64 = 0x20_0000;
+const BOOTLOADER_SECTOR_COUNT: usize = 6;
+
+/// Align upwards to page size
+pub fn page_align_up(addr: u64) -> u64 {
+    (addr + PAGE_SIZE_BYTES - 1) & !(PAGE_SIZE_BYTES - 1)
+}
 
 /// Write 'ER:_' to top top right of screen in red
 /// _ denotes the argument
@@ -57,12 +60,6 @@ fn error(c: char) -> ! {
         asm!("hlt" :::: "volatile", "intel");
         core::hint::unreachable_unchecked();
     }
-}
-
-/// Test error
-#[cfg(test)]
-fn error(a: char) -> ! {
-    panic!("ERR: {}", a);
 }
 
 /// Not used when testing
@@ -82,21 +79,39 @@ unsafe fn check_elf() {
     }
 
     // Check that the kernel entry point is correct (0x_100_0000, 1MiB)
-    if ptr::read((ELF_LOADPOINT + 0x18) as *const u64) != 0x100_0000 {
+    if ptr::read((ELF_LOADPOINT + 0x18) as *const u64) != KERNEL_ENTRY_POINT {
         error('P');
     }
 }
 
 #[naked]
 #[no_mangle]
-pub unsafe extern "C" fn d7boot(a: u8) {
+pub unsafe extern "C" fn d7boot() {
+    // Location info
+    let initrd_start_sector = (*(INITRD_SPLIT_SECTOR_PTR as *const u32)) as usize;
+    let initrd_end_sector = (*(INITRD_END_SECTOR_PTR as *const u32)) as usize;
+
+    // Load disk sectors
+    let supported_sector_count = ata_pio::init();
+    if (supported_sector_count as usize) < initrd_end_sector {
+        // Not enough sectors
+        error('S');
+    }
+    let mut dst: *mut u16 = ELF_LOADPOINT as *mut u16;
+    for lba in BOOTLOADER_SECTOR_COUNT..initrd_end_sector {
+        ata_pio::read_lba(lba as u64, 1, dst);
+        dst = dst.add(0x100);
+    }
+
+    // Load kernel ELF image
     check_elf();
 
     // Go through the program header table
     // Just assume that the header has standard lengths and positions
     let program_header_count: u16 = ptr::read((ELF_LOADPOINT + 0x38) as *const u16);
 
-    // Load and decompress sectors
+    // Load and copy sectors
+    let mut max_vaddr = 0;
     for i in 0..program_header_count {
         let base = ELF_LOADPOINT + 0x40 + i as usize * 0x38;
 
@@ -109,11 +124,15 @@ pub unsafe extern "C" fn d7boot(a: u8) {
             let p_filesz = ptr::read((base + 0x20) as *const u64);
             let p_memsz = ptr::read((base + 0x28) as *const u64);
 
+            if max_vaddr < p_vaddr {
+                max_vaddr = p_vaddr + p_memsz;
+            }
+
             // Clear p_memsz bytes at p_vaddr to 0
             ptr::write_bytes(p_vaddr as *mut u8, 0, p_memsz as usize);
 
             // Copy p_filesz bytes from p_offset to p_vaddr
-            core::intrinsics::copy_nonoverlapping(
+            copy_nonoverlapping(
                 (ELF_LOADPOINT as u64 + p_offset) as *const u8,
                 p_vaddr as *mut u8,
                 p_filesz as usize,
@@ -121,23 +140,17 @@ pub unsafe extern "C" fn d7boot(a: u8) {
         }
     }
 
+    // Copy InitRD to be just after the kernel
+    let src_ptr =
+        (ELF_LOADPOINT + (initrd_start_sector - BOOTLOADER_SECTOR_COUNT) * 0x200) as *const u8;
+    let dst_ptr = page_align_up(max_vaddr) as *mut u8;
+    let count = (initrd_end_sector - initrd_start_sector) * 0x200;
+    copy_nonoverlapping(src_ptr, dst_ptr, count);
+
     // Show message ('-> K') and jump to kernel
     asm!("mov rax, 0x0f4b0f200f3e0f2d; mov [0xb8000], rax" ::: "rax", "memory" : "volatile", "intel");
-    asm!(concat!("push ", 0x100_0000, "; ret") :::: "volatile", "intel");
+    asm!(concat!("push ", 0x100_0000, "; ret") :::: "volatile", "intel"); // KERNEL_ENTRY_POINT
     core::hint::unreachable_unchecked();
-}
-
-#[cfg(not(test))]
-#[allow(non_snake_case)]
-#[no_mangle]
-pub extern "C" fn _Unwind_Resume() -> ! {
-    loop {}
-}
-
-#[cfg(not(test))]
-#[lang = "eh_personality"]
-extern "C" fn eh_personality() -> ! {
-    loop {}
 }
 
 #[cfg(not(test))]
@@ -151,4 +164,3 @@ extern "C" fn panic(info: &PanicInfo) -> ! {
         core::hint::unreachable_unchecked();
     }
 }
-

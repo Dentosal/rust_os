@@ -36,6 +36,7 @@ def dir_files(path: Path, suffix=None, filter_start=False) -> Set[Path]:
         if p.is_file() and suffix_ok(p.suffix) and start_ok(p.stem)
     }
 
+
 def sort_paths(paths) -> List[Path]:
     return natsorted(list(paths))
 
@@ -266,6 +267,7 @@ def step_boot_stage1(root_dir) -> Step:
 #         ),
 #     )
 
+
 def step_boot_stage2(root_dir) -> Tuple[Union[Step, Set[Step]]]:
     return (
         {
@@ -387,7 +389,7 @@ def step_cli_tools(root_dir) -> Set[Step]:
     return {
         Step(cmd=cmd_cargo_build_bin(pdir=pdir, binary=target))
         for (pdir, target) in [
-            (root_dir / "libs/d7staticfs/", "mkimg"),
+            (root_dir / "libs/d7initrd/", "mkimg"),
             (root_dir / "libs/elf2bin/", "elf2bin"),
         ]
     }
@@ -443,7 +445,8 @@ def step_image_size(root_dir) -> Tuple[Step]:
         Step(
             requires={step_strip_kernel},
             cmd=lambda _: Expr(
-                name="imgsize", expr=(root_dir / "build/kernel_stripped.elf").stat().st_size
+                name="imgsize",
+                expr=(root_dir / "build/kernel_stripped.elf").stat().st_size,
             ),
         ),
         Step(
@@ -489,7 +492,9 @@ def step_create_disk(root_dir) -> Tuple[Union[Step, Set[Step]]]:
             ),
             Step(
                 requires={step_strip_kernel},
-                cmd=cmd_dd_insert(disk_img, root_dir / "build/kernel_stripped.elf", offset=6),
+                cmd=cmd_dd_insert(
+                    disk_img, root_dir / "build/kernel_stripped.elf", offset=6
+                ),
             ),
         },
     )
@@ -498,8 +503,14 @@ def step_create_disk(root_dir) -> Tuple[Union[Step, Set[Step]]]:
 def step_create_filesystem(root_dir) -> Step:
     disk_img = root_dir / "build/disk.img"
 
-    with open(root_dir / "build_config/staticfs_files.txt") as f:
-        filelist = f.read().splitlines()
+    with open(root_dir / "build_config/initrd_files.txt") as f:
+        filelist = []
+        for line in f:
+            line = line.split("#", 1)[0].strip()
+            if line:
+                assert line.count("=") == 1, f"Invalid line {line !r}"
+                l, r = line.split("=")
+                filelist.append(f"{l.strip()}={r.strip()}")
 
     return Step(
         requires={
@@ -511,7 +522,7 @@ def step_create_filesystem(root_dir) -> Step:
         },
         cmd=lambda c: Cmd(
             cmd=[
-                root_dir / "libs/d7staticfs/target/release/mkimg",
+                root_dir / "libs/d7initrd/target/release/mkimg",
                 disk_img,
                 c["imgsize"] // 0x200 + 8,
             ]
@@ -522,7 +533,7 @@ def step_create_filesystem(root_dir) -> Step:
 
 def step_all(root_dir) -> Step:
     return Step(
-        requires={step_create_filesystem}, #, step_produce_dumps
+        requires={step_create_filesystem},  # , step_produce_dumps
         cmd=Cmd(cmd=["echo", "done"]),
     )
 

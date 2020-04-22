@@ -1,0 +1,29 @@
+{
+    "8086:1237": {
+        "name": "Intel 440FX - 82441FX PMC [Natoma]"
+    },
+    "8086:7000": {
+        "name": "Intel 82371SB PIIX3 ISA [Natoma/Triton II]"
+    },
+    "8086:7010": {
+        "name": "Intel 82371SB PIIX3 IDE [Natoma/Triton II]"
+    },
+    "8086:7113": {
+        "name": "Intel 82371AB/EB/MB PIIX4 ACPI"
+    },
+    "1234:1111": {
+        "name": "QEMU Virtual Video Controller"
+    },
+    "10ec:8139": {
+        "shortname": "rtl8139",
+        "name": "RTL-8139 PCI Fast Ethernet Adapter",
+        "driver": {
+            "from_initrd": true,
+            "executable": "driver_rtl8139"
+        }
+    },
+    "1af4:1000": {
+        "shortname": "virtio-net",
+        "name": "Virtio network device"
+    }
+}

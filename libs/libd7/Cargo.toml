@@ -14,7 +14,6 @@ panic = "abort"
 [dependencies]
 spin = "0.5"
 pinecone = "0.2"
-unicode-segmentation = "1.6.0"
 
 [dependencies.hashbrown]        # HashMap for no_std contexts
 version = "0.7"
@@ -30,9 +29,9 @@ version = "1.0"
 default-features = false
 features = ["alloc"]
 
-[dependencies.unicode-normalization]    # Unicode normalization
-git = "https://github.com/Dentosal/unicode-normalization" # Pull request pending
-default-features = false
+[dependencies.lazy_static]
+version = "1.4"
+features = ["spin_no_std"]
 
 [dependencies.x86_64]
 git = "https://github.com/Dentosal/x86_64"

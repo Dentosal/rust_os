@@ -89,29 +89,9 @@ impl TimeSpec {
 /// no method to get "the number of seconds" from an instant. Instead, it only
 /// allows measuring the duration between two instants (or comparing two
 /// instants).
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Instant(TimeSpec);
 
-/// An error returned from the `duration_since` and `elapsed` methods on
-/// `SystemTime`, used to learn how far in the opposite direction a system time
-/// lies.
-///
-/// # Examples
-///
-/// ```no_run
-/// use std::thread::sleep;
-/// use std::time::{Duration, SystemTime};
-///
-/// let sys_time = SystemTime::now();
-/// sleep(Duration::from_secs(1));
-/// let new_sys_time = SystemTime::now();
-/// match sys_time.duration_since(new_sys_time) {
-///     Ok(_) => {}
-///     Err(e) => println!("SystemTimeError difference: {:?}", e.duration()),
-/// }
-/// ```
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SystemTimeError(Duration);
 
 impl Instant {
     /// Used by the system clock as constructor

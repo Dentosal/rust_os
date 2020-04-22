@@ -174,46 +174,6 @@ pub fn init_after_memory() {
     }
 }
 
-pub struct FreeIRQs {
-    irq9: Option<fn() -> ()>,
-    irq10: Option<fn() -> ()>,
-    irq11: Option<fn() -> ()>,
-}
-impl FreeIRQs {
-    pub fn set_by_irq(&mut self, irq: u8, f: fn() -> ()) {
-        match irq {
-            9 => self.irq9 = Some(f),
-            10 => self.irq10 = Some(f),
-            11 => self.irq11 = Some(f),
-            _ => panic!("Invalid free irq"),
-        }
-    }
-
-    pub fn by_irq(&self, irq: u8) -> Option<fn() -> ()> {
-        match irq {
-            9 => self.irq9,
-            10 => self.irq10,
-            11 => self.irq11,
-            _ => panic!("Invalid free irq"),
-        }
-    }
-
-    pub fn by_int(&self, int: u8) -> Option<fn() -> ()> {
-        match int {
-            0x29 => self.irq9,
-            0x2a => self.irq10,
-            0x2b => self.irq11,
-            _ => panic!("Invalid free irq"),
-        }
-    }
-}
-
-pub static FREE_IRQ_HOOK: Mutex<FreeIRQs> = Mutex::new(FreeIRQs {
-    irq9: None,
-    irq10: None,
-    irq11: None,
-});
-
 pub fn enable_external_interrupts() {
     log::info!("Enabling external interrupts");
 

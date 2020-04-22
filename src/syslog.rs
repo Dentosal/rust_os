@@ -1,18 +1,39 @@
+use alloc::collections::VecDeque;
+use alloc::prelude::v1::*;
 use core::fmt::Write;
+use core::sync::atomic::{AtomicBool, Ordering};
 use log::{Level, Metadata, Record};
+use spin::Mutex;
+
+/// Disable logging directly to the built-in vga buffer.
+/// This MUST NOT BE done before memory map has been initialized,
+/// or it causes page faults. (Requires allocation)
+static DISABLE_DIRECT_VGA: AtomicBool = AtomicBool::new(false);
+
+pub fn disable_direct_vga() {
+    DISABLE_DIRECT_VGA.store(true, Ordering::Release);
+}
+
+/********************************* PORT E9 ***********************************/
 
 struct PortE9;
+
+static mut PORT: cpuio::UnsafePort<u8> = unsafe { cpuio::UnsafePort::new(0xe9) };
 
 /// Allow formatting
 impl ::core::fmt::Write for PortE9 {
     fn write_str(&mut self, s: &str) -> ::core::fmt::Result {
         unsafe {
-            let mut port = cpuio::UnsafePort::<u8>::new(0xe9);
             for byte in s.bytes() {
                 if byte == b'\n' {
-                    port.write(b'\r');
+                    PORT.write(b'\r');
+                    PORT.write(b'\n');
+                } else if 0x20 <= byte && byte <= 0x7e {
+                    PORT.write(byte);
+                } else {
+                    PORT.write(b'?');
+                    loop {}
                 }
-                port.write(byte);
             }
         }
         Ok(()) // Success. Always.
@@ -29,10 +50,30 @@ macro_rules! e9_print {
     );
 }
 
+/**************************** BUFFER + SYSCALL *******************************/
+
+lazy_static::lazy_static! {
+    /// Write ahead log for kernel log messages
+    static ref WRITE_AHEAD_LOG: Mutex<VecDeque<u8>> = Mutex::new(VecDeque::new());
+}
+
+pub fn syscall_read(buffer: &mut [u8]) -> usize {
+    let mut wal = WRITE_AHEAD_LOG.try_lock().unwrap();
+    let count = wal.len().min(buffer.len());
+    for (i, b) in wal.drain(..count).enumerate() {
+        buffer[i] = b;
+    }
+    count
+}
+
+/***************************** LOGGER ITSELF ********************************/
+
 struct SystemLogger;
 
-pub const LEVEL_SCREEN: log::Level = log::Level::Info;
+// pub const LEVEL_SCREEN: log::Level = log::Level::Info;
+pub const LEVEL_SCREEN: log::Level = log::Level::Debug;
 pub const LEVEL_PORTE9: log::Level = log::Level::Trace;
+// pub const LEVEL_PORTE9: log::Level = log::Level::Debug;
 
 impl log::Log for SystemLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
@@ -50,15 +91,28 @@ impl log::Log for SystemLogger {
             );
         }
         if level <= LEVEL_SCREEN {
-            unsafe {
-                rforce_unlock!();
+            if crate::memory::can_allocate() {
+                let message = format!(
+                    "{:5} {} - {}\n",
+                    record.level(),
+                    record.target(),
+                    record.args()
+                );
+                let mut wal = WRITE_AHEAD_LOG.try_lock().unwrap();
+                wal.extend(message.bytes());
             }
-            rprintln!(
-                "{:5} {} - {}",
-                record.level(),
-                record.target(),
-                record.args()
-            );
+
+            if !DISABLE_DIRECT_VGA.load(Ordering::Acquire) {
+                unsafe {
+                    rforce_unlock!(); // TODO: remove
+                }
+                rprintln!(
+                    "{:5} {} - {}",
+                    record.level(),
+                    record.target(),
+                    record.args()
+                );
+            }
         }
     }
 

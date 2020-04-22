@@ -1,12 +1,27 @@
 [[constant]]
 name = "BOOT_KERNEL_LOADPOINT"
 type = "PhysAddr"
-value = "0x1_0000"
+value = "0x10_0000"
 
 [[constant]]
 name = "BOOT_TMP_MMAP_BUFFER"
 type = "PhysAddr"
 value = "0x2000"
+
+[[constant]]
+name = "BOOT_TMP_KERNEL_SPLIT_ADDR"
+type = "PhysAddr"
+value = "0x3000"
+
+[[constant]]
+name = "BOOT_TMP_KERNEL_END_ADDR"
+type = "PhysAddr"
+value = "0x3004"
+
+[[constant]]
+name = "KERNEL_ENTRY_POINT"
+type = "PhysAddr"
+value = "0x100_0000"
 
 # Number of sectors, including MBR (stage0)
 [[constant]]
@@ -23,7 +38,7 @@ value = "0x200"
 [[constant]]
 name = "BOOT_PAGE_TABLE_SECTION_START"
 type = "PhysAddr"
-value = "0x20_0000"
+value = "0x1_0000"
 
 [[constant]]
 name = "BOOT_PAGE_TABLE_P4"

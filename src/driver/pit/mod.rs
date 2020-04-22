@@ -1,8 +1,6 @@
 #![allow(unused_variables)]
 #![allow(unused_imports)]
 
-use crate::util::{inb, outb};
-
 const PIT_CH0: u16 = 0x40; // Channel 0 data port (read/write) (PIC TIMER)
 const PIT_CH1: u16 = 0x41; // Channel 1 data port (read/write) (UNUSED)
 const PIT_CH2: u16 = 0x42; // Channel 2 data port (read/write) (PC SPEAKER)
@@ -23,8 +21,8 @@ pub const TIME_BETWEEN_E_12: u64 = 999847467; // s * 10 ** 12
 pub fn init() {
     // Channel 0, lobyte/hibyte, Rate generator, Binary mode
     unsafe {
-        outb(PIT_REG, 0b00_11_010_0); // command
-        outb(PIT_CH0, (RELOAD_VALUE & 0x00FF) as u8); // low
-        outb(PIT_CH0, ((RELOAD_VALUE & 0xFF00) >> 8) as u8); // high
+        cpuio::outb(0b00_11_010_0, PIT_REG); // command
+        cpuio::outb((RELOAD_VALUE & 0x00FF) as u8, PIT_CH0); // low
+        cpuio::outb(((RELOAD_VALUE & 0xFF00) >> 8) as u8, PIT_CH0); // high
     }
 }

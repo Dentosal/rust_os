@@ -19,7 +19,13 @@ impl MacAddr {
 
 impl fmt::Debug for MacAddr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let parts: Vec<_> = self.0.iter().map(|c| format!("{:02x}", c)).collect();
-        write!(f, "MacAddr({})", parts.join(":"))
+        write!(f, "MacAddr({:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x})",
+            self.0[0],
+            self.0[1],
+            self.0[2],
+            self.0[3],
+            self.0[4],
+            self.0[5],
+        )
     }
 }

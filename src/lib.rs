@@ -1,7 +1,6 @@
 // Code style
 #![forbid(private_in_public)]
 #![forbid(tyvar_behind_raw_pointer)]
-#![deny(unused_assignments)]
 // Safety
 #![deny(overflowing_literals)]
 #![deny(safe_packed_borrows)]

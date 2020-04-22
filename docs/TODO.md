@@ -4,6 +4,7 @@
 
 # Backlog
 
+* Move keyboard IRQ handler to generic pluggable system
 * Convert system calls from (len, ptr) to (ptr, len).
 * System call and IPC topic access control
 * Move/copy disk drivers to own modules

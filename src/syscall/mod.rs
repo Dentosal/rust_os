@@ -1,5 +1,6 @@
 use alloc::prelude::v1::*;
 use core::convert::{TryFrom, TryInto};
+use core::intrinsics::copy_nonoverlapping;
 use core::mem;
 use core::ptr;
 use core::time::Duration;
@@ -460,26 +461,57 @@ fn syscall(
                 }
             },
             SC::irq_set_handler => {
-                let (ird, image_len, image_ptr, _) = rsc.args;
-                todo!();
-                // let image_ptr = VirtAddr::new(image_ptr);
-                // if let Some((area, slice)) =
-                //     unsafe { m.process_slice(process, image_len, image_ptr) }
-                // {
-                //     log::debug!("[pid={:8}] exec len={:?}", pid, slice.len());
+                use x86_64::structures::paging::page_table::PageTableFlags;
 
-                //     let elfimage = crate::multitasking::process::load_elf(m, slice);
-                //     let pid = sched.spawn(m, elfimage);
+                let (irq, code_len, code_ptr, _) = rsc.args;
+                let code_ptr = VirtAddr::new(code_ptr);
+                if let Some((area, code)) = unsafe { m.process_slice(process, code_len, code_ptr) }
+                {
+                    log::debug!("[pid={:8}] irq_set_handler len={:?}", pid, code.len());
 
-                //     unsafe { m.unmap_area(area) };
-                //     m.free_virtual_area(area);
+                    // Simply assumes that all irq handers fit on one page
+                    assert!((code.len() as u64) < PAGE_SIZE_BYTES);
 
-                //     SyscallResult::Continue(Ok(unsafe { pid.as_u64() }))
-                // } else {
-                //     SyscallResult::Terminate(process::ProcessResult::Failed(
-                //         process::Error::Pointer(image_ptr),
-                //     ))
-                // }
+                    // Copy the code to kernel memory
+                    let (frame_vec, code_area) = m.alloc_both(
+                        1,
+                        PageTableFlags::PRESENT
+                            | PageTableFlags::WRITABLE
+                            | PageTableFlags::NO_EXECUTE,
+                    );
+                    unsafe {
+                        copy_nonoverlapping(
+                            code.as_ptr(),
+                            code_area.start.as_mut_ptr(),
+                            code.len(),
+                        );
+                    }
+
+                    // Change flags
+                    assert!(frame_vec.len() == 1);
+                    unsafe {
+                        m.page_map
+                            .map_to(
+                                PT_VADDR,
+                                Page::from_start_address(code_area.start).unwrap(),
+                                frame_vec[0],
+                                PageTableFlags::PRESENT,
+                            )
+                            .flush();
+                    }
+
+                    let mut handlers = crate::interrupt::PLUGGABLE_IRQ_HANDLERS.try_lock().unwrap();
+                    handlers[irq as usize] = Some(code_area.start);
+
+                    unsafe { m.unmap_area(area) };
+                    m.free_virtual_area(area);
+
+                    SyscallResult::Continue(Ok(0))
+                } else {
+                    SyscallResult::Terminate(process::ProcessResult::Failed(
+                        process::Error::Pointer(code_ptr),
+                    ))
+                }
             },
             SC::mmap_physical => {
                 use d7abi::MemoryProtectionFlags as PFlags;

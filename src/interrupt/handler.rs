@@ -169,15 +169,10 @@ pub(super) unsafe fn exception_irq_free(interrupt: u8) {
 
     let value: u64;
 
-    // TODO: implment pluggable handlers (SYSCALL::set_irq_handler)
-    if irq == 11 {
-        unsafe {
-            let mut r_isr: cpuio::UnsafePort<u16> = cpuio::UnsafePort::new(0xc000 + 0x3e);
-            let v = r_isr.read();
-            r_isr.write(v);
-            log::trace!("v = {:#x}", v);
-            value = v as u64;
-        };
+    // Call a plugged handler if any are available
+    let ph = super::PLUGGABLE_IRQ_HANDLERS.try_lock().unwrap();
+    if let Some(entry_addr) = ph[irq as usize] {
+        asm!("call $0" : "={rax}"(value) : "0"(entry_addr.as_ptr::<*const u64>()) :: "volatile", "intel");
     } else {
         value = 0;
     }

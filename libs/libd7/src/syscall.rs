@@ -236,7 +236,7 @@ pub fn kernel_log_read(buffer: &mut [u8]) -> SyscallResult<usize> {
 /// # Safety
 ///
 /// Will lead to kernel crash or silent data corruption when misused.
-pub unsafe fn irq_set_handler(irq: u8, code: &mut [u8]) -> SyscallResult<()> {
+pub unsafe fn irq_set_handler(irq: u8, code: &[u8]) -> SyscallResult<()> {
     let len = code.len() as u64;
     let ptr = code.as_ptr() as u64;
 

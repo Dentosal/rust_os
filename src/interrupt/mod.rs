@@ -60,6 +60,9 @@ impl fmt::Debug for ExceptionStackFrame {
     }
 }
 
+/// Pluggable IRQ handlers for drivers
+pub static PLUGGABLE_IRQ_HANDLERS: Mutex<[Option<VirtAddr>; 0x10]> = Mutex::new([None; 0x10]);
+
 /// Write process descriptor tables (IDT, GDT) to given address
 pub unsafe fn write_process_dts(dst: VirtAddr, idt_table: VirtAddr) {
     use x86_64::structures::gdt::DescriptorFlags as GDTF;

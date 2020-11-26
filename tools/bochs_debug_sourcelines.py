@@ -92,10 +92,10 @@ for dbgline in debugdata:
 
         module_name = clamp_len(path, args.path_width, args.path_width)
 
-        if codeline.strip().startswith("asm!"):
+        if codeline.strip().startswith("llvm_asm!"):
             m = re.match(r".*\):([^;]*)", dbgline)
             assert m
-            codeline = "asm! " + m.group(1).strip()
+            codeline = "llvm_asm! " + m.group(1).strip()
 
         if output == prev_output:
             continue

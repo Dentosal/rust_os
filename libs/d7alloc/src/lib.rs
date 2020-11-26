@@ -1,4 +1,6 @@
 #![feature(allocator_api)]
+#![feature(nonnull_slice_from_raw_parts)]
+#![feature(slice_ptr_get)]
 #![feature(const_fn)]
 #![feature(integer_atomics)]
 #![forbid(private_in_public)]
@@ -8,7 +10,7 @@
 
 extern crate spin;
 
-use core::alloc::{AllocErr, AllocInit, AllocRef, GlobalAlloc, Layout, MemoryBlock};
+use core::alloc::{AllocError, AllocRef, GlobalAlloc, Layout};
 use core::ptr::NonNull;
 
 pub const HEAP_START: u64 = 0x4000_0000; // At 1 GiB
@@ -55,8 +57,7 @@ impl BumpAllocator {
 }
 
 unsafe impl<'a> AllocRef for &'a BumpAllocator {
-    fn alloc(&mut self, layout: Layout, init: AllocInit) -> Result<MemoryBlock, AllocErr> {
-        assert!(init == AllocInit::Uninitialized);
+    fn alloc(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
         assert!(layout.size() > 0);
         loop {
             // load current state of the `next` field
@@ -71,18 +72,18 @@ unsafe impl<'a> AllocRef for &'a BumpAllocator {
                         .compare_and_swap(current_next, alloc_end, Ordering::SeqCst);
                 if next_now == current_next {
                     // next address was successfully updated, allocation succeeded
-                    return Ok(MemoryBlock {
-                        ptr: NonNull::new(alloc_start as *mut _).expect("Tried to alloc null ptr"),
-                        size: (alloc_end - alloc_start) as usize,
-                    });
+                    return Ok(NonNull::slice_from_raw_parts(
+                        unsafe { NonNull::new_unchecked(alloc_start as *mut _) },
+                        (alloc_end - alloc_start) as usize,
+                    ));
                 }
             } else {
-                return Err(AllocErr);
+                return Err(AllocError);
             }
         }
     }
 
-    unsafe fn dealloc(&mut self, _ptr: NonNull<u8>, _layout: Layout) {
+    unsafe fn dealloc(&self, _ptr: NonNull<u8>, _layout: Layout) {
         // do nothing, leak memory
     }
 }
@@ -101,10 +102,9 @@ unsafe impl GlobalAlloc for GlobAlloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let alloc = self.alloc.lock();
         (&*alloc)
-            .alloc(layout, AllocInit::Uninitialized)
+            .alloc(layout)
             .expect("Could not allocate")
-            .ptr
-            .as_mut()
+            .as_mut_ptr()
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {

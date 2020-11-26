@@ -1,6 +1,6 @@
 #![no_std]
 // Features
-#![feature(asm)]
+#![feature(llvm_asm)]
 #![feature(alloc_prelude)]
 
 #[macro_use]

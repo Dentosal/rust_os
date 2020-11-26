@@ -2,8 +2,8 @@ use alloc::prelude::v1::*;
 
 pub use d7abi::process::{ProcessId, ProcessResult};
 
-use crate::syscall::{self, SyscallResult};
 use crate::ipc;
+use crate::syscall::{self, SyscallResult};
 
 /// A safe wrapper for a process
 #[derive(Debug, PartialEq, Eq, Hash)]

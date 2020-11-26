@@ -31,7 +31,7 @@ format.integer = { radix = "hex", underscores = 4 }
 import = ["x86_64::PhysAddr"]
 
 [lang.rust.type.VirtAddr]
-value_prefix = "unsafe {VirtAddr::new_unchecked_raw("
+value_prefix = "unsafe {VirtAddr::new_unsafe("
 value_suffix = ")}"
 format.integer = { radix = "hex", underscores = 4 }
 import = ["x86_64::VirtAddr"]

@@ -4,8 +4,8 @@ use alloc::vec::Vec;
 
 use super::super::prelude::*;
 
-const START_ADDR: VirtAddr = unsafe { VirtAddr::new_unchecked_raw(0x100_000_000) };
-const END_ADDR: VirtAddr = unsafe { VirtAddr::new_unchecked_raw(0x200_000_000) };
+const START_ADDR: VirtAddr = unsafe { VirtAddr::new_unsafe(0x100_000_000) };
+const END_ADDR: VirtAddr = unsafe { VirtAddr::new_unsafe(0x200_000_000) };
 const SIZE: u64 = END_ADDR.as_u64() - START_ADDR.as_u64();
 
 /// A first-fit virtual memory allocator

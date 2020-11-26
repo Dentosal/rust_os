@@ -15,7 +15,7 @@ panic = "abort"
 panic = "abort"
 
 [dependencies]
-cpuio = "0.2.0"
+cpuio = "0.3.0"
 log = "0.4"
 spin = "0.5"
 bitflags = "1.2.1"

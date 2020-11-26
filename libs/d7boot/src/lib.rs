@@ -11,7 +11,7 @@
 #![deny(safe_packed_borrows)]
 #![deny(unused_must_use)]
 // Unstable features
-#![feature(asm)]
+#![feature(llvm_asm)]
 #![feature(lang_items)]
 #![feature(naked_functions)]
 
@@ -28,7 +28,7 @@ macro_rules! sizeof {
 
 macro_rules! panic_indicator {
     ($x:expr) => ({
-        asm!(concat!("mov eax, ", stringify!($x), "; mov [0xb809c], eax") ::: "eax", "memory" : "volatile", "intel");
+        llvm_asm!(concat!("mov eax, ", stringify!($x), "; mov [0xb809c], eax") ::: "eax", "memory" : "volatile", "intel");
     });
     () => ({
         panic_indicator!(0x4f214f70);   // !p
@@ -54,10 +54,10 @@ pub fn page_align_up(addr: u64) -> u64 {
 fn error(c: char) -> ! {
     unsafe {
         // 'ER: _'
-        asm!("mov rax, 0x4f5f4f3a4f524f45; mov [0xb8000 + 76*2], rax" ::: "rax", "memory" : "volatile", "intel");
+        llvm_asm!("mov rax, 0x4f5f4f3a4f524f45; mov [0xb8000 + 76*2], rax" ::: "rax", "memory" : "volatile", "intel");
         // set arg
-        asm!("mov [0xb8006 + 76*2], al" :: "{al}"(c as u8) : "al", "memory" : "volatile", "intel");
-        asm!("hlt" :::: "volatile", "intel");
+        llvm_asm!("mov [0xb8006 + 76*2], al" :: "{al}"(c as u8) : "al", "memory" : "volatile", "intel");
+        llvm_asm!("hlt" :::: "volatile", "intel");
         core::hint::unreachable_unchecked();
     }
 }
@@ -148,8 +148,8 @@ pub unsafe extern "C" fn d7boot() {
     copy_nonoverlapping(src_ptr, dst_ptr, count);
 
     // Show message ('-> K') and jump to kernel
-    asm!("mov rax, 0x0f4b0f200f3e0f2d; mov [0xb8000], rax" ::: "rax", "memory" : "volatile", "intel");
-    asm!(concat!("push ", 0x100_0000, "; ret") :::: "volatile", "intel"); // KERNEL_ENTRY_POINT
+    llvm_asm!("mov rax, 0x0f4b0f200f3e0f2d; mov [0xb8000], rax" ::: "rax", "memory" : "volatile", "intel");
+    llvm_asm!(concat!("push ", 0x100_0000, "; ret") :::: "volatile", "intel"); // KERNEL_ENTRY_POINT
     core::hint::unreachable_unchecked();
 }
 
@@ -160,7 +160,7 @@ pub unsafe extern "C" fn d7boot() {
 extern "C" fn panic(info: &PanicInfo) -> ! {
     unsafe {
         panic_indicator!(0x4f214f45); // E!
-        asm!("hlt"::::"intel","volatile");
+        llvm_asm!("hlt"::::"intel","volatile");
         core::hint::unreachable_unchecked();
     }
 }

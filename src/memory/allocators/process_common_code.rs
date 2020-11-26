@@ -12,7 +12,7 @@ pub const COMMON_ADDRESS_VIRT: u64 = 0x20_0000;
 pub static mut PROCESS_IDT_PHYS_ADDR: u64 = 0;
 
 unsafe fn load_common_code(mem_ctrl: &mut MemoryController) {
-    let common_addr = VirtAddr::new_unchecked(COMMON_ADDRESS_VIRT);
+    let common_addr = VirtAddr::new_unsafe(COMMON_ADDRESS_VIRT);
 
     let bytes = crate::initrd::read("p_commoncode").expect("p_commoncode missing from initrd");
     assert!(bytes.len() <= (PAGE_SIZE_BYTES as usize));
@@ -54,7 +54,7 @@ unsafe fn create_process_dts(mem_ctrl: &mut MemoryController) {
 
     // Find process_interrupt.table_start
     let p = COMMON_ADDRESS_VIRT as *const u64;
-    let interrupt_table_start = VirtAddr::new_unchecked(ptr::read(p.offset(1)));
+    let interrupt_table_start = VirtAddr::new_unsafe(ptr::read(p.offset(1)));
 
     // Allocate memory
     let (frames, area) =

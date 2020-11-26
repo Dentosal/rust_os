@@ -14,9 +14,9 @@ unsafe fn pci_read_u32(bus: u8, slot: u8, func: u8, offset: u8) -> u32 {
         | (0x80000000u32)) as u32;
 
     /* write out the address */
-    asm!("out dx, eax" :: "{dx}"(CONFIG_ADDR), "{eax}"(address) :: "intel","volatile");
+    llvm_asm!("out dx, eax" :: "{dx}"(CONFIG_ADDR), "{eax}"(address) :: "intel","volatile");
     let inp: u32;
-    asm!("in eax, dx" : "={eax}"(inp) : "{dx}"(CONFIG_DATA) :: "intel","volatile");
+    llvm_asm!("in eax, dx" : "={eax}"(inp) : "{dx}"(CONFIG_DATA) :: "intel","volatile");
     inp
 }
 
@@ -30,8 +30,8 @@ unsafe fn pci_write_u32(bus: u8, slot: u8, func: u8, offset: u8, value: u32) {
         | (0x80000000u32)) as u32;
 
     /* write out the address */
-    asm!("out dx, eax" :: "{dx}"(CONFIG_ADDR), "{eax}"(address) :: "intel","volatile");
-    asm!("out dx, eax" :: "{dx}"(CONFIG_DATA), "{eax}"(value)   :: "intel","volatile");
+    llvm_asm!("out dx, eax" :: "{dx}"(CONFIG_ADDR), "{eax}"(address) :: "intel","volatile");
+    llvm_asm!("out dx, eax" :: "{dx}"(CONFIG_DATA), "{eax}"(value)   :: "intel","volatile");
 }
 
 pub(crate) fn pci_read_device(loc: DeviceLocation, offset: u8) -> u32 {

@@ -9,7 +9,6 @@
 #![no_std]
 #![feature(alloc_prelude)]
 #![feature(ptr_internals)]
-#![feature(asm)]
 #![deny(unused_must_use)]
 
 #[macro_use]

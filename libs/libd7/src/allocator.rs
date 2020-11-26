@@ -1,4 +1,4 @@
-use core::alloc::{AllocErr, AllocInit, AllocRef, GlobalAlloc, Layout, MemoryBlock};
+use core::alloc::{AllocError, AllocRef, GlobalAlloc, Layout};
 use core::ptr::NonNull;
 
 use spin::Mutex;
@@ -47,62 +47,77 @@ impl BlockAllocator {
     }
 }
 
-unsafe impl<'a> AllocRef for BlockAllocator {
-    fn alloc(&mut self, layout: Layout, init: AllocInit) -> Result<MemoryBlock, AllocErr> {
-        assert!(init == AllocInit::Uninitialized);
+/// A wrapper around spin::Mutex to permit trait implementations.
+pub struct Locked<A> {
+    inner: spin::Mutex<A>,
+}
+
+impl<A> Locked<A> {
+    pub const fn new(inner: A) -> Self {
+        Locked {
+            inner: spin::Mutex::new(inner),
+        }
+    }
+
+    pub fn lock(&self) -> spin::MutexGuard<A> {
+        self.inner.lock()
+    }
+}
+
+unsafe impl<'a> AllocRef for Locked<BlockAllocator> {
+    fn alloc(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+        let mut ba = self.lock();
 
         // Calculate resulting pointer and required bytes
         let start_addr = align_up(
-            PROCESS_DYNAMIC_MEMORY.as_u64() + self.used_bytes,
+            PROCESS_DYNAMIC_MEMORY.as_u64() + ba.used_bytes,
             layout.align() as u64,
         );
         let required_size = layout.size() + layout.align();
         let required_size_u64 = required_size as u64;
 
         // Allocate more if required
-        if self.available_capacity_bytes() < required_size_u64 {
-            let more = required_size_u64 - self.available_capacity_bytes();
-            let required_bytes = self.capacity_bytes + more;
-            self.capacity_bytes = unsafe { mem_set_size(required_bytes).map_err(|_| AllocErr)? };
-            debug_assert!(required_size_u64 <= self.available_capacity_bytes());
+        if ba.available_capacity_bytes() < required_size_u64 {
+            let more = required_size_u64 - ba.available_capacity_bytes();
+            let required_bytes = ba.capacity_bytes + more;
+            ba.capacity_bytes = unsafe { mem_set_size(required_bytes).map_err(|_| AllocError)? };
+            debug_assert!(required_size_u64 <= ba.available_capacity_bytes());
         }
 
         // Update used byte count and return
-        self.used_bytes += required_size_u64;
-        Ok(MemoryBlock {
-            ptr: unsafe { NonNull::new_unchecked(start_addr as *mut _) },
-            size: required_size as usize,
-        })
+        ba.used_bytes += required_size_u64;
+
+        Ok(NonNull::slice_from_raw_parts(
+            unsafe { NonNull::new_unchecked(start_addr as *mut _) },
+            required_size as usize,
+        ))
     }
 
-    unsafe fn dealloc(&mut self, _ptr: NonNull<u8>, _layout: Layout) {
+    unsafe fn dealloc(&self, _ptr: NonNull<u8>, _layout: Layout) {
         // do nothing, leak memory
     }
 }
 
 pub struct GlobAlloc {
-    alloc: Mutex<BlockAllocator>,
+    alloc: Locked<BlockAllocator>,
 }
 impl GlobAlloc {
     pub const fn new(alloc: BlockAllocator) -> Self {
         Self {
-            alloc: Mutex::new(alloc),
+            alloc: Locked::new(alloc),
         }
     }
 }
 unsafe impl GlobalAlloc for GlobAlloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        let mut alloc = self.alloc.lock();
-        alloc
-            .alloc(layout, AllocInit::Uninitialized)
+        self.alloc
+            .alloc(layout)
             .expect("Could not allocate")
-            .ptr
-            .as_mut()
+            .as_mut_ptr()
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        let mut alloc = self.alloc.lock();
-        alloc.dealloc(
+        self.alloc.dealloc(
             NonNull::new(ptr as *mut _).expect("Cannot deallocate null pointer"),
             layout,
         );

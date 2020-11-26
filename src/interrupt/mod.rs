@@ -153,7 +153,7 @@ pub fn init_after_memory() {
     let mut tss_selector: MaybeUninit<SegmentSelector> = MaybeUninit::uninit();
 
     let gdt = GDT.call_once(|| {
-        let mut gdt = unsafe { gdt::GdtBuilder::new(VirtAddr::new_unchecked(0x1000)) };
+        let mut gdt = unsafe { gdt::GdtBuilder::new(VirtAddr::new_unsafe(0x1000)) };
         code_selector.write(gdt.add_entry(gdt::Descriptor::kernel_code_segment()));
         tss_selector.write(gdt.add_entry(gdt::Descriptor::tss_segment(&tss)));
         gdt
@@ -178,7 +178,7 @@ pub fn enable_external_interrupts() {
     log::info!("Enabling external interrupts");
 
     unsafe {
-        asm!("sti" :::: "volatile", "intel");
+        llvm_asm!("sti" :::: "volatile", "intel");
     }
 
     log::info!("Done.");
@@ -188,7 +188,7 @@ pub fn disable_external_interrupts() {
     log::info!("Disabling external interrupts");
 
     unsafe {
-        asm!("cli" :::: "volatile", "intel");
+        llvm_asm!("cli" :::: "volatile", "intel");
     }
 
     log::info!("Done.");

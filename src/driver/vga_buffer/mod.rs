@@ -10,7 +10,7 @@ const SCREEN_WIDTH: usize = 80;
 pub const VGA_BUFFER_ADDR_U64: u64 = 0xb8000;
 pub const VGA_BUFFER_PHYSADDR: PhysAddr = unsafe { PhysAddr::new_unchecked(VGA_BUFFER_ADDR_U64) };
 pub const VGA_BUFFER_VIRTADDR: VirtAddr =
-    unsafe { VirtAddr::new_unchecked_raw(VGA_BUFFER_ADDR_U64) };
+    unsafe { VirtAddr::new_unsafe(VGA_BUFFER_ADDR_U64) };
 
 /// A VGA color
 #[allow(dead_code)]
@@ -296,7 +296,7 @@ macro_rules! rforce_unlock {
 }
 macro_rules! panic_indicator {
     ($x:expr) => ({
-        asm!(concat!("mov eax, ", stringify!($x), "; mov [0xb809c], eax") ::: "eax", "memory" : "volatile", "intel");
+        llvm_asm!(concat!("mov eax, ", stringify!($x), "; mov [0xb809c], eax") ::: "eax", "memory" : "volatile", "intel");
     });
     () => ({
         panic_indicator!(0x4f214f70);   // !p

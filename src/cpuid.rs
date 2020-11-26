@@ -10,7 +10,7 @@ pub fn cpu_brand() -> String {
         let ecx: u32;
         let edx: u32;
         unsafe {
-            asm!(
+            llvm_asm!(
                 "xor ecx, ecx; xor edx, edx; cpuid"
                 : "={eax}"(eax), "={ebx}"(ebx), "={ecx}"(ecx), "={edx}"(edx)
                 : "{eax}"(index)
@@ -42,7 +42,7 @@ pub fn init() {
     let edx: u32;
     unsafe {
         // CPUID_GETFEATURES
-        asm!(
+        llvm_asm!(
             "xor ecx, ecx; xor edx, edx; mov eax, 1; cpuid"
             : "={ecx}"(ecx), "={edx}"(edx)
             :

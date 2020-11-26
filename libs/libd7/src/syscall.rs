@@ -29,7 +29,7 @@ pub unsafe fn syscall(number: u64, args: (u64, u64, u64, u64)) -> SyscallResult<
     let mut success: u64;
     let mut result: u64;
 
-    asm!("int 0xd7"
+    llvm_asm!("int 0xd7"
         : "={rax}"(success), "={rdi}"(result)
         :
             "{rax}"(number),
@@ -53,7 +53,7 @@ pub unsafe fn syscall(number: u64, args: (u64, u64, u64, u64)) -> SyscallResult<
 
 pub fn exit(return_code: u64) -> ! {
     unsafe {
-        asm!("int 0xd7" :: "{rax}"(SyscallNumber::exit), "{rdi}"(return_code) :: "intel");
+        llvm_asm!("int 0xd7" :: "{rax}"(SyscallNumber::exit), "{rdi}"(return_code) :: "intel");
         unreachable_unchecked();
     }
 }
@@ -182,9 +182,7 @@ pub fn ipc_receive(sub_id: SubscriptionId, buf: &mut [u8]) -> SyscallResult<usiz
 
 /// Acknowledge a reliable message
 pub fn ipc_acknowledge(
-    sub_id: SubscriptionId,
-    ack_id: AcknowledgeId,
-    positive: bool,
+    sub_id: SubscriptionId, ack_id: AcknowledgeId, positive: bool,
 ) -> SyscallResult<()> {
     unsafe {
         syscall!(
@@ -252,10 +250,7 @@ pub unsafe fn irq_set_handler(irq: u8, code: &mut [u8]) -> SyscallResult<()> {
 /// Can override process address mappings.
 /// Can override kernel data.
 pub unsafe fn mmap_physical(
-    phys_addr: PhysAddr,
-    virt_addr: VirtAddr,
-    len: u64,
-    flags: MemoryProtectionFlags,
+    phys_addr: PhysAddr, virt_addr: VirtAddr, len: u64, flags: MemoryProtectionFlags,
 ) -> SyscallResult<*mut u8> {
     if len == 0 {
         panic!("Cannot mmap_physical an empty region");

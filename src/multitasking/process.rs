@@ -209,7 +209,7 @@ unsafe fn create_process(mm: &mut MemoryController, pid: ProcessId, elf: ElfImag
         // Descriptor tables
         pm.map_to(
             pt_area.start,
-            Page::from_start_address(VirtAddr::new_unchecked(0x0)).unwrap(),
+            Page::from_start_address(VirtAddr::new_unsafe(0x0)).unwrap(),
             PhysFrame::from_start_address(PhysAddr::new(pcc::PROCESS_IDT_PHYS_ADDR)).unwrap(),
             // Flags::PRESENT | Flags::NO_EXECUTE,
             // CPU likes to write to GDT(?) for some reason?

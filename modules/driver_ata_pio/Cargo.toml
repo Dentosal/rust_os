@@ -15,7 +15,7 @@ panic = "abort"
 panic = "abort"
 
 [dependencies]
-cpuio = "0.2.0"
+cpuio = "0.3.0"
 
 [dependencies.hashbrown]
 version = "0.7"

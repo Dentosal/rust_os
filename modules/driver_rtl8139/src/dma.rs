@@ -3,7 +3,7 @@ use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use libd7::{syscall, PhysAddr, VirtAddr};
 
 static MAPPED: AtomicBool = AtomicBool::new(false);
-static VIRTUAL_ADDR: VirtAddr = unsafe { VirtAddr::new_unchecked_raw(0x10_0000_0000) }; // Should be free
+static VIRTUAL_ADDR: VirtAddr = unsafe { VirtAddr::new_unsafe(0x10_0000_0000) }; // Should be free
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DMARegion {

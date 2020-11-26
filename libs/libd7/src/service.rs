@@ -6,13 +6,10 @@ use hashbrown::HashSet;
 use crate::ipc::protocol::service::{Registration, ServiceName};
 
 pub fn register(name: &str, oneshot: bool) {
-    crate::ipc::deliver(
-        "serviced/register",
-        &Registration {
-            name: ServiceName(name.to_owned()),
-            oneshot,
-        },
-    )
+    crate::ipc::deliver("serviced/register", &Registration {
+        name: ServiceName(name.to_owned()),
+        oneshot,
+    })
     .unwrap();
 }
 

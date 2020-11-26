@@ -1,9 +1,6 @@
 use d7net::{tcp, IpAddr, SocketAddr};
 
-use crate::{
-    pinecone,
-    syscall::SyscallResult,
-};
+use crate::{pinecone, syscall::SyscallResult};
 
 use super::create_socket;
 
@@ -31,6 +28,4 @@ impl Socket {
 pub struct Stream {
     // file: File,
 }
-impl Stream {
-
-}
+impl Stream {}

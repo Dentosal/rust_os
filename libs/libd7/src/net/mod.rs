@@ -9,7 +9,7 @@ use alloc::prelude::v1::*;
 
 use d7net::SocketAddr;
 
-use crate::{syscall::SyscallResult};
+use crate::syscall::SyscallResult;
 
 fn create_socket(addr: SocketAddr) -> SyscallResult<!> {
     todo!()

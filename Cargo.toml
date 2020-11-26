@@ -17,7 +17,7 @@ panic = "abort"
 [dependencies]
 rlibc = "*"                     # Raw libc
 spin = "0.5"                    # Spinlocks
-cpuio = "0.2.0"                 # Cpu port IO
+cpuio = "0.3.0"                 # Cpu port IO
 bitflags = "1.2"                # Bitflags
 bit_field = "0.10.0"            # Bit fields
 volatile = "0.2.6"              # Volatile read and write functions

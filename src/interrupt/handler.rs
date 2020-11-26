@@ -89,7 +89,7 @@ pub(super) unsafe fn exception_snp(stack_frame: &InterruptStackFrame, error_code
 /// 1. Before scheduler has taken over (early)
 /// 2. When the kernel is in idle state (no process is running)
 /// In both cases idle and continue are equivalent
-pub(super) unsafe extern "C" fn exception_irq0() -> u128 {
+pub(super) unsafe extern "sysv64" fn exception_irq0() -> u128 {
     let next_process = time::SYSCLOCK.tick();
     pic::PICS.try_lock().unwrap().notify_eoi(0x20);
     match next_process {
@@ -210,7 +210,7 @@ pub(super) unsafe fn exception_irq11() {
 /// Process registers `rax`, `rbx` and `rcx` are already stored in its stack.
 #[naked]
 pub(super) unsafe fn process_interrupt() {
-    asm!("
+    llvm_asm!("
         // Recreate interrupt stack frame from r10..=r14
         push r14
         push r13
@@ -248,7 +248,7 @@ unsafe extern "C" fn process_interrupt_inner(
 
     let stack_frame: InterruptStackFrameValue = (*stack_frame_ptr).clone();
     let page_table = PhysAddr::new_unchecked(page_table);
-    let process_stack = VirtAddr::new_unchecked(process_stack);
+    let process_stack = VirtAddr::new_unsafe(process_stack);
 
     let pid = {
         let mut sched = SCHEDULER.try_lock().unwrap();
@@ -373,7 +373,7 @@ fn idle() -> ! {
 
     // Jump into the idle state
     unsafe {
-        asm!("
+        llvm_asm!("
             mov rcx, [rcx + 2 * 8]  // Offset: idle
             jmp rcx                 // Jump into the procedure
             "
@@ -389,7 +389,7 @@ fn immediate_switch_to(process: Process) -> ! {
     use crate::memory::process_common_code::COMMON_ADDRESS_VIRT;
 
     unsafe {
-        asm!("
+        llvm_asm!("
             mov rcx, [rcx]  // Get procedure offset
             jmp rcx         // Jump into the procedure
             "

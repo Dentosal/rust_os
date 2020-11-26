@@ -122,7 +122,6 @@ impl<T: DeserializeOwned> Drop for ReliableSubscription<T> {
     }
 }
 
-
 /// Automatically NACKs if not used
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[must_use]

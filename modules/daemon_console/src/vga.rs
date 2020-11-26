@@ -10,7 +10,7 @@ const HARDWARE_BUFFER_ADDR: u64 = 0xb8000;
 const HARDWARE_BUFFER_SIZE: u64 = mem::size_of::<Buffer>() as u64;
 
 /// Should be free to use. Check plan.md
-const VIRTUAL_ADDR: VirtAddr = unsafe { VirtAddr::new_unchecked_raw(0x10_0000_0000) };
+const VIRTUAL_ADDR: VirtAddr = unsafe { VirtAddr::new_unsafe(0x10_0000_0000) };
 
 /// A VGA color
 #[allow(dead_code)]

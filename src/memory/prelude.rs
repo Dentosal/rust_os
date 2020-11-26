@@ -45,7 +45,7 @@ pub const PT_VADDR_INT: u64 = 0x10_000_000;
 
 /// Page tables are mapped starting from this virtual address.
 /// This pointer itself points to P4 table.
-pub const PT_VADDR: VirtAddr = unsafe { VirtAddr::new_unchecked_raw(PT_VADDR_INT) };
+pub const PT_VADDR: VirtAddr = unsafe { VirtAddr::new_unsafe(PT_VADDR_INT) };
 
 // Require P2 alignment
 static_assertions::const_assert!(PT_VADDR_INT % 0x1_000_000 == 0);

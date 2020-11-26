@@ -11,7 +11,9 @@
 #![feature(alloc_error_handler)]
 #![feature(alloc_prelude)]
 #![feature(allocator_api)]
-#![feature(asm)]
+#![feature(slice_ptr_get)]
+#![feature(nonnull_slice_from_raw_parts)]
+#![feature(llvm_asm)]
 #![feature(const_fn)]
 #![feature(integer_atomics)]
 #![feature(panic_info_message)]
@@ -25,8 +27,8 @@ mod allocator;
 pub mod ipc;
 pub mod net;
 pub mod process;
-pub mod syscall;
 pub mod service;
+pub mod syscall;
 
 use core::alloc::Layout;
 use core::panic::PanicInfo;
@@ -74,9 +76,9 @@ static HEAP_ALLOCATOR: allocator::GlobAlloc =
 #[alloc_error_handler]
 fn out_of_memory(_: Layout) -> ! {
     unsafe {
-        asm!("xchg bx, bx"::::"intel","volatile");
-        asm!("cli"::::"intel","volatile");
-        asm!("hlt"::::"intel","volatile");
+        llvm_asm!("xchg bx, bx"::::"intel","volatile");
+        llvm_asm!("cli"::::"intel","volatile");
+        llvm_asm!("hlt"::::"intel","volatile");
     }
     loop {}
 }

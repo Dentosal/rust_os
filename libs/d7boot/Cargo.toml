@@ -16,5 +16,5 @@ panic = "abort"
 
 [dependencies]
 rlibc = "*"                     # raw libc
-cpuio = "0.2.0"                 # Cpu port IO
+cpuio = "0.3.0"                 # Cpu port IO
 

@@ -31,7 +31,7 @@
 #![feature(alloc_prelude)]
 #![feature(allocator_api)]
 #![feature(asm)]
-#![feature(box_into_raw_non_null)]
+#![feature(llvm_asm)]
 #![feature(box_syntax, box_patterns)]
 #![feature(const_fn)]
 #![feature(core_intrinsics)]
@@ -39,7 +39,6 @@
 #![feature(lang_items)]
 #![feature(maybe_uninit_extra)]
 #![feature(naked_functions)]
-#![feature(no_more_cas)]
 #![feature(panic_info_message)]
 #![feature(ptr_internals)]
 #![feature(stmt_expr_attributes)]
@@ -111,7 +110,7 @@ pub extern "C" fn rust_main() -> ! {
     unsafe {
         interrupt::enable_external_interrupts();
         loop {
-            asm!("hlt")
+            llvm_asm!("hlt")
         }
     }
 }
@@ -127,9 +126,9 @@ static HEAP_ALLOCATOR: d7alloc::GlobAlloc = d7alloc::GlobAlloc::new(d7alloc::Bum
 #[cfg(not(test))]
 fn out_of_memory(_: Layout) -> ! {
     unsafe {
-        asm!("cli"::::"intel","volatile");
+        llvm_asm!("cli"::::"intel","volatile");
         panic_indicator!(0x4f4D4f21); // !M as in "No memory"
-        asm!("jmp panic_stop"::::"intel","volatile");
+        llvm_asm!("jmp panic_stop"::::"intel","volatile");
     }
     loop {}
 }
@@ -147,7 +146,7 @@ static PANIC_ACTIVE: AtomicBool = AtomicBool::new(false);
 extern "C" fn panic(info: &PanicInfo) -> ! {
     unsafe {
         bochs_magic_bp!();
-        asm!("cli"::::"intel","volatile");
+        llvm_asm!("cli"::::"intel","volatile");
         panic_indicator!(0x4f214f21); // !!
 
         if !PANIC_ACTIVE.load(Ordering::SeqCst) {
@@ -170,7 +169,7 @@ extern "C" fn panic(info: &PanicInfo) -> ! {
             } else {
                 log::error!("  Info unavailable");
             }
-            asm!("jmp panic_stop"::::"intel","volatile");
+            llvm_asm!("jmp panic_stop"::::"intel","volatile");
         } else {
             panic_indicator!(0x4f254f21); // !%
         }

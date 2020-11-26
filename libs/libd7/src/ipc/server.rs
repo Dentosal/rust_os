@@ -47,17 +47,13 @@ impl<RQ: Serialize + DeserializeOwned, RS: Serialize + DeserializeOwned> Server<
 
     /// Handle one request
     pub fn handle<F>(&self, f: F) -> SyscallResult<()>
-    where
-        F: FnOnce(RQ) -> SyscallResult<RS>,
-    {
+    where F: FnOnce(RQ) -> SyscallResult<RS> {
         self.handle_topic(|message, _topic| f(message))
     }
 
     /// Handle one request, including topic name
     pub fn handle_topic<F>(&self, f: F) -> SyscallResult<()>
-    where
-        F: FnOnce(RQ, String) -> SyscallResult<RS>,
-    {
+    where F: FnOnce(RQ, String) -> SyscallResult<RS> {
         let (ack_ctx, request, topic): (_, Request<RQ>, _) = self.sub.receive_topic()?;
         let (reply_to, message): (String, RQ) = request;
         let response: RS = f(message, topic)?;

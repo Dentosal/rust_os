@@ -101,8 +101,22 @@ pub fn cpu_brand() -> String {
     result.trim().to_owned()
 }
 
-fn run_feature_checks(_ecx: u32, _edx: u32) {
-    // TODO
+macro_rules! assert_feature {
+    ($register:expr, $feature:expr) => {
+        assert!(
+            $register.contains($feature),
+            "Unsupported CPU: Feature {:?} missing",
+            $feature
+        );
+    };
+}
+
+fn run_feature_checks(ecx: u32, edx: u32) {
+    let f_ecx = FlagsECX::from_bits_truncate(ecx);
+    let f_edx = FlagsEDX::from_bits_truncate(edx);
+
+    assert_feature!(f_edx, FlagsEDX::SSE);
+    assert_feature!(f_edx, FlagsEDX::APIC);
 }
 
 pub fn init() {

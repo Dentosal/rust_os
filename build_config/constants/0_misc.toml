@@ -79,12 +79,12 @@ value = "PAGE_TABLES_END"
 [[constant]]
 name = "DMA_MEMORY_START"
 type = "PhysAddr"
-value = "0x2_0000"
+value = "0x4_0000"
 
 [[constant]]
 name = "DMA_MEMORY_SIZE"
 type = "size_bytes"
-value = "0x7_0000"
+value = "0x4_0000"
 
 # Kernel stack for system calls
 [[constant]]
@@ -92,3 +92,10 @@ name = "SYSCALL_STACK"
 type = "VirtAddr"
 value = "0x1100_0000"
 
+# Higher half virtual address space start
+# Used for global physical to virtual memory mapping
+
+[[constant]]
+name = "HIGHER_HALF_START"
+type = "VirtAddr"
+value = "0xffff_8000_0000_0000"

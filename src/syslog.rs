@@ -18,20 +18,22 @@ pub fn disable_direct_vga() {
 
 struct PortE9;
 
-static mut PORT: cpuio::UnsafePort<u8> = unsafe { cpuio::UnsafePort::new(0xe9) };
+static PORT: Mutex<cpuio::UnsafePort<u8>> = Mutex::new(unsafe { cpuio::UnsafePort::new(0xe9) });
 
 /// Allow formatting
 impl ::core::fmt::Write for PortE9 {
     fn write_str(&mut self, s: &str) -> ::core::fmt::Result {
+        let mut port = PORT.lock();
         unsafe {
             for byte in s.bytes() {
+                assert!(byte != 0);
                 if byte == b'\n' {
-                    PORT.write(b'\r');
-                    PORT.write(b'\n');
+                    port.write(b'\r');
+                    port.write(b'\n');
                 } else if 0x20 <= byte && byte <= 0x7e {
-                    PORT.write(byte);
+                    port.write(byte);
                 } else {
-                    PORT.write(b'?');
+                    port.write(b'?');
                     loop {}
                 }
             }
@@ -98,14 +100,11 @@ impl log::Log for SystemLogger {
                     record.target(),
                     record.args()
                 );
-                let mut wal = WRITE_AHEAD_LOG.try_lock().unwrap();
+                let mut wal = WRITE_AHEAD_LOG.lock();
                 wal.extend(message.bytes());
             }
 
             if !DISABLE_DIRECT_VGA.load(Ordering::Acquire) {
-                unsafe {
-                    rforce_unlock!(); // TODO: remove
-                }
                 rprintln!(
                     "{:5} {} - {}",
                     record.level(),

@@ -31,7 +31,7 @@ trait Mapper = pg::Mapper<PageSizeType>;
 pub use x86_64::structures::paging::FrameAllocator;
 
 /// Numeric value of `PT_PADDR` for static assertions
-pub const PT_PADDR_INT: u64 = 0x10_000_000;
+pub const PT_PADDR_INT: u64 = 0x1000_0000;
 
 /// Physical address of the page table area
 /// This pointer itself points to P4 table.

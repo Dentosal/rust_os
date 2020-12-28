@@ -1,7 +1,7 @@
 use alloc::collections::VecDeque;
 use alloc::prelude::v1::*;
 use core::fmt::Write;
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{spin_loop_hint, AtomicBool, Ordering};
 use log::{Level, Metadata, Record};
 use spin::Mutex;
 
@@ -34,7 +34,12 @@ impl ::core::fmt::Write for PortE9 {
                     port.write(byte);
                 } else {
                     port.write(b'?');
-                    loop {}
+                    bochs_magic_bp!();
+                    loop {
+                        unsafe {
+                            asm!("cli; hlt");
+                        }
+                    }
                 }
             }
         }
@@ -48,6 +53,57 @@ macro_rules! e9_print {
     ($fmt:expr, $($arg:tt)*) => (
         unsafe {
             PORT_E9.write_fmt(format_args!(concat!($fmt, "\n"), $($arg)*)).unwrap()
+        }
+    );
+}
+
+/******************************* UART SERIAL *********************************/
+
+static UART_LOCK: AtomicBool = AtomicBool::new(false);
+
+struct Uart;
+
+/// Allow formatting
+impl ::core::fmt::Write for Uart {
+    fn write_str(&mut self, s: &str) -> ::core::fmt::Result {
+        use crate::driver::uart::{has_com1, write_com1};
+        if has_com1() {
+            // Acquire lock
+            while !UART_LOCK.compare_and_swap(false, true, Ordering::SeqCst) {
+                spin_loop_hint();
+            }
+
+            for byte in s.bytes() {
+                assert!(byte != 0);
+                if byte == b'\n' {
+                    write_com1(b'\r');
+                    write_com1(b'\n');
+                } else if 0x20 <= byte && byte <= 0x7e {
+                    write_com1(byte);
+                } else {
+                    write_com1(b'?');
+                    bochs_magic_bp!();
+                    loop {
+                        unsafe {
+                            asm!("cli; hlt");
+                        }
+                    }
+                }
+            }
+
+            // Release lock
+            UART_LOCK.store(false, Ordering::SeqCst);
+        }
+        Ok(()) // Success. Always.
+    }
+}
+
+static mut UART: Uart = Uart;
+
+macro_rules! uart_print {
+    ($fmt:expr, $($arg:tt)*) => (
+        unsafe {
+            UART.write_fmt(format_args!(concat!($fmt, "\n"), $($arg)*)).unwrap()
         }
     );
 }
@@ -86,8 +142,17 @@ impl log::Log for SystemLogger {
         let level = record.metadata().level();
         if level <= LEVEL_PORTE9 {
             e9_print!(
-                "{:40} {:5}  {}",
+                "{:30} [{}] {:5} {}",
                 record.target(),
+                crate::smp::current_processor_id(),
+                record.level(),
+                record.args()
+            );
+
+            uart_print!(
+                "{:30} [{}] {:5} {}",
+                record.target(),
+                crate::smp::current_processor_id(),
                 record.level(),
                 record.args()
             );

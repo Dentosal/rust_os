@@ -1,9 +1,4 @@
-// Some taken from, with MIT license
-// https://github.com/emk/toyos-rs/blob/master/crates/pic8259_simple/src/lib.rs
-// and from, public domain:
-// http://wiki.osdev.org/PIC#Programming_the_PIC_chips
-// adn rest written by me
-
+/// http://wiki.osdev.org/PIC
 use cpuio::{Port, UnsafePort};
 use spin::Mutex;
 
@@ -71,21 +66,17 @@ impl ChainedPics {
         let mut io_wait_port: Port<u8> = Port::new(0x80);
         let mut io_wait = || io_wait_port.write(0);
 
-        // Save masks
-        let mut _mask1: u8 = self.pics[0].data_port.read();
-        let mut _mask2: u8 = self.pics[1].data_port.read();
-
         // Initialization sequence
-        self.pics[0].command_port.write(PIC_CMD_INIT);
-        io_wait();
-        self.pics[1].command_port.write(PIC_CMD_INIT);
-        io_wait();
+        for pic in &mut self.pics {
+            pic.command_port.write(PIC_CMD_INIT);
+            io_wait();
+        }
 
         // Set interrupt offset
-        self.pics[0].data_port.write(self.pics[0].offset);
-        io_wait();
-        self.pics[1].data_port.write(self.pics[1].offset);
-        io_wait();
+        for pic in &mut self.pics {
+            pic.data_port.write(pic.offset);
+            io_wait();
+        }
 
         // Introduce PICs to each other
         self.pics[0].data_port.write(4);
@@ -111,6 +102,17 @@ impl ChainedPics {
         // Restore / Set masks
         self.pics[0].data_port.write(mask1);
         self.pics[1].data_port.write(mask2);
+    }
+
+    /// Disable PICs by masking all interrupts.
+    /// Used when transitioning to LAPIC.
+    /// https://wiki.osdev.org/PIC#Disabling
+    pub fn disable(&mut self) {
+        for pic in &mut self.pics {
+            unsafe {
+                pic.data_port.write(u8::MAX);
+            }
+        }
     }
 
     /// Verify that an interrupt is produced by pics
@@ -149,5 +151,11 @@ pub static PICS: Mutex<ChainedPics> = Mutex::new(unsafe { ChainedPics::new(0x20,
 pub fn init() {
     unsafe {
         PICS.lock().init();
+    }
+}
+
+pub fn disable() {
+    unsafe {
+        PICS.lock().disable();
     }
 }

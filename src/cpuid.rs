@@ -25,6 +25,7 @@ bitflags::bitflags! {
         const X2APIC       = 1 << 21;
         const MOVBE        = 1 << 22;
         const POPCNT       = 1 << 23;
+        const TSCD         = 1 << 24;
         const AES          = 1 << 25;
         const XSAVE        = 1 << 26;
         const OSXSAVE      = 1 << 27;
@@ -101,6 +102,31 @@ pub fn cpu_brand() -> String {
     result.trim().to_owned()
 }
 
+/// Returns tuple (max_standard_level, max_extended_level)
+fn get_max_levels() -> (u32, u32) {
+    let max_standard_level: u32;
+    unsafe {
+        asm!("cpuid",
+            inout("eax") 0 => max_standard_level,
+            out("rbx") _,
+            out("rdx") _,
+            out("rcx") _,
+            options(nostack, nomem)
+        );
+    }
+    let max_extended_level: u32;
+    unsafe {
+        asm!("cpuid",
+            inout("eax") 0x8000_0000u32 => max_extended_level,
+            out("rbx") _,
+            out("rdx") _,
+            out("rcx") _,
+            options(nostack, nomem)
+        );
+    }
+    (max_standard_level, max_extended_level)
+}
+
 macro_rules! assert_feature {
     ($register:expr, $feature:expr) => {
         assert!(
@@ -111,28 +137,58 @@ macro_rules! assert_feature {
     };
 }
 
-fn run_feature_checks(ecx: u32, edx: u32) {
-    let f_ecx = FlagsECX::from_bits_truncate(ecx);
-    let f_edx = FlagsEDX::from_bits_truncate(edx);
+fn run_feature_checks() {
+    let (level_std, level_ext) = get_max_levels();
+    assert!(
+        level_std >= 3,
+        "CPUID standard max level too low {:x} < 3",
+        level_std
+    );
+    assert!(
+        level_ext >= 0x8000_0007,
+        "CPUID extended max level too low {:x} < 0x8000_0007",
+        level_ext
+    );
 
-    assert_feature!(f_edx, FlagsEDX::SSE);
-    assert_feature!(f_edx, FlagsEDX::APIC);
-}
-
-pub fn init() {
     let ecx: u32;
     let edx: u32;
     unsafe {
         // CPUID_GETFEATURES
-        llvm_asm!(
-            "xor ecx, ecx; xor edx, edx; mov eax, 1; cpuid"
-            : "={ecx}"(ecx), "={edx}"(edx)
-            :
-            : "eax", "ebx"
-            : "intel", "volatile"
+        asm!(
+            "cpuid",
+            inout("eax") 1 => _,
+            out("ebx") _,
+            out("ecx") ecx,
+            out("edx") edx,
+            options(nostack, nomem)
         );
     }
-    log::debug!("CPU: {}", cpu_brand());
     log::debug!("CPU: FEATURE BITS: {:b} {:b}", ecx, edx);
-    run_feature_checks(ecx, edx);
+
+    let f_ecx = FlagsECX::from_bits_truncate(ecx);
+    let f_edx = FlagsEDX::from_bits_truncate(edx);
+
+    assert_feature!(f_edx, FlagsEDX::TSC);
+    assert_feature!(f_ecx, FlagsECX::TSCD);
+    assert_feature!(f_edx, FlagsEDX::SSE);
+    assert_feature!(f_edx, FlagsEDX::APIC);
+
+    let edx: u32;
+    unsafe {
+        // Get extended capabilities
+        asm!(
+            "xor ecx, ecx; xor edx, edx; mov eax, 1; cpuid",
+            inout("eax") 0x8000_0007u32 => _,
+            out("ebx") _,
+            out("ecx") _,
+            out("edx") edx,
+            options(nostack, nomem)
+        );
+    }
+    assert!(edx & (1 << 8) != 0, "CPUID: invariant TSC not supported");
+}
+
+pub fn init() {
+    log::debug!("CPU: {}", cpu_brand());
+    run_feature_checks();
 }

@@ -1,3 +1,8 @@
+# Active
+
+* Race condition: If NIC driver receives packets before netd is up
+* Memory corruption(?) on startup sometimes overwrites statics like WAL
+
 # Backlog
 
 * Move keyboard IRQ handler to generic pluggable system
@@ -6,6 +11,7 @@
 * Move/copy disk drivers to own modules
     * All must be moved in one step
 * Implement proper logging in `libd7`
+* Add a proper Result type to `libd7`
 * Provide process-accessable event system
     * Gives new scheduler event ids when reading
     * Activates events when writing

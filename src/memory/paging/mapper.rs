@@ -234,9 +234,8 @@ impl PageMap {
     pub unsafe fn identity_map(
         &mut self, curr_addr: VirtAddr, frame: PhysFrame, flags: Flags,
     ) -> MapperFlush<pg::Size2MiB> {
-        let page =
-            Page::from_start_address(VirtAddr::new_unsafe(frame.start_address().as_u64()))
-                .expect("Invalid physical address: no corresponding virtual address");
+        let page = Page::from_start_address(VirtAddr::new_unsafe(frame.start_address().as_u64()))
+            .expect("Invalid physical address: no corresponding virtual address");
         self.map_to(curr_addr, page, frame, flags)
     }
 

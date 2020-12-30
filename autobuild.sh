@@ -25,7 +25,6 @@ while getopts 'abf:nuvbsdcr' flag; do
     u) flag_vagrant=1 ;;
     v) flag_vbox=1 ;;
     b) flag_bochs=1 ;;
-    s) flag_qemu_s=1 ;;
     d) flag_debug=1 ;;
     c) flag_build_only=1 ;;
     r) flag_run_only=1 ;;
@@ -81,24 +80,17 @@ then
             bochs -q -f dbgenv_config/bochs_normal
         fi
     else
-        if [ $flag_qemu_s -eq 1 ]
+        # More qemu flags
+        # -nic user,model=virtio
+        # -nic user,model=virtio,id=u
+        # -object filter-dump,id=f1,netdev=u1,file=dump.dat
+        # -drive file=build/disk.img,format=raw,if=virtio
+        # -cpu qemu64,+invtsc,+rdtscp,+tsc-deadline
+        if [ $flag_debug -eq 1 ]
         then
-            $qemucmd -smp 4 -d int -m 4G -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio -serial file:CON -s -S
+            $qemucmd -cpu max -enable-kvm -smp 4 -d int,in_asm,guest_errors -m 4G -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio -serial file:CON
         else
-            if [ $flag_debug -eq 1 ]
-            then
-                # $qemucmd -smp 4 -d guest_errors -m 4G -no-reboot -drive file=build/disk.img,format=raw,if=ide -nic user,model=virtio -monitor stdio
-                # $qemucmd -smp 4 -d guest_errors -m 4G -no-reboot -drive file=build/disk.img,format=raw,if=ide -nic user,model=virtio,id=u1 -monitor stdio -object filter-dump,id=f1,netdev=u1,file=dump.dat
-                # $qemucmd -smp 4 -d guest_errors -m 4G -no-reboot -drive file=build/disk.img,format=raw,if=ide -nic user,model=virtio,id=u1 -monitor stdio -object filter-dump,id=f1,netdev=u1,file=dump.dat
-                # $qemucmd -smp 4 -d guest_errors -m 4G -no-reboot -drive file=build/disk.img,format=raw,if=virtio -monitor stdio
-                $qemucmd -smp 4 -d int,in_asm,guest_errors -m 4G -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio -serial file:CON
-            else
-                # $qemucmd -smp 4 -d int -m 4G -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio
-                # $qemucmd -smp 4 -d int,guest_errors -m 4G -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio
-                # $qemucmd -smp 4 -m 4G -no-reboot -drive file=build/disk.img,format=raw,if=ide -nic user,model=ne2k_pci -net nic,model=virtio
-                # $qemucmd -smp 4 -m 4G -no-reboot -drive file=build/disk.img,format=raw,if=ide -nic user,model=virtio
-                $qemucmd -smp 4 -m 4G -no-reboot -no-shutdown -drive file=build/disk.img,format=raw,if=ide -monitor stdio -nic user,model=rtl8139,hostfwd=tcp::5555-:22
-            fi
+            $qemucmd -cpu max -enable-kvm -smp 4 -m 4G -no-reboot -no-shutdown -drive file=build/disk.img,format=raw,if=ide -monitor stdio -nic user,model=rtl8139,hostfwd=tcp::5555-:22
         fi
     fi
 fi

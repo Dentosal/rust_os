@@ -147,8 +147,6 @@ boot:
     add edx, BOOTLOADER_SECTOR_COUNT
 
 
-    ; xchg bx, bx
-
     cmp ecx, edx
     jle .load_loop
 .afterkernel:

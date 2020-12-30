@@ -69,6 +69,7 @@ mod interrupt;
 mod ipc;
 mod memory;
 mod multitasking;
+mod random;
 mod services;
 mod syscall;
 mod syslog;

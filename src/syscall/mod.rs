@@ -119,6 +119,22 @@ fn syscall(
                     _ => unimplemented!("OutOfMemory case not implmented yet"),
                 }
             },
+            SC::get_random => {
+                let (buf_len, buf_ptr, _, _) = rsc.args;
+                let buf_ptr = VirtAddr::new(buf_ptr);
+                if let Some((area, slice)) =
+                    unsafe { m.process_slice_mut(process, buf_len, buf_ptr) }
+                {
+                    crate::random::fill_bytes(slice);
+                    unsafe { m.unmap_area(area) };
+                    m.free_virtual_area(area);
+                    SyscallResult::Continue(Ok(0))
+                } else {
+                    SyscallResult::Terminate(process::ProcessResult::Failed(
+                        process::Error::Pointer(buf_ptr),
+                    ))
+                }
+            },
             SC::exec => {
                 let (image_len, image_ptr, _, _) = rsc.args;
                 let image_ptr = VirtAddr::new(image_ptr);

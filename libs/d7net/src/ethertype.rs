@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 #[repr(u16)]
 pub enum EtherType {
     Ipv4 = 0x0800,
-    ARP = 0x0806,
+    Arp = 0x0806,
     WakeOnLan = 0x0842,
     SLPP = 0x8102,
     Ipv6 = 0x86dd,

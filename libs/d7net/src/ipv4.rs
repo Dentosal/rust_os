@@ -22,10 +22,11 @@ impl Packet {
         }
     }
 
-    /// https://en.wikipedia.org/wiki/Address_Resolution_Protocol#Packet_structure
+    /// Fixes header fields regarding body as necessary
     pub fn to_bytes(self) -> Vec<u8> {
         let mut result = Vec::new();
-        todo!();
+        result.extend(&self.header.to_bytes(self.payload.len()));
+        result.extend(&self.payload);
         result
     }
 }
@@ -64,9 +65,50 @@ impl Header {
         }
     }
 
-    pub fn to_bytes(self) -> Vec<u8> {
+    pub fn to_bytes(self, payload_len: usize) -> Vec<u8> {
+        assert!(payload_len <= (u16::MAX as usize));
         let mut result = Vec::new();
-        todo!();
+        // Version 4, IHL 20 (no options)
+        result.push(0b0100_0101u8);
+        result.push(self.dscp_and_ecn);
+        result.extend(&(20 + (payload_len as u16)).to_be_bytes());
+        result.extend(&self.identification.to_be_bytes());
+        result.extend(&self.flags_and_frament.to_be_bytes());
+        result.push(self.ttl);
+        result.push(self.protocol as u8);
+        result.extend(&0u16.to_be_bytes()); // Checksum placeholder
+        result.extend(&self.src_ip.0);
+        result.extend(&self.dst_ip.0);
+
+        let checksum_bytes = crate::checksum::checksum_be(result.iter());
+        result[10..12].copy_from_slice(&checksum_bytes);
+
         result
+    }
+
+    /// Pseudo-header for encapsulated protocol (e.g. TCP or UDP) checksum computation
+    /// https://en.wikipedia.org/wiki/User_Datagram_Protocol#IPv4_pseudo_header
+    pub fn pseudo_header_bytes(&self, payload_len: u16) -> Vec<u8> {
+        let mut result = Vec::new();
+        result.extend(&self.src_ip.0);
+        result.extend(&self.dst_ip.0);
+        result.push(0u8);
+        result.push(self.protocol as u8);
+        result.extend(&payload_len.to_be_bytes());
+        result
+    }
+
+    /// New header with sensible default settings
+    pub fn new(protocol: IpProtocol, src_ip: Ipv4Addr, dst_ip: Ipv4Addr) -> Self {
+        Self {
+            dscp_and_ecn: 0,
+            payload_len: 0,
+            identification: 0,
+            flags_and_frament: 0,
+            ttl: 64,
+            protocol,
+            src_ip,
+            dst_ip,
+        }
     }
 }

@@ -418,6 +418,7 @@ impl RTL8139 {
 
             if status.contains(IntFlags::TXOK) {
                 log::info!("tx complete");
+                println!("TX OK");
             }
 
             if status.contains(IntFlags::TXERR) {
@@ -459,7 +460,6 @@ impl RTL8139 {
                 r_isr.write(value);
                 value
             });
-            println!("V = {:?}", status);
         }
 
         received_packets

@@ -15,35 +15,40 @@ panic = "abort"
 panic = "abort"
 
 [dependencies]
-rlibc = "*"                     # Raw libc
-spin = "0.5"                    # Spinlocks
-cpuio = "0.2.0"                 # Cpu port IO
-bitflags = "1.2"                # Bitflags
-bit_field = "0.10.0"            # Bit fields
-volatile = "0.2.6"              # Volatile read and write functions
-static_assertions = "1.1"       # Compile time assertions
-pinecone = "0.2"                # Message format for process IO
-log = "0.4"                     # Logging macros
+rlibc = "*"
+spin = "0.5"
+cpuio = "0.2.0"
+bitflags = "1.2"
+bit_field = "0.10.0"
+volatile = "0.2.6"
+static_assertions = "1.1"
+pinecone = "0.2"
+log = "0.4"
 
-[dependencies.hashbrown]        # HashMap for no_std contexts
+[dependencies.hashbrown]
 version = "0.7"
 features = ["nightly", "inline-more", "serde"]
 
-[dependencies.serde]            # Serde
+[dependencies.serde]
 version = "1.0"
 default-features = false
 features = ["alloc", "derive"]
 
-[dependencies.serde_json]       # JSON support
+[dependencies.serde_json]
 version = "1.0"
 default-features = false
 features = ["alloc"]
 
-[dependencies.lazy_static]      # Non-const_fn static intialization
+[dependencies.rand]
+version = "0.7"
+default-features = false
+features = ["alloc", "small_rng"]
+
+[dependencies.lazy_static]
 version = "1.4"
 features = ["spin_no_std"]
 
-[dependencies.x86_64]           # x86-64 instructions and data structures
+[dependencies.x86_64]
 git = "https://github.com/Dentosal/x86_64"
 features = ["use-serde"]
 

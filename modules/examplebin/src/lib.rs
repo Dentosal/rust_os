@@ -4,49 +4,34 @@
 #![feature(allocator_api)]
 #![deny(unused_must_use)]
 
-use libd7::{
-    // attachment::*,
-    // console::Console,
-    // fs::{list_dir, File},
-    // process::Process,
-    syscall,
-    // net::{tcp, d7net::*},
-};
-
 #[macro_use]
 extern crate alloc;
+
+#[macro_use]
+extern crate libd7;
+
+use libd7::{
+    net::{d7net::*, tcp::TcpListener},
+    syscall,
+};
 
 use alloc::prelude::v1::*;
 
 #[no_mangle]
-fn main() -> u64 {
+fn main() {
     let pid = syscall::get_pid();
 
-    // let tcp_server = tcp::Socket::bind(SocketAddr {
-    //     host: IpAddr::V4(Ipv4Addr([0,0,0,0])),
-    //     port: 22,
-    // }).expect("Could not open socket");
+    let tcp_server =
+        TcpListener::listen(IpAddr::V4(Ipv4Addr::ZERO), 80).expect("Could not open socket");
 
-    loop {}
+    loop {
+        let conn = tcp_server.accept().unwrap();
+        println!("New connection from {:?}", conn.remote());
 
-    // // Console
-    // let mut console = Console::open(
-    //     "/dev/console",
-    //     "/mnt/staticfs/keycode.json",
-    //     "/mnt/staticfs/keymap.json",
-    // )
-    // .unwrap();
-    // loop {
-    //     syscall::debug_print(&format!("Input test:"));
-    //     let line = console.read_line().unwrap();
-    //     syscall::debug_print(&format!("Line {:?}", line));
-    //     if line == "exit" {
-    //         break;
-    //     } else {
-    //         let dirlist = list_dir("/net").unwrap();
-    //         syscall::debug_print(&format!("/net: {:?}", dirlist));
-    //     }
-    // }
+        let bytes = conn.receive().unwrap();
+        let msg = String::from_utf8(bytes).unwrap();
+        println!("Message {:?}", msg);
 
-    // 0
+        conn.send(&"Hello, client!\n".as_bytes()).unwrap();
+    }
 }

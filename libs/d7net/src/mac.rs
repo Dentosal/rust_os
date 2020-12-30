@@ -1,4 +1,3 @@
-use alloc::prelude::v1::*;
 use core::fmt;
 use serde::{Deserialize, Serialize};
 
@@ -19,13 +18,10 @@ impl MacAddr {
 
 impl fmt::Debug for MacAddr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "MacAddr({:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x})",
-            self.0[0],
-            self.0[1],
-            self.0[2],
-            self.0[3],
-            self.0[4],
-            self.0[5],
+        write!(
+            f,
+            "MacAddr({:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x})",
+            self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5],
         )
     }
 }

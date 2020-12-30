@@ -14,9 +14,16 @@ panic = "abort"
 [profile.release]
 panic = "abort"
 
+[dependencies]
+spin = "0.5"
+
 [dependencies.hashbrown]
 version = "0.7"
 features = ["nightly", "inline-more", "serde"]
+
+[dependencies.lazy_static]
+version = "1.4"
+features = ["spin_no_std"]
 
 [dependencies.libd7]
 version = "*"

@@ -5,7 +5,7 @@ System call reference
 
 Numbers| Description
 -------|-----------------
-0x0X   | Misc essentials/utilities for the current process calls
+0x0X   | Misc essentials/utilities
 0x30   | Process control
 0x50   | Scheduler
 0x70   | IPC
@@ -21,6 +21,7 @@ Number | Name              | Arguments (logical)   | On success  | Short descrip
 0x01   | get_pid           |                       | pid         | Get pid of the calling process
 0x02   | debug_print       | **string**            | -           | Print a UTF-8 string to the kernel terminal
 0x03   | mem_set_size      | total_bytes           | total_bytes | Set memory size, rounds up to page size
+0x04   | get_random        | **buffer**            | -           | (unimpl) Fill **buffer** with random bytes
 0x30   | exec              | **image**             | pid         | Execute a file from an elf image
 0x50   | sched_yield       | -                     | -           | Yield control to schedule next process
 0x51   | sched_sleep_ns    | ns                    | -           | Sleep specified number of nanoseconds

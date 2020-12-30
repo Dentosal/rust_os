@@ -10,6 +10,6 @@ Coming soon: UDP, IPv6, DHCP, DNS
 
 ## Unsupported by design
 
-* IPv4 Options fields are not supported
-* Only the most commonly used TCP Options fields are supported
+* IPv4/IPv6 Options fields are not supported
+* Only the most commonly used TCP Options fields are supported (deserialization only)
 * TCP Urgency fields are not supported

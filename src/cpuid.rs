@@ -33,24 +33,20 @@ pub fn cpu_brand() -> String {
     result.trim().to_owned()
 }
 
-fn run_feature_checks(_ecx: u32, _edx: u32) {
-    // TODO
-}
-
 pub fn init() {
+    let ebx: u32;
     let ecx: u32;
     let edx: u32;
     unsafe {
         // CPUID_GETFEATURES
         asm!(
             "xor ecx, ecx; xor edx, edx; mov eax, 1; cpuid"
-            : "={ecx}"(ecx), "={edx}"(edx)
+            : "={ecx}"(ebx), "={ecx}"(ecx), "={edx}"(edx)
             :
-            : "eax", "ebx"
+            : "eax"
             : "intel", "volatile"
         );
     }
     log::debug!("CPU: {}", cpu_brand());
-    log::debug!("CPU: FEATURE BITS: {:b} {:b}", ecx, edx);
-    run_feature_checks(ecx, edx);
+    log::debug!("CPU: FEATURE BITS: {:b} {:b} {:b}", ebx, ecx, edx);
 }

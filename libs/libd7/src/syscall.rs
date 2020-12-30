@@ -72,6 +72,17 @@ pub fn debug_print(s: &str) {
     }
 }
 
+/// This system call never fails
+pub fn get_random(buffer: &mut [u8]) {
+    unsafe {
+        syscall!(
+            SyscallNumber::get_random;
+            buffer.len() as u64, buffer.as_ptr() as u64
+        )
+        .expect("get_random syscall failed");
+    }
+}
+
 /// # Safety
 /// Can be used to confuse thé memory manager, and generally
 /// should not be used outside of this library.
@@ -154,7 +165,7 @@ pub fn ipc_deliver(topic: &str, data: &[u8]) -> SyscallResult<()> {
     }
 }
 
-/// Deliver a reply to a reliable message
+/// Deliver a reliable message without waiting for ack
 pub fn ipc_deliver_reply(topic: &str, data: &[u8]) -> SyscallResult<()> {
     let len = topic.len() as u64;
     let slice = topic.as_ptr() as u64;
@@ -216,7 +227,7 @@ pub fn ipc_select(sub_ids: &[SubscriptionId], nonblocking: bool) -> SyscallResul
 /// Read (and clear) kernel log buffer. Nonblocking.
 pub fn kernel_log_read(buffer: &mut [u8]) -> SyscallResult<usize> {
     if buffer.is_empty() {
-        panic!("Cannot ipc_select from an empty list");
+        panic!("Cannot kernel_log_read using an empty buffer");
     }
 
     unsafe {

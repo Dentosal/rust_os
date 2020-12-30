@@ -1,6 +1,5 @@
 // Lints
 #![forbid(private_in_public)]
-#![forbid(bare_trait_objects)]
 #![deny(unused_must_use)]
 #![deny(unused_assignments)]
 #![deny(clippy::missing_safety_doc)]
@@ -20,13 +19,12 @@
 
 mod allocator;
 
-// pub mod attachment;
-// pub mod console;
 pub mod ipc;
 pub mod net;
+pub mod prelude;
 pub mod process;
-pub mod syscall;
 pub mod service;
+pub mod syscall;
 
 use core::alloc::Layout;
 use core::panic::PanicInfo;

@@ -1,25 +1,23 @@
-#![allow(unreachable_code)] // TODO remove this
+use alloc::prelude::v1::*;
+use serde::de::DeserializeOwned;
+
+use crate::{
+    ipc::{self, ReliableSubscription},
+    syscall::SyscallResult,
+};
 
 pub use d7net;
 
+pub mod socket;
 pub mod tcp;
 // pub mod udp;
 
-use alloc::prelude::v1::*;
+use self::socket::{SocketDescriptor, SocketOptions};
 
-use d7net::SocketAddr;
-
-use crate::{syscall::SyscallResult};
-
-fn create_socket(addr: SocketAddr) -> SyscallResult<!> {
-    todo!()
-    // let f = File::open("/srv/net/newsocket")?;
-    // f.write_all(&pinecone::to_vec(&addr).unwrap())?;
-
-    // let mut buffer = [0u8; 10];
-    // let count = f.read(&mut buffer)?;
-    // assert!(0 < count && count < buffer.len());
-
-    // let socket_id: u64 = pinecone::from_bytes(&buffer[..count]).expect("Invalid socket id response");
-    // File::open(&format!("/srv/net/socket/{}", socket_id))
+fn create_socket_listen<P: DeserializeOwned>(
+    options: SocketOptions,
+) -> SyscallResult<(SocketDescriptor, ReliableSubscription<P>)> {
+    let desc: SocketDescriptor = ipc::request("netd/socket/listen", &options)?;
+    let sub = ReliableSubscription::<P>::exact(&desc.topic())?;
+    Ok((desc, sub))
 }

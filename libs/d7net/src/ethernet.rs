@@ -20,7 +20,6 @@ impl Frame {
         let mut result = Vec::new();
         result.extend(&self.header.to_bytes());
         result.extend(&self.payload);
-        // Return
         result
     }
 }
@@ -64,11 +63,14 @@ mod test {
         ];
 
         let frame_header = FrameHeader::from_bytes(&example);
-        assert_eq!(frame_header, FrameHeader {
-            dst_mac: MacAddr::from_bytes(&[0xff, 0xff, 0xff, 0xff, 0xff, 0xff]),
-            src_mac: MacAddr::from_bytes(&[1, 2, 3, 4, 5, 6]),
-            ethertype: EtherType::ARP,
-        });
+        assert_eq!(
+            frame_header,
+            FrameHeader {
+                dst_mac: MacAddr::from_bytes(&[0xff, 0xff, 0xff, 0xff, 0xff, 0xff]),
+                src_mac: MacAddr::from_bytes(&[1, 2, 3, 4, 5, 6]),
+                ethertype: EtherType::Arp,
+            }
+        );
 
         assert_eq!(frame_header.to_bytes(), example);
     }

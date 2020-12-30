@@ -1,6 +1,7 @@
 use num_enum::TryFromPrimitive;
 use serde::{Deserialize, Serialize};
 
+/// https://en.wikipedia.org/wiki/List_of_IP_protocol_numbers
 #[allow(non_camel_case_types)]
 #[derive(
     Debug,
@@ -155,7 +156,7 @@ pub enum IpProtocol {
     Mobility = 135,
     UDPLite = 136,
     MPLS_in_IP = 137,
-    manet = 138,
+    MANET = 138,
     HIP = 139,
     Shim6 = 140,
     WESP = 141,

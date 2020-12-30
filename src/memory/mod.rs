@@ -540,6 +540,27 @@ pub fn init() {
 
     let dma_allocator = unsafe { dma_allocator::Allocator::new() };
 
+    // Map all physical memory to the higher half
+    let a = PhysFrame::from_start_address(PhysAddr::zero()).unwrap();
+    let b = PhysFrame::containing_address(PhysAddr::new(memory_info.max_memory));
+    for frame in PhysFrame::range_inclusive(a, b) {
+        let f_u64 = frame.start_address().as_u64();
+        let page =
+            Page::from_start_address(VirtAddr::new(constants::HIGHER_HALF_START.as_u64() + f_u64))
+                .unwrap();
+
+        unsafe {
+            page_map
+                .map_to(
+                    PT_VADDR,
+                    page,
+                    frame,
+                    Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE,
+                )
+                .flush();
+        }
+    }
+
     let mem_ctrl = MemoryController {
         page_map,
         frame_allocator,
@@ -577,4 +598,15 @@ where F: FnMut(&mut MemoryController) -> T {
     } else {
         unreachable!("Memory controller missing");
     }
+}
+
+/// Convert PhysAddr to VirtAddr, only accessible in by the kernel,
+/// i.e. requires kernel page tables to be active
+pub fn phys_to_virt(offset: PhysAddr) -> VirtAddr {
+    VirtAddr::new(
+        constants::HIGHER_HALF_START
+            .as_u64()
+            .checked_add(offset.as_u64())
+            .expect("phys_to_virt overflow"),
+    )
 }

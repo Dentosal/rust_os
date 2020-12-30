@@ -48,6 +48,7 @@ macro_rules! e9_print {
             PORT_E9.write_fmt(format_args!(concat!($fmt, "\n"), $($arg)*)).unwrap()
         }
     );
+    ($fmt:expr) => (e9_print!($fmt,));
 }
 
 /**************************** BUFFER + SYSCALL *******************************/
@@ -58,11 +59,13 @@ lazy_static::lazy_static! {
 }
 
 pub fn syscall_read(buffer: &mut [u8]) -> usize {
+    e9_print!(">>>");
     let mut wal = WRITE_AHEAD_LOG.try_lock().unwrap();
     let count = wal.len().min(buffer.len());
     for (i, b) in wal.drain(..count).enumerate() {
         buffer[i] = b;
     }
+    e9_print!("<<<");
     count
 }
 
@@ -91,14 +94,14 @@ impl log::Log for SystemLogger {
             );
         }
         if level <= LEVEL_SCREEN {
-            if crate::memory::can_allocate() {
+            if crate::memory::can_allocate() && !crate::PANIC_ACTIVE.load(Ordering::SeqCst) {
                 let message = format!(
                     "{:5} {} - {}\n",
                     record.level(),
                     record.target(),
                     record.args()
                 );
-                let mut wal = WRITE_AHEAD_LOG.try_lock().unwrap();
+                let mut wal = WRITE_AHEAD_LOG.try_lock().expect("WAL locked");
                 wal.extend(message.bytes());
             }
 

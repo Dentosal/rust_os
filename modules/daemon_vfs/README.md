@@ -1,0 +1,3 @@
+# `vfsd`
+
+Virtual filesystem daemon

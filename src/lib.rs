@@ -104,6 +104,7 @@ pub extern "C" fn rust_main() -> ! {
         let bytes = crate::initrd::read("serviced").expect("serviced missing from initrd");
         let elfimage = multitasking::process::load_elf(mem_ctrl, bytes);
         sched.spawn(mem_ctrl, elfimage);
+        log::trace!("{}", sched.debug_view_string());
     });
 
     // Wait until the next clock tick interrupt,

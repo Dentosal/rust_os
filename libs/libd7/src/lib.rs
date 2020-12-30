@@ -13,6 +13,7 @@
 #![feature(allocator_api)]
 #![feature(slice_ptr_get)]
 #![feature(nonnull_slice_from_raw_parts)]
+#![feature(asm)]
 #![feature(llvm_asm)]
 #![feature(const_fn)]
 #![feature(integer_atomics)]
@@ -76,11 +77,11 @@ static HEAP_ALLOCATOR: allocator::GlobAlloc =
 #[alloc_error_handler]
 fn out_of_memory(_: Layout) -> ! {
     unsafe {
-        llvm_asm!("xchg bx, bx"::::"intel","volatile");
-        llvm_asm!("cli"::::"intel","volatile");
-        llvm_asm!("hlt"::::"intel","volatile");
+        asm!("xchg bx, bx");
+        loop {
+            asm!("cli; hlt");
+        }
     }
-    loop {}
 }
 
 // Output macros

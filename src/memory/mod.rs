@@ -499,7 +499,7 @@ pub fn init() {
     let elf_metadata = unsafe { elf_parser::parse_kernel_elf() };
 
     // Receive memory map before it's overwritten
-    let memory_map = map::load_memory_map();
+    let memory_info = map::load_memory_map();
 
     // initalize paging system
     unsafe {
@@ -511,7 +511,8 @@ pub fn init() {
     let mut page_map = unsafe { paging::init(elf_metadata) };
 
     // Initialize frame allocator
-    let mut frame_allocator = unsafe { self::frame_allocator::Allocator::new(memory_map) };
+    let mut frame_allocator =
+        unsafe { self::frame_allocator::Allocator::new(memory_info.allocatable) };
 
     // Identity map heap
     let heap_start_page = pg::Page::containing_address(VirtAddr::new(HEAP_START));

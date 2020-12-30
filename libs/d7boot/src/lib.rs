@@ -11,6 +11,7 @@
 #![deny(safe_packed_borrows)]
 #![deny(unused_must_use)]
 // Unstable features
+#![feature(asm)]
 #![feature(llvm_asm)]
 #![feature(lang_items)]
 #![feature(naked_functions)]
@@ -149,7 +150,11 @@ pub unsafe extern "C" fn d7boot() {
 
     // Show message ('-> K') and jump to kernel
     llvm_asm!("mov rax, 0x0f4b0f200f3e0f2d; mov [0xb8000], rax" ::: "rax", "memory" : "volatile", "intel");
-    llvm_asm!(concat!("push ", 0x100_0000, "; ret") :::: "volatile", "intel"); // KERNEL_ENTRY_POINT
+    // Set rax = 0 to signal that this is the BSP i.e. cpu0
+    asm!(
+        concat!("push ", 0x100_0000, "; ret"),
+        in("rcx") 0
+    ); // KERNEL_ENTRY_POINT
     core::hint::unreachable_unchecked();
 }
 

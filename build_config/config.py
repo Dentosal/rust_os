@@ -321,7 +321,7 @@ def step_kernel_entry(root_dir) -> Step:
 def step_kernel_rs(root_dir) -> Step:
     return (
         Step(
-            requires={step_codegen},
+            requires={step_codegen, step_smp_ap_startup},
             cmd=cmd_cargo_xbuild(pdir=root_dir, target_json=root_dir / "d7os.json"),
             env={"RUSTFLAGS": "-g -C opt-level=s"},
         ),
@@ -380,6 +380,16 @@ def step_process_common(root_dir) -> Step:
         cmd=cmd_nasm(
             root_dir / "src/asm_misc/process_common.asm",
             root_dir / "build/process_common.bin",
+            format="bin",
+        ),
+    )
+
+def step_smp_ap_startup(root_dir) -> Step:
+    return Step(
+        requires={step_codegen},
+        cmd=cmd_nasm(
+            root_dir / "src/asm_misc/smp_ap_startup.asm",
+            root_dir / "build/smp_ap_startup.bin",
             format="bin",
         ),
     )

@@ -10,7 +10,7 @@ use x86_64::structures::paging::PageTableFlags as Flags;
 
 mod allocators;
 mod area;
-mod constants;
+pub mod constants;
 mod map;
 pub mod paging;
 pub mod prelude;
@@ -561,6 +561,7 @@ pub fn init() {
         }
     }
 
+    // Create centralized memory controller
     let mem_ctrl = MemoryController {
         page_map,
         frame_allocator,
@@ -574,6 +575,7 @@ pub fn init() {
         *guard = Some(mem_ctrl);
     }
 
+    // InitRD
     crate::initrd::init(elf_metadata);
 
     // Prepare a kernel stack for syscalls

@@ -1,7 +1,3 @@
-mod mapper;
-
-pub use self::mapper::PageMap;
-
 use x86_64::registers::control::{Cr0, Cr0Flags};
 use x86_64::registers::model_specific::{Efer, EferFlags};
 use x86_64::structures::paging as pg;
@@ -13,7 +9,11 @@ use crate::interrupt::idt;
 use crate::util::elf_parser::ELFData;
 
 use super::prelude::*;
-use super::{Page, PhysFrame};
+use super::{constants, Page, PhysFrame};
+
+mod mapper;
+
+pub use self::mapper::PageMap;
 
 pub unsafe fn enable_nxe() {
     Efer::update(|flags| flags.set(EferFlags::NO_EXECUTE_ENABLE, true))
@@ -58,11 +58,7 @@ pub unsafe fn init(elf_metadata: ELFData) -> PageMap {
 
     unsafe {
         new_table
-            .identity_map(
-                PT_VADDR,
-                lowmem_frame,
-                Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE,
-            )
+            .identity_map(PT_VADDR, lowmem_frame, Flags::PRESENT | Flags::WRITABLE)
             .ignore();
     }
 

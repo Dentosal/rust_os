@@ -1,9 +1,11 @@
-# Active
-
-* Make netd work again
-
 # Backlog
 
+* spin::Once seems to have some strange bug in v 0.7
+* Never map anything to virtual address zero
+* SMP support (multiple cores):
+    * Move kernel to use new static mappings for physical memory access
+    * Scheduler rewrite
+    * TLB Shootdown support
 * Convert system calls from (len, ptr) to (ptr, len).
 * System call and IPC topic access control
 * Move/copy disk drivers to own modules

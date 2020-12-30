@@ -6,17 +6,18 @@ use super::super::prelude::*;
 
 #[derive(Debug)]
 pub struct Stack {
-    pub top: PhysAddr,
-    pub bottom: PhysAddr,
+    pub top: VirtAddr,
+    pub bottom: VirtAddr,
 }
 
 impl Stack {
-    fn new(top: PhysAddr, bottom: PhysAddr) -> Stack {
+    fn new(top: VirtAddr, bottom: VirtAddr) -> Stack {
         assert!(top > bottom);
         Stack { top, bottom }
     }
 }
 
+/// Doesn't (need to) support deallocation
 pub struct StackAllocator {
     range: pg::page::PageRangeInclusive<pg::Size2MiB>,
 }
@@ -26,7 +27,8 @@ impl StackAllocator {
         Self { range }
     }
 
-    /// Requires that the kernel page table is active
+    /// Allocates a new stack, including a guard page, and maps it.
+    /// Requires that the kernel page table is active.
     pub fn alloc_stack<A: pg::FrameAllocator<pg::Size2MiB>>(
         &mut self, page_map: &mut PageMap, frame_allocator: &mut A, size_in_pages: usize,
     ) -> Option<Stack> {
@@ -72,11 +74,7 @@ impl StackAllocator {
 
             // Create a new stack
             let new_top = end.start_address() + Page::SIZE;
-            // TODO: Check that virtual and physical addresses match, or map
-            Some(Stack::new(
-                PhysAddr::new(new_top.as_u64()),
-                PhysAddr::new(start.start_address().as_u64()),
-            ))
+            Some(Stack::new(new_top, start.start_address()))
         } else {
             // Not enough pages
             None

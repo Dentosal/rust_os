@@ -32,11 +32,16 @@ Begin    | Size  | Content
 
 Using 2MiB pages here.
 
+All rwx flags are on for addresses < 0x20_0000, as the AP trampoline requires.
+
 Begin      | Size     |rwx| Content
 -----------|----------|---|--------
-          0|      1000|rw-| IDT Descriptors (all used) (0x100 entries * 16 bytes per entry)
-       1000|       100|rw-| GDT (some used, and after that reserved)
-     2_0000|     70000|rw-| DMA / VirtIO memory buffers (requires "low" memory)
+          0|      1000|rwx| IDT Descriptors (all used) (0x100 entries * 16 bytes per entry)
+       2000|      1000|rwx| SMP AP startup trampoline
+       4000| 40*ncores|rwx| GDTs (0x40 =  64 bytes per cpu core)
+       6000| 68*ncores|rwx| TSSs (0x68 = 104 bytes per cpu core)
+       a000|       100|rwx| Pointer to function that handles in-process interrupts
+     4_0000|    4_0000|rw-| DMA / VirtIO memory buffers (requires "low" memory)
      8_0000|         ?|---| Reserved for EBDA, ROM, Video Memory and other stuff there.
    100_0000|         ?|+++| Kernel + InitRD (Size around 0x800_0000, each section is page_aligned)
   1000_0000|  100_0000|rw-| Page tables, (0x200_000 used and after that reserved)
@@ -47,6 +52,8 @@ TODO: Bump allocator
 
 ## Virtual address space
 
+Only for the kernel, of course. Processes have a separate layout.
+
 Begin       | Size    |rwx| Content
 ------------|---------|---|---------
            0| 200_000 |r--| IDT, GDT, Global pointers, DMA buffers
@@ -55,6 +62,7 @@ Begin       | Size    |rwx| Content
   10_000_000| 200_000 |rw-| Kernel page tables, identity mapped
   11_000_000| 200_000 |rw-| System call kernel stack (grows downwards)
  100_000_000|       ? |???| Allocated virtual memory for processes
+HIGHER_HALF | ?       |rw-| Physical memory mapped here for fast and convenient access
 
 # Interrupts
 
@@ -62,7 +70,9 @@ Numbers     | Description
 ------------|-------------
 0x00..=0x1f | Standard intel interrupts
 0x20..=0x2f | PIC interrupts
+0x30        | LAPIC timer
 0xd7        | System call
+0xdd        | System panic (IPI)
 
 # Process Virtual Memory Layout
 

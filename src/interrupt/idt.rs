@@ -21,8 +21,10 @@ pub struct Descriptor {
 }
 
 impl Descriptor {
-    pub fn new(present: bool, pointer: u64, ring: PrivilegeLevel, ist_index: u8) -> Descriptor {
-        let ist_offset = ist_index + 1;
+    pub fn new(
+        present: bool, pointer: u64, ring: PrivilegeLevel, ist_index: Option<u8>,
+    ) -> Descriptor {
+        let ist_offset = if let Some(i) = ist_index { i + 1 } else { 0 };
         assert!(ist_offset < 0b1000);
         assert!(present || (pointer == 0 && ring == Ring0)); // pointer and ring must be 0 if not present
         // example options: present => 1, ring 0 => 00, interrupt gate => 0, interrupt gate => 1110
@@ -33,23 +35,6 @@ impl Descriptor {
             pointer_low: (pointer & 0xffff) as u16,
             gdt_selector: GDT_SELECTOR_CODE,
             ist_offset,
-            options,
-            pointer_middle: ((pointer & 0xffff_0000) >> 16) as u16,
-            pointer_high: ((pointer & 0xffff_ffff_0000_0000) >> 32) as u32,
-            reserved: 0,
-        }
-    }
-
-    pub fn new_no_ist(present: bool, pointer: u64, ring: PrivilegeLevel) -> Descriptor {
-        assert!(present || (pointer == 0 && ring == Ring0)); // pointer and ring must be 0 if not present
-        // example options: present => 1, ring 0 => 00, interrupt gate => 0, interrupt gate => 1110
-        let options: u8 =
-            0b0_00_0_1110 | ((ring as u8) << 5) | ((if present { 1 } else { 0 }) << 7);
-
-        Descriptor {
-            pointer_low: (pointer & 0xffff) as u16,
-            gdt_selector: GDT_SELECTOR_CODE,
-            ist_offset: 0,
             options,
             pointer_middle: ((pointer & 0xffff_0000) >> 16) as u16,
             pointer_high: ((pointer & 0xffff_ffff_0000_0000) >> 32) as u32,

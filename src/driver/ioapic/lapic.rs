@@ -1,0 +1,78 @@
+//! Processor-local APIC
+
+use core::ptr;
+use x86_64::VirtAddr;
+
+use crate::driver::acpi::ACPI_DATA;
+use crate::memory;
+use crate::smp::ProcessorId;
+
+mod reg {
+    #[derive(Debug, Clone, Copy)]
+    pub struct LapicReg(u64);
+    impl LapicReg {
+        pub fn get(self) -> u64 {
+            self.0
+        }
+    }
+
+    pub const LAPIC_ID: LapicReg = LapicReg(0x20);
+    pub const LAPIC_VERSION: LapicReg = LapicReg(0x30);
+    pub const TASK_PRIORITY: LapicReg = LapicReg(0x80);
+    pub const ARBITRATION_PRIORITY: LapicReg = LapicReg(0x90);
+    pub const PROCESSOR_PRIORITY: LapicReg = LapicReg(0xa0);
+    pub const END_OF_INTERRUPT: LapicReg = LapicReg(0xb0);
+    pub const REMOTE_READ: LapicReg = LapicReg(0xc0);
+    pub const LOCAL_DESTINATION: LapicReg = LapicReg(0xd0);
+    pub const DESTINATION_FORMAT: LapicReg = LapicReg(0xe0);
+    pub const SPURIOUS_IV: LapicReg = LapicReg(0xf0);
+    pub const ISR_BASE: LapicReg = LapicReg(0x100);
+    pub const TRIGGER_MODE_BASE: LapicReg = LapicReg(0x180);
+    pub const INTERRUPT_REQUEST: LapicReg = LapicReg(0x200);
+    pub const ERROR_STATUS: LapicReg = LapicReg(0x280);
+    pub const LVT_CMCI: LapicReg = LapicReg(0x2f0);
+    pub const INTERRUPT_COMMAND_BASE: LapicReg = LapicReg(0x300);
+    pub const LVT_TIMER: LapicReg = LapicReg(0x320);
+    pub const LVT_THERMAL_SENSOR: LapicReg = LapicReg(0x330);
+    pub const LVT_PM_COUNTERS: LapicReg = LapicReg(0x340);
+    pub const LVT_LINT0: LapicReg = LapicReg(0x350);
+    pub const LVT_LINT1: LapicReg = LapicReg(0x360);
+    pub const LVT_ERROR: LapicReg = LapicReg(0x370);
+    pub const TIMER_INITIAL_COUNT: LapicReg = LapicReg(0x380);
+    pub const TIMER_CURRENT_COUNT: LapicReg = LapicReg(0x390);
+    pub const TIMER_DIVIDE_CONFIG: LapicReg = LapicReg(0x3e0);
+}
+
+/// Address of the processor-local APIC
+pub fn addr() -> VirtAddr {
+    let phys_addr = ACPI_DATA
+        .r#try()
+        .expect("acpi::init not called")
+        .local_apic_addr;
+
+    memory::phys_to_virt(phys_addr)
+}
+
+pub fn read_u32(offset: reg::LapicReg) -> u32 {
+    unsafe { ptr::read_volatile((addr().as_u64() + offset.get()) as *const u32) }
+}
+
+pub fn write_u32(offset: reg::LapicReg, value: u32) {
+    unsafe { ptr::write_volatile((addr().as_u64() + offset.get()) as *mut u32, value) };
+}
+
+/// Get APIC ID of the current CPU
+pub fn processor_id() -> ProcessorId {
+    ProcessorId((read_u32(reg::LAPIC_ID) >> 24) as u8)
+}
+
+/// Tell LAPIC that the interrupt has been processed
+pub fn write_eoi() {
+    write_u32(reg::END_OF_INTERRUPT, 0);
+}
+
+pub fn configure_timer(vector_number: u8) {
+    // vector number, TSC-deadline mode, and unmask
+    write_u32(reg::LVT_TIMER, (vector_number as u32) | 0x40000);
+    log::trace!("TSC-deadline timer configured");
+}

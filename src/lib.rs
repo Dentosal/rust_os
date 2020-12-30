@@ -70,9 +70,12 @@ mod ipc;
 mod memory;
 mod multitasking;
 mod services;
+mod smp;
 mod syscall;
 mod syslog;
 mod time;
+
+use self::multitasking::SCHEDULER;
 
 /// The kernel main function
 #[cfg(not(test))]
@@ -86,8 +89,14 @@ pub extern "C" fn rust_main() -> ! {
     interrupt::init();
     memory::init();
     interrupt::init_after_memory();
-    driver::pit::init();
     cpuid::init();
+    driver::uart::init();
+    driver::tsc::init();
+    unsafe {
+        driver::acpi::init();
+        driver::ioapic::init_bsp();
+        smp::start_all();
+    }
     services::init();
 
     rreset!();
@@ -97,7 +106,6 @@ pub extern "C" fn rust_main() -> ! {
 
     // Start service daemon
     crate::memory::configure(|mut mem_ctrl| {
-        use crate::multitasking::SCHEDULER;
         let mut sched = SCHEDULER.lock();
 
         let bytes = crate::initrd::read("serviced").expect("serviced missing from initrd");
@@ -105,13 +113,41 @@ pub extern "C" fn rust_main() -> ! {
         sched.spawn(mem_ctrl, elfimage);
     });
 
-    // Wait until the next clock tick interrupt,
-    // after that the process scheduler takes over
+    // Hand over to the process scheduler
+    multitasking::SCHEDULER_ENABLED.store(true, Ordering::SeqCst);
     unsafe {
-        interrupt::enable_external_interrupts();
-        loop {
-            llvm_asm!("hlt")
-        }
+        asm!("int 0x30");
+    }
+    panic!("Returned from the scheduler");
+}
+
+/// Used by new AP core for setting up a stack
+#[cfg(not(test))]
+#[no_mangle]
+pub unsafe extern "C" fn rust_ap_get_stack() -> u64 {
+    smp::ap_take_stack()
+}
+/// Main function for other cores
+#[cfg(not(test))]
+#[no_mangle]
+pub extern "C" fn rust_ap_main() -> ! {
+    log::info!("AP core online, getting id...");
+    let processor_id = smp::current_processor_id();
+    log::info!("AP core {} online", processor_id);
+
+    interrupt::init_smp_ap();
+    log::info!("Interrupt handler initialized");
+
+    driver::ioapic::per_processor_init();
+    log::info!("APIC initialized");
+
+    smp::ap_mark_ready();
+    log::info!("AP core {} ready", processor_id);
+
+    log::trace!("INTO @ {}", self::driver::ioapic::lapic::processor_id());
+    loop {
+        self::driver::tsc::sleep_ns(1_000_000_000);
+        // log::info!("TICK @ {}", self::driver::ioapic::lapic::processor_id());
     }
 }
 
@@ -126,9 +162,9 @@ static HEAP_ALLOCATOR: d7alloc::GlobAlloc = d7alloc::GlobAlloc::new(d7alloc::Bum
 #[cfg(not(test))]
 fn out_of_memory(_: Layout) -> ! {
     unsafe {
-        llvm_asm!("cli"::::"intel","volatile");
+        asm!("cli");
         panic_indicator!(0x4f4D4f21); // !M as in "No memory"
-        llvm_asm!("jmp panic_stop"::::"intel","volatile");
+        asm!("jmp panic_stop");
     }
     loop {}
 }
@@ -146,30 +182,32 @@ static PANIC_ACTIVE: AtomicBool = AtomicBool::new(false);
 extern "C" fn panic(info: &PanicInfo) -> ! {
     unsafe {
         bochs_magic_bp!();
-        llvm_asm!("cli"::::"intel","volatile");
+        asm!("cli");
         panic_indicator!(0x4f214f21); // !!
 
         if !PANIC_ACTIVE.load(Ordering::SeqCst) {
             PANIC_ACTIVE.store(true, Ordering::SeqCst);
             panic_indicator!(0x4f234f21); // !#
 
-            rforce_unlock!();
-
             if let Some(location) = info.location() {
                 log::error!(
-                    "\nKernel Panic: file: '{}', line: {}",
+                    "Kernel Panic: file: '{}', line: {}",
                     location.file(),
                     location.line()
                 );
             } else {
-                log::error!("\nKernel Panic: Location unavailable");
+                log::error!("Kernel Panic: Location unavailable");
             }
             if let Some(msg) = info.message() {
                 log::error!("  {:?}", msg);
             } else {
                 log::error!("  Info unavailable");
             }
-            llvm_asm!("jmp panic_stop"::::"intel","volatile");
+
+            // Stop other cores as well
+            driver::ioapic::broadcast_ipi(false, 0xdd);
+
+            asm!("jmp panic_stop");
         } else {
             panic_indicator!(0x4f254f21); // !%
         }

@@ -1,8 +1,8 @@
-# GDT & IDT
+# GDT & TSS & IDT
 [[constant]]
 name = "GDT_ADDR"
 type = "PhysAddr"
-value = "0x1000"
+value = "0x4000"
 
 [[constant]]
 name = "GDT_SELECTOR_ZERO"
@@ -18,6 +18,11 @@ value = "0x08"
 name = "GDT_SELECTOR_DATA"
 type = "PhysAddr"
 value = "0x10"
+
+[[constant]]
+name = "TSS_ADDR"
+type = "PhysAddr"
+value = "0x6000"
 
 [[constant]]
 name = "IDT_ADDR"

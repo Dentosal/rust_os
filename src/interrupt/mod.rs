@@ -19,6 +19,7 @@ mod macros;
 mod gdt;
 mod handler;
 pub mod idt;
+mod tss;
 
 use self::handler::*;
 
@@ -73,10 +74,11 @@ pub unsafe fn write_process_dts(dst: VirtAddr, idt_table: VirtAddr) {
         let table_offset = index as u64 * call_instruction_size; // Jump table offset
         ptr::write(
             (dst + index * idt_desc_size).as_mut_ptr(),
-            idt::Descriptor::new_no_ist(
+            idt::Descriptor::new(
                 true,
                 idt_table.as_u64() + table_offset,
                 PrivilegeLevel::Ring0,
+                None, // TODO: set kernel stack here?
             ),
         );
     }
@@ -90,26 +92,34 @@ pub unsafe fn write_process_dts(dst: VirtAddr, idt_table: VirtAddr) {
 
 pub fn init() {
     let mut handlers: [idt::Descriptor; idt::ENTRY_COUNT] =
-        [idt::Descriptor::new(false, 0, PrivilegeLevel::Ring0, 0); idt::ENTRY_COUNT];
+        [idt::Descriptor::new(false, 0, PrivilegeLevel::Ring0, None); idt::ENTRY_COUNT];
 
     // Bind exception handlers
-    handlers[0x00] = simple_exception_handler!("Divide-by-zero Error");
+    handlers[0x00] = simple_exception_handler!("Divide-by-zero Error", None);
     handlers[0x03] = exception_handler!(exception_bp);
     handlers[0x06] = exception_handler!(exception_ud);
-    handlers[0x08] = exception_handler_with_error_code!(exception_df, PrivilegeLevel::Ring0, 5);
+    handlers[0x08] =
+        exception_handler_with_error_code!(exception_df, PrivilegeLevel::Ring0, Some(0));
     handlers[0x0b] = exception_handler_with_error_code!(exception_snp);
     handlers[0x0d] = exception_handler_with_error_code!(exception_gpf);
     handlers[0x0e] = exception_handler_with_error_code!(exception_pf);
-    handlers[0x20] = irq_handler_switch!(exception_irq0);
-    handlers[0x21] = irq_handler!(exception_irq1);
-    handlers[0x27] = irq_handler!(exception_irq7);
-    handlers[0x29] = irq_handler!(exception_irq9);
-    handlers[0x2a] = irq_handler!(exception_irq10);
-    handlers[0x2b] = irq_handler!(exception_irq11);
-    handlers[0x2e] = irq_handler!(exception_irq14);
-    handlers[0x2f] = irq_handler!(exception_irq15);
+    handlers[0x20] = irq_handler!(exception_irq0, None);
+    handlers[0x21] = irq_handler!(exception_irq1, None);
+    handlers[0x27] = irq_handler!(exception_irq7, None);
+    handlers[0x29] = irq_handler!(exception_irq9, None);
+    handlers[0x2a] = irq_handler!(exception_irq10, None);
+    handlers[0x2b] = irq_handler!(exception_irq11, None);
+    handlers[0x2e] = irq_handler!(exception_irq14, None);
+    handlers[0x2f] = irq_handler!(exception_irq15, None);
+    handlers[0x30] = irq_handler_switch!(exception_tsc_deadline, None);
+    handlers[0xdd] = exception_handler!(ipi_panic);
 
     for index in 0..idt::ENTRY_COUNT {
+        log::trace!(
+            "WRITE IDT {:x} @ {:04x}",
+            index,
+            idt::ADDRESS + index * mem::size_of::<idt::Descriptor>()
+        );
         unsafe {
             ptr::write_volatile(
                 (idt::ADDRESS + index * mem::size_of::<idt::Descriptor>()) as *mut _,
@@ -118,6 +128,17 @@ pub fn init() {
         }
     }
 
+    load_idt();
+}
+
+/// SMP AP just reuses the kernel IVT,
+/// but has own GDT and TSS
+pub fn init_smp_ap() {
+    load_idt();
+    init_gdt_and_tss();
+}
+
+fn load_idt() {
     log::debug!("Loading new IDT...");
 
     unsafe {
@@ -130,11 +151,19 @@ pub fn init() {
     log::debug!("Enabled.");
 }
 
-static GDT: Once<gdt::GdtBuilder> = Once::new();
-static TSS: Once<TaskStateSegment> = Once::new();
-
+/// Called on BSP after the memory module (i.e. paging) has been initialized
 pub fn init_after_memory() {
-    log::debug!("Swithcing to new GDT and TSS...");
+    init_gdt_and_tss();
+    unsafe {
+        // Write syscall address
+        ptr::write(
+            0xa000u64 as *mut u64, // TODO: constant
+            handler::process_interrupt as *const u64 as u64,
+        );
+    }
+}
+
+fn init_gdt_and_tss() {
     // Initialize TSS
     let double_fault_stack = memory::configure(|mem_ctrl: &mut MemoryController| {
         mem_ctrl
@@ -142,54 +171,27 @@ pub fn init_after_memory() {
             .expect("could not allocate double fault stack")
     });
 
-    let tss = TSS.call_once(|| {
+    let tss = tss::store({
         let mut tss = TaskStateSegment::new();
-        tss.interrupt_stack_table[gdt::DOUBLE_FAULT_IST_INDEX] =
-            VirtAddr::new(double_fault_stack.top.as_u64());
+        tss.interrupt_stack_table[gdt::DOUBLE_FAULT_IST_INDEX] = double_fault_stack.top;
         tss
     });
 
-    let mut code_selector: MaybeUninit<SegmentSelector> = MaybeUninit::uninit();
-    let mut tss_selector: MaybeUninit<SegmentSelector> = MaybeUninit::uninit();
+    let kernel_cs_desc = gdt::Descriptor::kernel_code_segment();
+    let tss_desc = gdt::Descriptor::tss_segment(&tss);
 
-    let gdt = GDT.call_once(|| {
-        let mut gdt = unsafe { gdt::GdtBuilder::new(VirtAddr::new_unsafe(0x1000)) };
-        code_selector.write(gdt.add_entry(gdt::Descriptor::kernel_code_segment()));
-        tss_selector.write(gdt.add_entry(gdt::Descriptor::tss_segment(&tss)));
-        gdt
-    });
+    let mut gdt_builder = gdt::create_new();
+    let kernel_cs_sel = gdt_builder.add_entry(kernel_cs_desc);
+    let tss_sel = gdt_builder.add_entry(tss_desc);
 
+    log::debug!("Swithcing to new GDT and TSS...");
     unsafe {
         // load GDT
-        gdt.load();
+        gdt_builder.load();
         // reload code segment register
-        set_cs(code_selector.assume_init());
+        set_cs(kernel_cs_sel);
         // load TSS
-        load_tss(tss_selector.assume_init());
-        // Write syscall address
-        ptr::write(
-            0x2000u64 as *mut u64,
-            handler::process_interrupt as *const u64 as u64,
-        );
+        load_tss(tss_sel);
     }
-}
-
-pub fn enable_external_interrupts() {
-    log::info!("Enabling external interrupts");
-
-    unsafe {
-        llvm_asm!("sti" :::: "volatile", "intel");
-    }
-
-    log::info!("Done.");
-}
-
-pub fn disable_external_interrupts() {
-    log::info!("Disabling external interrupts");
-
-    unsafe {
-        llvm_asm!("cli" :::: "volatile", "intel");
-    }
-
-    log::info!("Done.");
+    log::debug!("Switch done");
 }

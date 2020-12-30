@@ -90,7 +90,7 @@ switch_to:
     iretq
 
 ; Kernel addresses
-%define interrupt_handler_ptr_addr 0x2000
+%define interrupt_handler_ptr_addr 0xa000
 %define page_table_physaddr 0x10_000_000
 %define kernel_syscall_stack 0x11_000_000
 %define kernel_syscall_stack_size 0x200_00

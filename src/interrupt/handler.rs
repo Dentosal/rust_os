@@ -1,17 +1,21 @@
+use core::sync::atomic::Ordering;
 use x86_64::structures::idt::{InterruptStackFrame, InterruptStackFrameValue, PageFaultErrorCode};
 use x86_64::{PhysAddr, VirtAddr};
 
 use crate::driver::pic;
-use crate::multitasking::{process, Process, ProcessId, ProcessSwitch, SCHEDULER};
+use crate::multitasking::{
+    process, Process, ProcessId, ProcessSwitch, SCHEDULER, SCHEDULER_ENABLED,
+};
+use crate::smp;
 use crate::syscall::RawSyscall;
-use crate::time;
 
 /// Breakpoint handler
 pub(super) unsafe fn exception_bp(stack_frame: &InterruptStackFrame) {
     rforce_unlock!();
     log::warn!(
-        "Breakpoint at {:?}\n{:?}",
+        "Breakpoint at {:?} (cpu {})\n{:?}",
         (*stack_frame).instruction_pointer,
+        smp::current_processor_id(),
         *stack_frame
     );
     bochs_magic_bp!();
@@ -20,8 +24,9 @@ pub(super) unsafe fn exception_bp(stack_frame: &InterruptStackFrame) {
 /// Invalid Opcode handler (instruction undefined)
 pub(super) unsafe fn exception_ud(stack_frame: &InterruptStackFrame) {
     panic!(
-        "Exception: invalid opcode at {:?}\n{:?}",
+        "Exception: invalid opcode at {:?} (cpu {})\n{:?}",
         (*stack_frame).instruction_pointer,
+        smp::current_processor_id(),
         *stack_frame
     );
 }
@@ -39,6 +44,11 @@ pub(super) unsafe fn exception_df(stack_frame: &InterruptStackFrame, error_code:
 
 /// General Protection Fault handler
 pub(super) unsafe fn exception_gpf(stack_frame: &InterruptStackFrame, error_code: u64) {
+    log::trace!(
+        "Exception: General Protection Fault with error code {:#x}\n{:#?}",
+        error_code,
+        *stack_frame
+    );
     panic!(
         "Exception: General Protection Fault with error code {:#x}\n{:#?}",
         error_code, *stack_frame
@@ -48,10 +58,11 @@ pub(super) unsafe fn exception_gpf(stack_frame: &InterruptStackFrame, error_code
 /// Page Fault handler
 pub(super) unsafe fn exception_pf(stack_frame: &InterruptStackFrame, error_code: u64) {
     panic!(
-        "Exception: Page Fault with error code {:?} ({:?}) at {:#x}\n{:#?}",
+        "Exception: Page Fault with error code {:?} ({:?}) at {:#x} (cpu {})\n{:#?}",
         error_code,
         PageFaultErrorCode::from_bits(error_code).expect("#PF code invalid"),
         x86_64::registers::control::Cr2::read().as_u64(),
+        smp::current_processor_id(),
         *stack_frame
     );
 }
@@ -67,7 +78,7 @@ enum SegmentNotPresentTable {
 /// Segment Not Present handler
 pub(super) unsafe fn exception_snp(stack_frame: &InterruptStackFrame, error_code: u64) {
     panic!(
-        "Exception: Segment Not Present with error code {:#x} (e={:b},t={:?},i={:#x})\n{:?}",
+        "Exception: Segment Not Present with error code {:#x} (e={:b},t={:?},i={:#x}) (cpu {})\n{:?}",
         error_code,
         error_code & 0b1,
         match (error_code & 0b110) >> 1 {
@@ -80,30 +91,44 @@ pub(super) unsafe fn exception_snp(stack_frame: &InterruptStackFrame, error_code
             },
         },
         (error_code & 0xFFFF) >> 3,
+        smp::current_processor_id(),
         *stack_frame
     );
 }
 
-/// PIT timer ticked while the kernel was running
-/// This occurs in two cases:
-/// 1. Before scheduler has taken over (early)
-/// 2. When the kernel is in idle state (no process is running)
-/// In both cases idle and continue are equivalent
-pub(super) unsafe extern "sysv64" fn exception_irq0() -> u128 {
-    let next_process = time::SYSCLOCK.tick();
-    pic::PICS.try_lock().unwrap().notify_eoi(0x20);
-    match next_process {
-        ProcessSwitch::Switch(p) => return_process(p),
-        ProcessSwitch::RepeatSyscall(p) => {
-            if let Some(rp) = handle_repeat_syscall(p) {
-                return_process(rp)
-            } else {
-                0
-            }
-        },
-        ProcessSwitch::Continue => 0,
-        ProcessSwitch::Idle => 0,
+/// LAPIC TSC-deadline timer ticked
+pub(super) unsafe extern "sysv64" fn exception_tsc_deadline() -> u128 {
+    // log::trace!("TSC_DEADLINE");
+    crate::driver::ioapic::lapic::write_eoi();
+
+    if crate::smp::is_bsp() && SCHEDULER_ENABLED.load(Ordering::SeqCst) {
+        let next_process = {
+            let mut sched = SCHEDULER.try_lock().expect("SCHEDUELR LOCKED");
+            sched.tick()
+        };
+
+        crate::driver::tsc::set_deadline_ns(1_000_000);
+        match next_process {
+            ProcessSwitch::Switch(p) => return_process(p),
+            ProcessSwitch::RepeatSyscall(p) => {
+                if let Some(rp) = handle_repeat_syscall(p) {
+                    return_process(rp)
+                } else {
+                    0
+                }
+            },
+            ProcessSwitch::Continue => 0,
+            ProcessSwitch::Idle => 0,
+        }
+    } else {
+        0
     }
+}
+
+/// PIT timer ticked while the kernel was running
+pub(super) unsafe fn exception_irq0() {
+    crate::driver::pit::callback();
+    pic::PICS.try_lock().unwrap().notify_eoi(0x20);
 }
 
 /// First ps/2 device, keyboard, sent data.
@@ -201,6 +226,15 @@ pub(super) unsafe fn exception_irq11() {
     exception_irq_free(0x2b)
 }
 
+/// Some other core paniced, stopping the system
+pub(super) unsafe fn ipi_panic(_: &InterruptStackFrame) {
+    crate::driver::ioapic::lapic::write_eoi();
+    log::error!("Kernel panic IPI received, halting core");
+    loop {
+        asm!("cli; hlt");
+    }
+}
+
 /// Interrupt from a process
 /// Called from `src/asm_misc/process_common.asm`, process_interrupt
 /// Input registers:
@@ -292,11 +326,27 @@ unsafe extern "C" fn process_interrupt_inner(
                 },
             }
         },
+        0x30 => {
+            // TSC deadline
+
+            // log::trace!("TSC_DEADLINE");
+            crate::driver::ioapic::lapic::write_eoi();
+
+            assert!(SCHEDULER_ENABLED.load(Ordering::SeqCst)); // TODO: remove
+            if crate::smp::is_bsp() {
+                crate::driver::tsc::set_deadline_ns(1_000_000);
+                let switch_target = {
+                    let mut sched = SCHEDULER.try_lock().expect("SCHEDUELR LOCKED");
+                    sched.tick()
+                };
+                handle_switch!(switch_target);
+            } else {
+                handle_switch!(ProcessSwitch::Idle);
+            }
+        },
         0x20 => {
             // PIT timer ticked
-            let next_process = time::SYSCLOCK.tick();
-            pic::PICS.lock().notify_eoi(interrupt);
-            handle_switch!(next_process);
+            panic!("PIT ticked while in process");
         },
         0x21 => exception_irq1(),
         0x27 => exception_irq7(),
@@ -377,7 +427,7 @@ fn idle() -> ! {
             mov rcx, [rcx + 2 * 8]  // Offset: idle
             jmp rcx                 // Jump into the procedure
             "
-            :: "{rcx}"((COMMON_ADDRESS_VIRT) as *const u8 as u64)
+            :: "{rcx}"(COMMON_ADDRESS_VIRT)
             :: "intel"
         );
         ::core::hint::unreachable_unchecked();
@@ -395,7 +445,7 @@ fn immediate_switch_to(process: Process) -> ! {
             "
             :
             :
-                "{rcx}"(COMMON_ADDRESS_VIRT as *const u8 as u64), // switch_to
+                "{rcx}"(COMMON_ADDRESS_VIRT), // switch_to
                 "{rdx}"(process.stack_pointer.as_u64()),
                 "{rax}"(process.page_table.p4_addr().as_u64())
             :

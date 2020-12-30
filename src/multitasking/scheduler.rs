@@ -1,19 +1,19 @@
 use alloc::prelude::v1::*;
+use core::sync::atomic::{AtomicBool, Ordering};
 use hashbrown::HashMap;
 use spin::Mutex;
 use x86_64::{PhysAddr, VirtAddr};
 
-use d7time::{Duration, Instant};
-
 use crate::memory;
 use crate::memory::MemoryController;
 use crate::multitasking::{loader::ElfImage, ExplicitEventId};
+use crate::time::BSPInstant;
 
 use super::process::{Process, ProcessResult};
 use super::queues::Queues;
 use super::{ProcessId, WaitFor};
 
-const TIME_SLICE: Duration = Duration::from_millis(1); // run task 1 millisecond and switch
+const TIME_SLICE_NS: u64 = 100_000_000;
 
 /// Process switch an related alternatives
 #[allow(clippy::large_enum_variant)]
@@ -35,7 +35,7 @@ pub enum ProcessSwitch {
 #[derive(Debug)]
 pub struct Scheduler {
     /// Time of the next switch if set, otherwise immediately
-    next_switch: Option<Instant>,
+    next_switch: Option<BSPInstant>,
     /// Processes by id
     processes: HashMap<ProcessId, Process>,
     /// Queues for different types of scheduling
@@ -176,11 +176,14 @@ impl Scheduler {
                 .get_mut(&pid)
                 .expect("Process from queue not running");
             if process.repeat_syscall {
+                log::trace!("Repeat syscall");
                 ProcessSwitch::RepeatSyscall(process.clone())
             } else {
+                log::trace!("Switch to {}", pid);
                 ProcessSwitch::Switch(process.clone())
             }
         } else {
+            log::trace!("Switch to idle");
             self.running = None;
             ProcessSwitch::Idle
         }
@@ -205,12 +208,13 @@ impl Scheduler {
         }
     }
 
-    pub fn tick(&mut self, now: Instant) -> ProcessSwitch {
+    pub fn tick(&mut self) -> ProcessSwitch {
+        let now = BSPInstant::now();
         self.queues.on_tick(&now);
         match self.next_switch {
             Some(s) => {
                 if now >= s {
-                    self.next_switch = Some(now + TIME_SLICE);
+                    self.next_switch = Some(now.add_ns(TIME_SLICE_NS));
                     unsafe { self.switch(Some(WaitFor::None)) }
                 } else {
                     ProcessSwitch::Continue
@@ -218,8 +222,9 @@ impl Scheduler {
             },
             None => {
                 // start switching
-                self.next_switch = Some(now + TIME_SLICE);
-                ProcessSwitch::Continue
+                log::trace!("Start switching");
+                self.next_switch = Some(now.add_ns(TIME_SLICE_NS));
+                unsafe { self.switch(Some(WaitFor::None)) }
             },
         }
     }
@@ -250,3 +255,6 @@ lazy_static::lazy_static! {
         Mutex::new(Scheduler::new())
     };
 }
+
+/// Exception handler doesn't schdule new slices if this isn't set
+pub static SCHEDULER_ENABLED: AtomicBool = AtomicBool::new(false);

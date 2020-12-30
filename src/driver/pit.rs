@@ -15,9 +15,6 @@ const PIT_CH2_CONTROL: u16 = 0x61;
 /// Frequency of the internal oscillator, in Hz
 const FREQ_HZ: u32 = 1_193_182;
 
-/// TODO: remove
-pub const TIME_BETWEEN_E_12: u64 = 999847467; // s * 10 ** 12
-
 /// Returns the number of nanoseconds between ticks
 fn set_freq_and_start(target_freq_hz: u32) -> u64 {
     assert!(target_freq_hz >= 10, "Requested PIT frequency too low");

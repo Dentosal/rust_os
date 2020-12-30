@@ -1,11 +1,11 @@
 use x86_64::PrivilegeLevel;
 
 macro_rules! irq_handler {
-    ($name:ident) => {{
+    ($name:ident, $ist:expr) => {{
         unsafe extern "x86-interrupt" fn wrapper(_: &mut InterruptStackFrame) {
             ($name)();
         }
-        idt::Descriptor::new(true, wrapper as u64, PrivilegeLevel::Ring0, 0)
+        idt::Descriptor::new(true, wrapper as u64, PrivilegeLevel::Ring0, $ist)
     }};
 }
 
@@ -46,60 +46,64 @@ macro_rules! restore_scratch_registers {
 // (p4_physical_address, stack_pointer)
 // If no switch should be done then function must return `(0, 0)`.
 macro_rules! irq_handler_switch {
-    ($name:ident) => {{
+    ($name:ident, $ist:expr) => {{
         #[naked]
         unsafe fn wrapper(_: &mut InterruptStackFrame) -> ! {
             use crate::memory::process_common_code::COMMON_ADDRESS_VIRT;
             save_scratch_registers!();
             asm!("
-                push rcx        // Save COMMON_ADDRESS_VIRT
-                //sub rsp, 8    // Align the stack pointer
-                call {handler}  // Call the exception handler
-                //add rsp, 8    // Undo stack pointer alignment
-                pop rcx         // Restore COMMON_ADDRESS_VIRT
-                test rax, rax   // Check whether a process switch is required
-                jz .noswitch    // Jump to process switch routine, if required
-                mov rcx, [rcx]  // Get procedure offset
-                jmp rcx         // Jump into the procedure
+                push rcx            // Save COMMON_ADDRESS_VIRT
+                //sub rsp, 8        // Align the stack pointer
+                call {handler}      // Call the exception handler
+                //add rsp, 8        // Undo stack pointer alignment
+                pop rcx             // Restore COMMON_ADDRESS_VIRT
+                test rax, rax       // Check whether a process switch is required
+                jz .noswitch        // Jump to process switch routine, if required
+                mov rcx, [{cav}]    // Get procedure offset
+                jmp rcx             // Jump into the procedure
             .noswitch:
                 ",
                 handler = in(reg) $name as unsafe extern "sysv64" fn() -> u128,
-                in("rcx") COMMON_ADDRESS_VIRT as *const u8 as u64 // switch_to
+                cav = in(reg) COMMON_ADDRESS_VIRT,
             );
             restore_scratch_registers!();
             asm!("iretq", options(noreturn));
             ::core::intrinsics::unreachable();
         }
-        idt::Descriptor::new(true, wrapper as u64, PrivilegeLevel::Ring0, 0)
+        idt::Descriptor::new(true, wrapper as u64, PrivilegeLevel::Ring0, $ist)
     }};
 }
 
 macro_rules! exception_handler {
-    ($name:ident, $pl:expr, $tss_s:expr) => {{
+    ($name:ident, $pl:expr, $ist:expr) => {{
         unsafe extern "x86-interrupt" fn wrapper(sf: &mut InterruptStackFrame) {
             ($name)(sf);
         }
-        idt::Descriptor::new(true, wrapper as u64, $pl, $tss_s)
+        idt::Descriptor::new(true, wrapper as u64, $pl, $ist)
     }};
-    ($name:ident) => {{ exception_handler!($name, PrivilegeLevel::Ring0, 0) }};
+    ($name:ident) => {{ exception_handler!($name, PrivilegeLevel::Ring0, None) }};
 }
 
 macro_rules! exception_handler_with_error_code {
-    ($name:ident, $pl:expr, $tss_s:expr) => {{
+    ($name:ident, $pl:expr, $ist:expr) => {{
         unsafe extern "x86-interrupt" fn wrapper(sf: &mut InterruptStackFrame, ec: u64) {
             ($name)(sf, ec);
         }
-        idt::Descriptor::new(true, wrapper as u64, $pl, $tss_s)
+        idt::Descriptor::new(true, wrapper as u64, $pl, $ist)
     }};
-    ($name:ident) => {{ exception_handler_with_error_code!($name, PrivilegeLevel::Ring0, 0) }};
+    ($name:ident) => {{ exception_handler_with_error_code!($name, PrivilegeLevel::Ring0, None) }};
 }
 
 macro_rules! simple_exception_handler {
-    ($text:expr) => {{
+    ($text:expr, $ist:expr) => {{
         unsafe extern "x86-interrupt" fn wrapper(stack_frame: &mut InterruptStackFrame) {
-            panic!(concat!("Exception: ", $text, "\n{:?}"), stack_frame);
+            panic!(
+                concat!("Exception: ", $text, " (cpu {})\n{:?}"),
+                crate::smp::current_processor_id(),
+                stack_frame
+            );
         }
-        idt::Descriptor::new(true, wrapper as u64, PrivilegeLevel::Ring0, 0)
+        idt::Descriptor::new(true, wrapper as u64, PrivilegeLevel::Ring0, $ist)
     }};
 }
 
@@ -109,6 +113,6 @@ macro_rules! last_resort_exception_handler {
             llvm_asm!("jmp panic"::::"intel","volatile");
             ::core::hint::unreachable_unchecked();
         }
-        idt::Descriptor::new(true, wrapper as u64, PrivilegeLevel::Ring0, 0)
+        idt::Descriptor::new(true, wrapper as u64, PrivilegeLevel::Ring0, None)
     }};
 }

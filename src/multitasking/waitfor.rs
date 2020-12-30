@@ -2,9 +2,8 @@ use alloc::prelude::v1::*;
 use core::sync::atomic::{AtomicU64, Ordering};
 use hashbrown::HashSet;
 
-use d7time::Instant;
-
 use crate::multitasking::ProcessId;
+use crate::time::BSPInstant;
 
 use super::queues::Queues;
 
@@ -14,7 +13,7 @@ pub enum WaitFor {
     /// Run again on the next free slot
     None,
     /// Run after specified moment
-    Time(Instant),
+    Time(BSPInstant),
     /// Process completed
     Process(ProcessId),
     /// An explicitly-triggered event
@@ -81,7 +80,7 @@ impl WaitFor {
         match self {
             FirstOf(mut subevents) => {
                 let mut new_se = Vec::new();
-                let mut earliest: Option<Instant> = Option::None;
+                let mut earliest: Option<BSPInstant> = Option::None;
                 for e in subevents.into_iter() {
                     match e {
                         None => {

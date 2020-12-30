@@ -13,7 +13,7 @@ use crate::ipc;
 use crate::memory::prelude::*;
 use crate::memory::{self, MemoryController};
 use crate::multitasking::{process, Process, ProcessId, Scheduler, WaitFor, SCHEDULER};
-use crate::time::SYSCLOCK;
+use crate::time::BSPInstant;
 
 /// Separate module to get distinct logging path
 #[allow(non_snake_case)]
@@ -145,8 +145,11 @@ fn syscall(
             },
             SC::sched_sleep_ns => {
                 let (time_ns, _, _, _) = rsc.args;
-                let now = SYSCLOCK.instant();
-                SyscallResult::Switch(Ok(0), WaitFor::Time(now + Duration::from_nanos(time_ns)))
+                if crate::smp::is_bsp() {
+                    SyscallResult::Switch(Ok(0), WaitFor::Time(BSPInstant::now().add_ns(time_ns)))
+                } else {
+                    todo!(); // If core != BSP, push into a set-to-sleep queue
+                }
             },
             SC::ipc_subscribe => {
                 let (filter_len, filter_ptr, exact, reliable) = rsc.args;
@@ -591,6 +594,10 @@ pub fn handle_syscall(
 ) -> SyscallResultAction {
     // Map process stack
     memory::configure(|mm| {
+        if !crate::smp::is_bsp() {
+            todo!("Cannot do syscalls with non-BSP cores yet");
+        };
+
         let mut sched = SCHEDULER
             .try_lock()
             .expect("SCHEDULER LOCKED at start of handle_syscall");

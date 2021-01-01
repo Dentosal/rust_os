@@ -1,7 +1,7 @@
 #![no_std]
 // Features
-#![feature(llvm_asm)]
 #![feature(alloc_prelude)]
+#![feature(asm)]
 
 #[macro_use]
 extern crate alloc;

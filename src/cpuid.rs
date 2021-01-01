@@ -77,14 +77,13 @@ pub fn cpu_brand() -> String {
         let ecx: u32;
         let edx: u32;
         unsafe {
-            llvm_asm!(
-                "xor ecx, ecx; xor edx, edx; cpuid"
-                :
-                    "={eax}"(eax), "={ebx}"(ebx),
-                    "={ecx}"(ecx), "={edx}"(edx)
-                : "{eax}"(index)
-                :
-                : "intel", "volatile"
+            asm!(
+                "xor ecx, ecx; xor edx, edx; cpuid",
+                inout("ecx") 0 => ecx,
+                inout("edx") 0 => edx,
+                out("eax") eax,
+                out("ebx") ebx,
+                options(nostack)
             );
             let values = [eax, ebx, ecx, edx];
             for v in values.iter() {

@@ -69,7 +69,10 @@ impl ::core::fmt::Write for Uart {
         use crate::driver::uart::{has_com1, write_com1};
         if has_com1() {
             // Acquire lock
-            while !UART_LOCK.compare_and_swap(false, true, Ordering::SeqCst) {
+            while UART_LOCK
+                .compare_exchange_weak(false, true, Ordering::SeqCst, Ordering::SeqCst)
+                .is_err()
+            {
                 spin_loop_hint();
             }
 

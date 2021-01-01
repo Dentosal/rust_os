@@ -144,7 +144,7 @@ fn load_idt() {
     unsafe {
         lidt(&DescriptorTablePointer {
             limit: (idt::ENTRY_COUNT * mem::size_of::<idt::Descriptor>()) as u16 - 1,
-            base: idt::ADDRESS as u64,
+            base: idt::VIRT_ADDRESS,
         });
     }
 

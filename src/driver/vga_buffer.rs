@@ -325,7 +325,11 @@ macro_rules! rreset {
 }
 macro_rules! panic_indicator {
     ($x:expr) => ({
-        llvm_asm!(concat!("mov eax, ", stringify!($x), "; mov [0xb809c], eax") ::: "eax", "memory" : "volatile", "intel");
+        asm!(
+            concat!("mov eax, ", stringify!($x), "; mov [0xb809c], eax"),
+            out("eax") _,
+            options(nostack)
+        );
     });
     () => ({
         panic_indicator!(0x4f214f70);   // !p

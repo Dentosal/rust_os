@@ -31,7 +31,6 @@
 #![feature(alloc_prelude)]
 #![feature(allocator_api)]
 #![feature(asm)]
-#![feature(llvm_asm)]
 #![feature(box_syntax, box_patterns)]
 #![feature(const_fn)]
 #![feature(core_intrinsics)]

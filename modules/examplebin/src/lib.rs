@@ -1,5 +1,4 @@
 #![no_std]
-#![feature(llvm_asm)]
 #![feature(alloc_prelude)]
 #![feature(allocator_api)]
 #![deny(unused_must_use)]

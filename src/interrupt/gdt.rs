@@ -52,7 +52,7 @@ impl GdtBuilder {
         use x86_64::instructions::tables::{lgdt, DescriptorTablePointer};
 
         let ptr = DescriptorTablePointer {
-            base: self.addr.as_ptr() as *const u64 as u64,
+            base: self.addr,
             limit: (self.next_entry * size_of::<u64>() - 1) as u16,
         };
 

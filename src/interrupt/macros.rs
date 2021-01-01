@@ -9,34 +9,36 @@ macro_rules! irq_handler {
     }};
 }
 
-macro_rules! save_scratch_registers {
+macro_rules! asm_save_scratch_registers {
     () => {
-        llvm_asm!("push rax
-              push rcx
-              push rdx
-              push rsi
-              push rdi
-              push r8
-              push r9
-              push r10
-              push r11
-        " :::: "intel", "volatile");
-    }
+        "
+        push rax
+        push rcx
+        push rdx
+        push rsi
+        push rdi
+        push r8
+        push r9
+        push r10
+        push r11
+        "
+    };
 }
 
-macro_rules! restore_scratch_registers {
+macro_rules! asm_restore_scratch_registers {
     () => {
-        llvm_asm!("pop r11
-              pop r10
-              pop r9
-              pop r8
-              pop rdi
-              pop rsi
-              pop rdx
-              pop rcx
-              pop rax
-            " :::: "intel", "volatile");
-    }
+        "
+        pop r11
+        pop r10
+        pop r9
+        pop r8
+        pop rdi
+        pop rsi
+        pop rdx
+        pop rcx
+        pop rax
+        "
+    };
 }
 
 // IRQ handler that allows switching to next process if required
@@ -47,28 +49,29 @@ macro_rules! restore_scratch_registers {
 // If no switch should be done then function must return `(0, 0)`.
 macro_rules! irq_handler_switch {
     ($name:ident, $ist:expr) => {{
+        use crate::memory::process_common_code::COMMON_ADDRESS_VIRT;
+
         #[naked]
-        unsafe fn wrapper(_: &mut InterruptStackFrame) -> ! {
-            use crate::memory::process_common_code::COMMON_ADDRESS_VIRT;
-            save_scratch_registers!();
-            asm!("
-                push rcx            // Save COMMON_ADDRESS_VIRT
-                //sub rsp, 8        // Align the stack pointer
-                call {handler}      // Call the exception handler
-                //add rsp, 8        // Undo stack pointer alignment
-                pop rcx             // Restore COMMON_ADDRESS_VIRT
-                test rax, rax       // Check whether a process switch is required
-                jz .noswitch        // Jump to process switch routine, if required
-                mov rcx, [{cav}]    // Get procedure offset
-                jmp rcx             // Jump into the procedure
-            .noswitch:
-                ",
-                handler = in(reg) $name as unsafe extern "sysv64" fn() -> u128,
-                cav = in(reg) COMMON_ADDRESS_VIRT,
+        unsafe extern "sysv64" fn wrapper(_: &mut InterruptStackFrame) {
+            asm!(concat!(
+                    asm_save_scratch_registers!(), "
+                    push rcx            // Save COMMON_ADDRESS_VIRT
+                    //sub rsp, 8        // Align the stack pointer
+                    call {handler}      // Call the exception handler
+                    //add rsp, 8        // Undo stack pointer alignment
+                    pop rcx             // Restore COMMON_ADDRESS_VIRT
+                    test rax, rax       // Check whether a process switch is required
+                    jz .noswitch        // Jump to process switch routine, if required
+                    mov rcx, [{cav}]    // Get procedure offset
+                    jmp rcx             // Jump into the procedure
+                    .noswitch:",
+                    asm_restore_scratch_registers!(),
+                    "iretq"
+                ),
+                handler = sym $name,
+                cav = const COMMON_ADDRESS_VIRT,
+                options(noreturn)
             );
-            restore_scratch_registers!();
-            asm!("iretq", options(noreturn));
-            ::core::intrinsics::unreachable();
         }
         idt::Descriptor::new(true, wrapper as u64, PrivilegeLevel::Ring0, $ist)
     }};
@@ -109,8 +112,8 @@ macro_rules! simple_exception_handler {
 
 macro_rules! last_resort_exception_handler {
     () => {{
-        unsafe extern "x86-interrupt" fn wrapper(_stack_frame: &mut InterruptStackFrame) {
-            llvm_asm!("jmp panic"::::"intel","volatile");
+        unsafe extern "x86-interrupt" fn wrapper(_stack_frame: &mut InterruptStackFrame) -> ! {
+            asm!("jmp panic", options(noreturn));
             ::core::hint::unreachable_unchecked();
         }
         idt::Descriptor::new(true, wrapper as u64, PrivilegeLevel::Ring0, None)

@@ -47,7 +47,7 @@ macro_rules! dump_memory_at {
 
 macro_rules! int {
     ($num:expr) => ({
-        llvm_asm!(concat!("int ", stringify!($num)) :::: "volatile", "intel");
+        asm!(concat!("int ", stringify!($num)), options(nostack));
     });
 }
 
@@ -55,7 +55,7 @@ macro_rules! bochs_magic_bp {
     () => ({
         #![allow(unused_unsafe)]
         unsafe {
-            llvm_asm!("xchg bx, bx" :::: "volatile", "intel");
+            asm!("xchg bx, bx", options(nostack, nomem));
         };
     });
 }
@@ -63,11 +63,11 @@ macro_rules! bochs_magic_bp {
 macro_rules! no_interrupts {
     ($block:expr) => {
         unsafe {
-            llvm_asm!("cli" :::: "volatile", "intel");
+            asm!("cli", options(nostack, nomem));
         }
         $block;
         unsafe {
-            llvm_asm!("sti" :::: "volatile", "intel");
+            asm!("sti", options(nostack, nomem));
         }
     }
 }

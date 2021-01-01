@@ -3,7 +3,6 @@
 //!
 
 #![no_std]
-#![feature(llvm_asm)]
 #![feature(alloc_prelude)]
 #![deny(unused_must_use)]
 

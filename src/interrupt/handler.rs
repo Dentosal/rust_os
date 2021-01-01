@@ -243,8 +243,9 @@ pub(super) unsafe fn ipi_panic(_: &InterruptStackFrame) {
 ///
 /// Process registers `rax`, `rbx` and `rcx` are already stored in its stack.
 #[naked]
-pub(super) unsafe fn process_interrupt() {
-    llvm_asm!("
+pub(super) unsafe extern "C" fn process_interrupt() {
+    asm!(
+        "
         // Recreate interrupt stack frame from r10..=r14
         push r14
         push r13
@@ -269,15 +270,16 @@ pub(super) unsafe fn process_interrupt() {
 
         // Return to trampoline
         ret
-    " :::: "volatile", "intel");
+    ",
+        options(noreturn)
+    );
 }
 
 #[no_mangle]
 unsafe extern "C" fn process_interrupt_inner(
     interrupt: u8, process_stack: u64, page_table: u64,
     stack_frame_ptr: *const InterruptStackFrameValue, error_code: u32,
-) -> u128
-{
+) -> u128 {
     use x86_64::registers::control::Cr2;
 
     let stack_frame: InterruptStackFrameValue = (*stack_frame_ptr).clone();
@@ -423,12 +425,12 @@ fn idle() -> ! {
 
     // Jump into the idle state
     unsafe {
-        llvm_asm!("
-            mov rcx, [rcx + 2 * 8]  // Offset: idle
-            jmp rcx                 // Jump into the procedure
-            "
-            :: "{rcx}"(COMMON_ADDRESS_VIRT)
-            :: "intel"
+        asm!("
+            mov rcx, [{cav} + 2 * 8]    // Offset: idle
+            jmp rcx                     // Jump into the procedure
+            ",
+            cav = const COMMON_ADDRESS_VIRT,
+            options(nostack, noreturn)
         );
         ::core::hint::unreachable_unchecked();
     }
@@ -439,17 +441,14 @@ fn immediate_switch_to(process: Process) -> ! {
     use crate::memory::process_common_code::COMMON_ADDRESS_VIRT;
 
     unsafe {
-        llvm_asm!("
+        asm!("
             mov rcx, [rcx]  // Get procedure offset
             jmp rcx         // Jump into the procedure
-            "
-            :
-            :
-                "{rcx}"(COMMON_ADDRESS_VIRT), // switch_to
-                "{rdx}"(process.stack_pointer.as_u64()),
-                "{rax}"(process.page_table.p4_addr().as_u64())
-            :
-            : "intel"
+            ",
+            in("rcx") COMMON_ADDRESS_VIRT, // switch_to
+            in("rdx") process.stack_pointer.as_u64(),
+            in("rax") process.page_table.p4_addr().as_u64(),
+            options(nostack, noreturn)
         );
         ::core::hint::unreachable_unchecked();
     }

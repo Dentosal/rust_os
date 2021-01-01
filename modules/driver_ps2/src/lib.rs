@@ -1,5 +1,5 @@
 #![no_std]
-#![feature(llvm_asm)]
+#![feature(asm)]
 #![feature(alloc_prelude)]
 #![feature(allocator_api)]
 #![deny(unused_must_use)]
@@ -26,10 +26,10 @@ fn main() -> ! {
     // Interrupts must be disabled during initialization,
     // so this wont deadlock on not-terribly-slow computers, including Qemu
     let mut keyboard = unsafe {
-        llvm_asm!("cli");
+        asm!("cli");
         let mut k = Keyboard::new();
         k.init();
-        llvm_asm!("sti");
+        asm!("sti");
         k
     };
 

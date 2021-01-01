@@ -29,16 +29,12 @@ pub unsafe fn syscall(number: u64, args: (u64, u64, u64, u64)) -> SyscallResult<
     let mut success: u64;
     let mut result: u64;
 
-    llvm_asm!("int 0xd7"
-        : "={rax}"(success), "={rdi}"(result)
-        :
-            "{rax}"(number),
-            "{rdi}"(args.0),
-            "{rsi}"(args.1),
-            "{rdx}"(args.2),
-            "{rcx}"(args.3)
-        : "memory"
-        : "volatile", "intel"
+    asm!("int 0xd7",
+        inout("rax") number => success,
+        inout("rdi") args.0 => result,
+        in("rsi") args.1,
+        in("rdx") args.2,
+        in("rcx") args.3,
     );
 
     if success == 1 {
@@ -53,7 +49,11 @@ pub unsafe fn syscall(number: u64, args: (u64, u64, u64, u64)) -> SyscallResult<
 
 pub fn exit(return_code: u64) -> ! {
     unsafe {
-        llvm_asm!("int 0xd7" :: "{rax}"(SyscallNumber::exit), "{rdi}"(return_code) :: "intel");
+        asm!("int 0xd7",
+            in("rax") SyscallNumber::exit as u64,
+            in("rdi") return_code,
+            options(nomem, nostack, noreturn)
+        );
         unreachable_unchecked();
     }
 }

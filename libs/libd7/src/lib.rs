@@ -14,7 +14,6 @@
 #![feature(slice_ptr_get)]
 #![feature(nonnull_slice_from_raw_parts)]
 #![feature(asm)]
-#![feature(llvm_asm)]
 #![feature(const_fn)]
 #![feature(integer_atomics)]
 #![feature(panic_info_message)]

@@ -1,4 +1,4 @@
-use core::alloc::{AllocError, AllocRef, GlobalAlloc, Layout};
+use core::alloc::{AllocError, Allocator, GlobalAlloc, Layout};
 use core::ptr::NonNull;
 
 use spin::Mutex;
@@ -64,8 +64,8 @@ impl<A> Locked<A> {
     }
 }
 
-unsafe impl<'a> AllocRef for Locked<BlockAllocator> {
-    fn alloc(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+unsafe impl<'a> Allocator for Locked<BlockAllocator> {
+    fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
         let mut ba = self.lock();
 
         // Calculate resulting pointer and required bytes
@@ -93,31 +93,31 @@ unsafe impl<'a> AllocRef for Locked<BlockAllocator> {
         ))
     }
 
-    unsafe fn dealloc(&self, _ptr: NonNull<u8>, _layout: Layout) {
+    unsafe fn deallocate(&self, _ptr: NonNull<u8>, _layout: Layout) {
         // do nothing, leak memory
     }
 }
 
 pub struct GlobAlloc {
-    alloc: Locked<BlockAllocator>,
+    allocator: Locked<BlockAllocator>,
 }
 impl GlobAlloc {
-    pub const fn new(alloc: BlockAllocator) -> Self {
+    pub const fn new(allocator: BlockAllocator) -> Self {
         Self {
-            alloc: Locked::new(alloc),
+            allocator: Locked::new(allocator),
         }
     }
 }
 unsafe impl GlobalAlloc for GlobAlloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        self.alloc
-            .alloc(layout)
+        self.allocator
+            .allocate(layout)
             .expect("Could not allocate")
             .as_mut_ptr()
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        self.alloc.dealloc(
+        self.allocator.deallocate(
             NonNull::new(ptr as *mut _).expect("Cannot deallocate null pointer"),
             layout,
         );

@@ -10,6 +10,8 @@ use crate::driver::acpi;
 use crate::driver::ioapic;
 use crate::memory;
 
+pub mod data;
+
 pub fn current_processor_id() -> ProcessorId {
     if ioapic::is_enabled() {
         ioapic::apic_processor_id()
@@ -118,4 +120,9 @@ pub fn start_all() {
         crate::driver::tsc::sleep_ns(200_000);
     }
     log::info!("All CPU cores ready");
+}
+
+/// Not to be used before start_all has been called.
+pub fn cpu_count() -> u64 {
+    AP_READY_COUNT.load(Ordering::SeqCst)
 }

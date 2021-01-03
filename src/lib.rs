@@ -140,7 +140,7 @@ pub extern "C" fn rust_ap_main() -> ! {
     driver::ioapic::per_processor_init();
     log::info!("APIC initialized");
 
-    smp::ap_mark_ready();
+    smp::ap_finish_init();
     log::info!("AP core {} ready", processor_id);
 
     log::trace!("INTO @ {}", self::driver::ioapic::lapic::processor_id());

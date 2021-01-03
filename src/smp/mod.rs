@@ -2,7 +2,7 @@
 
 use alloc::vec::Vec;
 use core::fmt;
-use core::sync::atomic::{AtomicU64, AtomicU8, Ordering};
+use core::sync::atomic::{AtomicU64, AtomicU8, AtomicBool, Ordering};
 use spin::Mutex;
 use x86_64::VirtAddr;
 
@@ -95,9 +95,20 @@ unsafe fn start_one(acpi_id: ProcessorId) {
 }
 
 /// Called by the AP once it has finished initialization
-pub fn ap_mark_ready() {
+/// Waits until all cores are ready
+pub fn ap_finish_init() {
     AP_READY_COUNT.fetch_add(1, Ordering::SeqCst);
+    // Wait for all cores to be ready
+    while !AP_ALL_READY.load(Ordering::SeqCst) {
+        // TODO: timeout?
+        crate::driver::tsc::sleep_ns(200_000);
+    }
 }
+
+
+/// Whether all AP cores are ready
+static AP_ALL_READY: AtomicBool = AtomicBool::new(false);
+
 
 pub fn start_all() {
     let acpi_data = acpi::ACPI_DATA.r#try().expect("acpi::init not called");
@@ -117,5 +128,11 @@ pub fn start_all() {
         // TODO: timeout
         crate::driver::tsc::sleep_ns(200_000);
     }
+    AP_ALL_READY.store(true, Ordering::SeqCst);
     log::info!("All CPU cores ready");
+}
+
+/// Not to be used before start_all has been called.
+pub fn cpu_count() -> u64 {
+    1 + AP_READY_COUNT.load(Ordering::SeqCst)
 }

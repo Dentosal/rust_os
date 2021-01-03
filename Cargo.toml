@@ -47,6 +47,9 @@ features = ["spin_no_std"]
 git = "https://github.com/Dentosal/x86_64"
 features = ["use-serde"]
 
+[dependencies.num_enum]
+git = "https://github.com/Dentosal/num_enum_simplified"
+
 [dependencies.d7abi]
 version = "*"
 path = "libs/d7abi"

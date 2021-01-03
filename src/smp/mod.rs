@@ -10,6 +10,8 @@ use crate::driver::acpi;
 use crate::driver::ioapic;
 use crate::memory;
 
+pub mod data;
+
 pub fn current_processor_id() -> ProcessorId {
     if ioapic::is_enabled() {
         ioapic::apic_processor_id()

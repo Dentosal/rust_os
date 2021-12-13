@@ -3,9 +3,6 @@
 #![cfg_attr(not(test), no_std)]
 // Lints
 #![allow(incomplete_features)]
-// Features
-#![feature(alloc_prelude)]
-#![feature(const_generics)]
 
 #[macro_use]
 extern crate alloc;

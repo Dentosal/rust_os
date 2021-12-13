@@ -8,7 +8,7 @@
 //! TODO: permission system
 //! TODO: page mapping for large messages
 
-use alloc::prelude::v1::*;
+use alloc::string::String;
 use hashbrown::{HashMap, HashSet};
 use spin::Mutex;
 

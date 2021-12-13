@@ -1,6 +1,6 @@
 //! https://en.wikipedia.org/wiki/IPv4#Packet_structure
 
-use alloc::prelude::v1::*;
+use alloc::vec::Vec;
 use core::convert::TryFrom;
 use serde::{Deserialize, Serialize};
 

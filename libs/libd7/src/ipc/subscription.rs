@@ -1,5 +1,9 @@
-use alloc::prelude::v1::*;
 use core::marker::PhantomData;
+
+use alloc::vec::Vec;
+use alloc::string::String;
+use alloc::borrow::ToOwned;
+
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use d7abi::ipc::*;

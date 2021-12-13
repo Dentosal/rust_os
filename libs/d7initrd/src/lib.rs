@@ -1,11 +1,9 @@
 // No std
 #![no_std]
-// Features
-#![feature(alloc_prelude)]
 
 extern crate alloc;
 
-use alloc::prelude::v1::*;
+use alloc::string::String;
 use serde::{Deserialize, Serialize};
 
 pub const SECTOR_SIZE: u64 = 0x200;

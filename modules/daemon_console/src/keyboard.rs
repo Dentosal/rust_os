@@ -1,4 +1,6 @@
-use alloc::prelude::v1::*;
+use alloc::vec::Vec;
+use alloc::string::String;
+use alloc::borrow::ToOwned;
 use hashbrown::HashSet;
 
 use d7keymap::{KeyAction, KeyCodes, KeyMap, KeySymbol};
@@ -12,8 +14,8 @@ pub struct Keyboard {
 impl Keyboard {
     pub fn new() -> Self {
         let keycodes_json: Vec<u8> =
-            ipc::request("initrd/read", "keycodes.json".to_string()).unwrap();
-        let keymap_json: Vec<u8> = ipc::request("initrd/read", "keymap.json".to_string()).unwrap();
+            ipc::request("initrd/read", "keycodes.json".to_owned()).unwrap();
+        let keymap_json: Vec<u8> = ipc::request("initrd/read", "keymap.json".to_owned()).unwrap();
 
         Self {
             keycodes: serde_json::from_slice(&keycodes_json).unwrap(),

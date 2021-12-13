@@ -1,5 +1,4 @@
-use alloc::prelude::v1::*;
-
+use alloc::string::String;
 use d7abi::process::ProcessId;
 
 use crate::ipc::{DeliveryError, IpcResult, Manager, Message, Topic};

@@ -1,4 +1,4 @@
-use alloc::prelude::v1::*;
+use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
 const INITIAL_WINDOW_SIZE: u16 = 8760;

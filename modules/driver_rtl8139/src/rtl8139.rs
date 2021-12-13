@@ -1,6 +1,6 @@
 //! https://wiki.osdev.org/RTL8139
 
-use alloc::prelude::v1::*;
+use alloc::vec::Vec;
 use bitflags::bitflags;
 use core::intrinsics::{copy_nonoverlapping, write_bytes};
 use cpuio::UnsafePort;

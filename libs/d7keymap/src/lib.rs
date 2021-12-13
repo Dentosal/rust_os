@@ -1,17 +1,18 @@
 // Features
-#![feature(alloc_prelude)]
 #![feature(allocator_api)]
 // No-std
 #![cfg_attr(not(test), no_std)]
 
 extern crate alloc;
 
-use core::hash::{Hash, Hasher};
-use alloc::prelude::v1::*;
-use hashbrown::HashSet;
-
 use core::str::FromStr;
-use hashbrown::HashMap;
+use core::hash::{Hash, Hasher};
+
+use alloc::vec::Vec;
+use alloc::string::String;
+use alloc::borrow::ToOwned;
+use hashbrown::{HashSet, HashMap};
+
 use serde::{de, Deserialize, Deserializer};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]

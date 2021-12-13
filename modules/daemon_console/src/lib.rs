@@ -7,7 +7,6 @@
 //! TODO: color support
 
 #![no_std]
-#![feature(alloc_prelude)]
 #![feature(ptr_internals)]
 #![deny(unused_must_use)]
 
@@ -17,7 +16,9 @@ extern crate alloc;
 #[macro_use]
 extern crate libd7;
 
-use alloc::prelude::v1::*;
+use alloc::vec::Vec;
+use alloc::string::String;
+use alloc::borrow::ToOwned;
 use hashbrown::HashSet;
 
 use libd7::{

@@ -3,7 +3,6 @@
 //!
 
 #![no_std]
-#![feature(alloc_prelude)]
 #![deny(unused_must_use)]
 
 #[macro_use]
@@ -12,8 +11,11 @@ extern crate alloc;
 #[macro_use]
 extern crate libd7;
 
-use alloc::prelude::v1::*;
+use alloc::vec::Vec;
+use alloc::string::String;
+use alloc::borrow::ToOwned;
 use hashbrown::{HashMap, HashSet};
+
 use serde::{Deserialize, Serialize};
 
 use libd7::{

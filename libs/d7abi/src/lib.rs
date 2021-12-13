@@ -7,10 +7,8 @@
 // no_std
 #![no_std]
 // Unstable features
-#![feature(const_fn)]
 #![feature(integer_atomics)]
 #![feature(allocator_api)]
-#![feature(alloc_prelude)]
 
 #[macro_use]
 extern crate alloc;

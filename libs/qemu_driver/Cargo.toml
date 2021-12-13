@@ -1,0 +1,8 @@
+[package]
+name = "qemu_driver"
+version = "0.1.0"
+authors = ["Hannes Karppila <hannes.karppila@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+tokio = {git = "https://github.com/tokio-rs/tokio", rev = "3ecaa6d91cef271b4c079a2e28bc3270280bcee6", features = ["process"]}

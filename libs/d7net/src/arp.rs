@@ -1,6 +1,6 @@
 //! https://en.wikipedia.org/wiki/Address_Resolution_Protocol
 
-use alloc::prelude::v1::*;
+use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
 use crate::{EtherType, Ipv4Addr, MacAddr};

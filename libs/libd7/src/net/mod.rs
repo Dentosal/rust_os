@@ -5,8 +5,7 @@ pub use d7net;
 pub mod tcp;
 // pub mod udp;
 
-use alloc::prelude::v1::*;
-
+use alloc::vec::Vec;
 use d7net::SocketAddr;
 
 use crate::syscall::SyscallResult;

@@ -2,7 +2,6 @@
 //! and then reponds to device queries
 
 #![no_std]
-#![feature(alloc_prelude)]
 #![feature(allocator_api)]
 #![deny(unused_must_use)]
 
@@ -12,7 +11,10 @@ extern crate alloc;
 #[macro_use]
 extern crate libd7;
 
-use alloc::prelude::v1::*;
+use alloc::vec::Vec;
+use alloc::string::String;
+use alloc::borrow::ToOwned;
+
 use hashbrown::HashMap;
 use serde::Deserialize;
 
@@ -37,7 +39,7 @@ fn main() -> ! {
 
     libd7::service::register("driver_pci", false);
 
-    let s: Vec<u8> = ipc::request("initrd/read", "pci_devices.json".to_string()).unwrap();
+    let s: Vec<u8> = ipc::request("initrd/read", "pci_devices.json".to_owned()).unwrap();
     let config_devices: HashMap<String, ConfigDevice> = serde_json::from_slice(&s).unwrap();
 
     let devices = unsafe { d7pci::list_devices() };

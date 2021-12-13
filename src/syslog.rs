@@ -1,5 +1,5 @@
 use alloc::collections::VecDeque;
-use alloc::prelude::v1::*;
+use alloc::vec::Vec;
 use core::fmt::Write;
 use core::sync::atomic::{spin_loop_hint, AtomicBool, Ordering};
 use log::{Level, Metadata, Record};

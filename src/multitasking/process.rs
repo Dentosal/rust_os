@@ -1,4 +1,4 @@
-use alloc::prelude::v1::*;
+use alloc::vec::Vec;
 use core::intrinsics::copy_nonoverlapping;
 use core::ptr;
 use serde::{Deserialize, Serialize};

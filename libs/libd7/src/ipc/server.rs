@@ -12,7 +12,9 @@
 //! If there is no known topic for S, a discovery service could be used.
 //! (Discovery service always has a known topic)
 
-use alloc::prelude::v1::*;
+use alloc::vec::Vec;
+use alloc::string::String;
+use alloc::borrow::ToOwned;
 use core::marker::PhantomData;
 use core::sync::atomic::{AtomicU64, Ordering};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};

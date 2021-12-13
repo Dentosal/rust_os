@@ -1,6 +1,7 @@
 //! Utility functions for interacting with serviced
 
-use alloc::prelude::v1::*;
+use alloc::borrow::ToOwned;
+use alloc::vec::Vec;
 use hashbrown::HashSet;
 
 use crate::ipc::protocol::service::{Registration, ServiceName};

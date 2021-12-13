@@ -1,4 +1,4 @@
-use alloc::prelude::v1::*;
+use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, Ordering};
 use hashbrown::HashSet;
 

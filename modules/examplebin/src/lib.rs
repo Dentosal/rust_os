@@ -1,5 +1,4 @@
 #![no_std]
-#![feature(alloc_prelude)]
 #![feature(allocator_api)]
 #![deny(unused_must_use)]
 
@@ -15,7 +14,7 @@ use libd7::{
 #[macro_use]
 extern crate alloc;
 
-use alloc::prelude::v1::*;
+use alloc::vec::Vec;
 
 #[no_mangle]
 fn main() -> u64 {
@@ -26,7 +25,12 @@ fn main() -> u64 {
     //     port: 22,
     // }).expect("Could not open socket");
 
-    loop {}
+    for i in 0..100 {
+        syscall::debug_print(&format!("TICK {} - {}", pid, i));
+        syscall::sched_sleep_ns(1_000_000_000).unwrap();
+    }
+
+    0
 
     // // Console
     // let mut console = Console::open(

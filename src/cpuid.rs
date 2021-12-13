@@ -68,33 +68,37 @@ bitflags::bitflags! {
     }
 }
 
+/// Returns (a,b,c,d)
+fn call_cpuid(a: u32, b: u32) -> [u32; 4] {
+    let ra: u32;
+    let rb: u32;
+    let rc: u32;
+    let rd: u32;
+    unsafe {
+        asm!(
+            "xchg r10, rbx; cpuid; xchg r10, rbx",
+            inlateout("eax") a => ra,
+            inlateout("r10") b => rb,
+            inlateout("ecx") 0 => rc,
+            inlateout("edx") 0 => rd,
+            options(nostack, nomem)
+        );
+    }
+    [ra,rb,rc,rd]
+}
+
 pub fn cpu_brand() -> String {
     let mut result = String::new();
 
     'outer: for index in 0x80000002u32..=0x80000004u32 {
-        let eax: u32;
-        let ebx: u32;
-        let ecx: u32;
-        let edx: u32;
-        unsafe {
-            asm!(
-                "xor ecx, ecx; xor edx, edx; cpuid",
-                inout("ecx") 0 => ecx,
-                inout("edx") 0 => edx,
-                out("eax") eax,
-                out("ebx") ebx,
-                options(nostack)
-            );
-            let values = [eax, ebx, ecx, edx];
-            for v in values.iter() {
-                for i in 0..=3 {
-                    let bytepos = i * 8;
-                    let byte = ((v & (0xFF << bytepos)) >> bytepos) as u8;
-                    if byte == 0 {
-                        break 'outer;
-                    }
-                    result.push(byte as char);
+        for v in call_cpuid(0, 0).iter() {
+            for i in 0..=3 {
+                let bytepos = i * 8;
+                let byte = ((v & (0xFF << bytepos)) >> bytepos) as u8;
+                if byte == 0 {
+                    break 'outer;
                 }
+                result.push(byte as char);
             }
         }
     }
@@ -104,25 +108,8 @@ pub fn cpu_brand() -> String {
 /// Returns tuple (max_standard_level, max_extended_level)
 fn get_max_levels() -> (u32, u32) {
     let max_standard_level: u32;
-    unsafe {
-        asm!("cpuid",
-            inout("eax") 0 => max_standard_level,
-            out("rbx") _,
-            out("rdx") _,
-            out("rcx") _,
-            options(nostack, nomem)
-        );
-    }
-    let max_extended_level: u32;
-    unsafe {
-        asm!("cpuid",
-            inout("eax") 0x8000_0000u32 => max_extended_level,
-            out("rbx") _,
-            out("rdx") _,
-            out("rcx") _,
-            options(nostack, nomem)
-        );
-    }
+    let [max_standard_level,_,_,_] = call_cpuid(0, 0);
+    let [max_extended_level,_,_,_] = call_cpuid(0x8000_0000u32, 0);
     (max_standard_level, max_extended_level)
 }
 
@@ -149,19 +136,7 @@ fn run_feature_checks() {
         level_ext
     );
 
-    let ecx: u32;
-    let edx: u32;
-    unsafe {
-        // CPUID_GETFEATURES
-        asm!(
-            "cpuid",
-            inout("eax") 1 => _,
-            out("ebx") _,
-            out("ecx") ecx,
-            out("edx") edx,
-            options(nostack, nomem)
-        );
-    }
+    let [_, _, ecx, edx] = call_cpuid(1, 0);
     log::debug!("CPU: FEATURE BITS: {:b} {:b}", ecx, edx);
 
     let f_ecx = FlagsECX::from_bits_truncate(ecx);
@@ -173,17 +148,8 @@ fn run_feature_checks() {
     assert_feature!(f_edx, FlagsEDX::APIC);
 
     let edx: u32;
-    unsafe {
-        // Get extended capabilities
-        asm!(
-            "xor ecx, ecx; xor edx, edx; mov eax, 1; cpuid",
-            inout("eax") 0x8000_0007u32 => _,
-            out("ebx") _,
-            out("ecx") _,
-            out("edx") edx,
-            options(nostack, nomem)
-        );
-    }
+    // Get extended capabilities
+    let [_, _, _, edx] = call_cpuid(0x8000_0007u32, 0);
     assert!(edx & (1 << 8) != 0, "CPUID: invariant TSC not supported");
 }
 

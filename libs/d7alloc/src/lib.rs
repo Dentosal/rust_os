@@ -1,7 +1,6 @@
 #![feature(allocator_api)]
 #![feature(nonnull_slice_from_raw_parts)]
 #![feature(slice_ptr_get)]
-#![feature(const_fn)]
 #![feature(integer_atomics)]
 #![forbid(private_in_public)]
 #![forbid(bare_trait_objects)]

@@ -1,4 +1,4 @@
-use alloc::prelude::v1::*;
+use alloc::vec::Vec;
 use d7abi::fs::FileDescriptor;
 use hashbrown::HashMap;
 

@@ -3,7 +3,7 @@
 //! This driver only supports primary ATA bus,
 //! i.e. only first two disks.
 
-use alloc::prelude::v1::*;
+use alloc::vec::Vec;
 use cpuio::UnsafePort;
 
 use libd7::syscall::sched_sleep_ns;

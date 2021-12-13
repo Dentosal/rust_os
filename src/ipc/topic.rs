@@ -1,3 +1,5 @@
+use crate::alloc::borrow::ToOwned;
+
 use super::*;
 
 /// While reliable and unreliable messages cannot be sent to each

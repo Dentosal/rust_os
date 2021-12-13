@@ -1,7 +1,7 @@
 //! IPC-accessible services hosted from the kernel for technical reasons.
 //! Only reliable connections accepted.
 
-use alloc::prelude::v1::*;
+use alloc::vec::Vec;
 use hashbrown::HashMap;
 use serde::Serialize;
 use spin::Mutex;

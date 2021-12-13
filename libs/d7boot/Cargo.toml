@@ -16,5 +16,6 @@ panic = "abort"
 
 [dependencies]
 rlibc = "*"                     # raw libc
-cpuio = "0.3.0"                 # Cpu port IO
 
+[dependencies.cpuio]            # Cpu port IO
+git = "https://github.com/Dentosal/cpuio-rs"

@@ -1,4 +1,4 @@
-use alloc::prelude::v1::*;
+use alloc::string::String;
 use core::fmt;
 use serde::{Deserialize, Serialize};
 

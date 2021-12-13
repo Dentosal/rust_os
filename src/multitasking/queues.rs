@@ -1,5 +1,5 @@
 use alloc::collections::VecDeque;
-use alloc::prelude::v1::*;
+use alloc::string::String;
 use hashbrown::{HashMap, HashSet};
 
 use crate::multitasking::ProcessId;

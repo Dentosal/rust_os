@@ -1,5 +1,7 @@
 use alloc::collections::VecDeque;
-use alloc::prelude::v1::*;
+use alloc::vec::Vec;
+use alloc::string::String;
+use alloc::borrow::ToOwned;
 use core::ptr::Unique;
 
 use super::{keyboard::EventAction, vga};

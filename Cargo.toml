@@ -17,13 +17,15 @@ panic = "abort"
 [dependencies]
 rlibc = "*"                     # Raw libc
 spin = "0.5"                    # Spinlocks
-cpuio = "0.3.0"                 # Cpu port IO
 bitflags = "1.2"                # Bitflags
 bit_field = "0.10.0"            # Bit fields
 volatile = "0.2.6"              # Volatile read and write functions
 static_assertions = "1.1"       # Compile time assertions
 pinecone = "0.2"                # Message format for process IO
 log = "0.4"                     # Logging macros
+
+[dependencies.cpuio]            # Cpu port IO
+git = "https://github.com/Dentosal/cpuio-rs"
 
 [dependencies.hashbrown]        # HashMap for no_std contexts
 version = "0.7"

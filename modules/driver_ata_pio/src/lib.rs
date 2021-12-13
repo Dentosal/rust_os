@@ -1,5 +1,4 @@
 #![no_std]
-#![feature(alloc_prelude)]
 #![feature(allocator_api)]
 #![deny(unused_must_use)]
 
@@ -9,7 +8,7 @@ extern crate alloc;
 #[macro_use]
 extern crate libd7;
 
-use alloc::prelude::v1::*;
+use alloc::vec::Vec;
 use hashbrown::HashMap;
 use libd7::{select, syscall};
 

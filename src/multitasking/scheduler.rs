@@ -1,4 +1,5 @@
-use alloc::prelude::v1::*;
+use alloc::vec::Vec;
+use alloc::string::String;
 use core::sync::atomic::{AtomicBool, Ordering};
 use hashbrown::HashMap;
 use spin::Mutex;

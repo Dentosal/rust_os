@@ -1,7 +1,7 @@
 //! Data transfer protocol definitions.
 //! The kernel encodes these using Serde with Pinecone serializer.
 
-use alloc::prelude::v1::*;
+use alloc::{vec::Vec, string::String};
 use serde::{Deserialize, Serialize};
 
 pub mod attachment;

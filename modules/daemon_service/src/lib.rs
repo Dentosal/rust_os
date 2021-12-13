@@ -5,7 +5,6 @@
 //! * Service registration/discovery
 
 #![no_std]
-#![feature(alloc_prelude)]
 #![feature(drain_filter)]
 #![deny(unused_must_use)]
 
@@ -15,8 +14,11 @@ extern crate alloc;
 #[macro_use]
 extern crate libd7;
 
-use alloc::prelude::v1::*;
+use alloc::vec::Vec;
+use alloc::string::String;
+use alloc::borrow::ToOwned;
 use hashbrown::{HashMap, HashSet};
+
 use serde::{Deserialize, Serialize};
 
 use libd7::{
@@ -62,7 +64,7 @@ struct Services {
 }
 impl Services {
     pub fn new(path: &str) -> SyscallResult<Self> {
-        let s: Vec<u8> = ipc::request("initrd/read", path.to_string())?;
+        let s: Vec<u8> = ipc::request("initrd/read", path.to_owned())?;
         let definitions: Vec<ServiceDefinition> = serde_json::from_slice(&s).unwrap();
         let start_queue = definitions.iter().map(|s| s.name.clone()).collect();
 

@@ -15,9 +15,11 @@ panic = "abort"
 panic = "abort"
 
 [dependencies]
-cpuio = "0.3.0"
 log = "0.4"
 spin = "0.5"
+
+[dependencies.cpuio]
+git = "https://github.com/Dentosal/cpuio-rs"
 
 [dependencies.hashbrown]
 version = "0.7"

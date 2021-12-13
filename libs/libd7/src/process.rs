@@ -1,5 +1,4 @@
-use alloc::prelude::v1::*;
-
+use alloc::vec::Vec;
 pub use d7abi::process::{ProcessId, ProcessResult};
 
 use crate::ipc;

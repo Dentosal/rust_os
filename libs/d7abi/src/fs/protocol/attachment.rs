@@ -1,6 +1,6 @@
 //! Interface types for `fs_attach` system call
 
-use alloc::prelude::v1::*;
+use alloc::{vec::Vec, string::String};
 use serde::{Deserialize, Serialize};
 
 use crate::process::ProcessId;

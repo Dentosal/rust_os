@@ -5,7 +5,6 @@
 //! has been written on the disk.
 
 #![no_std]
-#![feature(alloc_prelude)]
 #![deny(unused_must_use)]
 
 #[macro_use]
@@ -15,7 +14,9 @@ extern crate alloc;
 extern crate libd7;
 
 use alloc::collections::VecDeque;
-use alloc::prelude::v1::*;
+use alloc::vec::Vec;
+use alloc::string::String;
+use alloc::borrow::ToOwned;
 
 use libd7::{ipc, select, syscall, process::ProcessId};
 

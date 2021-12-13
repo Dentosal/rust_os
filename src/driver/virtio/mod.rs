@@ -4,7 +4,7 @@
 
 use core::ptr;
 
-use alloc::prelude::v1::Vec;
+use alloc::vec::Vec;
 
 use crate::driver::pci;
 use crate::memory::prelude::PhysAddr;

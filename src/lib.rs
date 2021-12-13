@@ -4,8 +4,10 @@
 #![deny(unused_assignments)]
 // Safety
 #![deny(overflowing_literals)]
-#![deny(safe_packed_borrows)]
+#![deny(unaligned_references)]
 #![deny(unused_must_use)]
+// Workarounds
+#![allow(named_asm_labels)]
 // Code style (development time)
 #![allow(unused_macros)]
 #![allow(dead_code)]
@@ -28,11 +30,9 @@
 // Unstable features
 #![feature(abi_x86_interrupt)]
 #![feature(alloc_error_handler)]
-#![feature(alloc_prelude)]
 #![feature(allocator_api)]
-#![feature(asm)]
+#![feature(asm, asm_const, asm_sym)]
 #![feature(box_syntax, box_patterns)]
-#![feature(const_fn)]
 #![feature(core_intrinsics)]
 #![feature(integer_atomics)]
 #![feature(lang_items)]
@@ -42,7 +42,6 @@
 #![feature(ptr_internals)]
 #![feature(stmt_expr_attributes)]
 #![feature(trait_alias)]
-#![feature(try_trait)]
 
 use core::alloc::Layout;
 use core::panic::PanicInfo;

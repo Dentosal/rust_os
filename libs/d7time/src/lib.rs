@@ -1,7 +1,6 @@
 //! Temporal quantification.
 
 #![no_std]
-#![feature(const_fn)]
 
 
 use core::fmt;

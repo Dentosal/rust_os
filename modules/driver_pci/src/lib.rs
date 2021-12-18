@@ -49,7 +49,9 @@ fn main() -> ! {
 
         if let Some(device_config) = config_devices.get(&vendor_and_id) {
             println!(
-                "PCI device: {} ({})",
+                "PCI device: {}/{:?} {} ({})",
+                vendor_and_id,
+                device.location,
                 device_config.name,
                 device_config
                     .driver

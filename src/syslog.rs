@@ -1,7 +1,8 @@
 use alloc::collections::VecDeque;
 use alloc::vec::Vec;
 use core::fmt::Write;
-use core::sync::atomic::{spin_loop_hint, AtomicBool, Ordering};
+use core::sync::atomic::{AtomicBool, Ordering};
+use core::hint;
 use log::{Level, Metadata, Record};
 use spin::Mutex;
 
@@ -73,7 +74,7 @@ impl ::core::fmt::Write for Uart {
                 .compare_exchange_weak(false, true, Ordering::SeqCst, Ordering::SeqCst)
                 .is_err()
             {
-                spin_loop_hint();
+                hint::spin_loop();
             }
 
             for byte in s.bytes() {

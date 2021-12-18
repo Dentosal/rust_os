@@ -40,5 +40,12 @@
         "requires": ["consoled", "netd"],
         "from_initrd": true,
         "executable": "examplebin"
+    },
+    {
+        "name": "example2",
+        "description": "Example user binary",
+        "requires": ["consoled", "netd"],
+        "from_initrd": true,
+        "executable": "examplebin"
     }
 ]

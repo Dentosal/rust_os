@@ -111,8 +111,10 @@ pub fn init() {
     handlers[0x2b] = irq_handler!(exception_irq11, None);
     handlers[0x2e] = irq_handler!(exception_irq14, None);
     handlers[0x2f] = irq_handler!(exception_irq15, None);
-    handlers[0x30] = irq_handler_switch!(exception_tsc_deadline, None);
+    handlers[0xd7] = simple_exception_handler!("Syscall interrupt while in kernel", None);
+    handlers[0xd8] = irq_handler_switch!(exception_tsc_deadline, None);
     handlers[0xdd] = exception_handler!(ipi_panic);
+    handlers[0xff] = simple_exception_handler!("I/O APIC masked a hardware irq", None);
 
     for index in 0..idt::ENTRY_COUNT {
         log::trace!(

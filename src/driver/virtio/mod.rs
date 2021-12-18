@@ -181,6 +181,8 @@ impl VirtioDevice {
         let start = self.capability_addr(ct);
         let size = self.capability_size(ct);
 
+
+        // TODO: phys_to_virt are instead?
         memory::configure(|mem_ctrl: &mut MemoryController| {
             use crate::memory::PhysFrame;
             use x86_64::structures::paging::PageTableFlags as Flags;

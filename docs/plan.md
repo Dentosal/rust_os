@@ -70,9 +70,10 @@ Numbers     | Description
 ------------|-------------
 0x00..=0x1f | Standard intel interrupts
 0x20..=0x2f | PIC interrupts
-0x30        | LAPIC timer
 0xd7        | System call
+0xd8        | LAPIC timer
 0xdd        | System panic (IPI)
+0xff        | IOAPIC spurious interrupt
 
 # Process Virtual Memory Layout
 

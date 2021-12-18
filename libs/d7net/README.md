@@ -10,6 +10,7 @@ Coming soon: UDP, IPv6, DHCP, DNS
 
 ## Unsupported by design
 
+* ARP only supports MAC addresses as HW addresses
 * IPv4 Options fields are not supported
 * Only the most commonly used TCP Options fields are supported
 * TCP Urgency fields are not supported

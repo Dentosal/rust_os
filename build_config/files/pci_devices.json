@@ -14,6 +14,14 @@
     "1234:1111": {
         "name": "QEMU Virtual Video Controller"
     },
+    "10ec:8029": {
+        "shortname": "rtl8029",
+        "name": "Bochs ne2k mis-identifying as rtl8029, using rtl8139 driver",
+        "driver": {
+            "from_initrd": true,
+            "executable": "driver_rtl8139"
+        }
+    },
     "10ec:8139": {
         "shortname": "rtl8139",
         "name": "RTL-8139 PCI Fast Ethernet Adapter",

@@ -21,18 +21,20 @@ pub mod entry {
     #[derive(Debug, Copy, Clone)]
     #[repr(C, packed)]
     pub struct IoAPIC {
-        io_acpi_id: u8,
+        pub io_acpi_id: u8,
         reserved: u8,
-        io_acpi_addr: u32,
-        gsib: u32,
+        /// MMIO base address
+        pub io_acpi_addr: u32,
+        /// Global system interrupt (first IRQ handled by this)
+        pub gsib: u32,
     }
     #[derive(Debug, Copy, Clone)]
     #[repr(C, packed)]
     pub struct InterruptSourceOverride {
-        bus_source: u8,
-        irq_source: u8,
-        gsi: u32,
-        flags: u16,
+        pub bus_source: u8,
+        pub irq_source: u8,
+        pub gsi: u32,
+        pub flags: u16,
     }
     #[derive(Debug, Copy, Clone)]
     #[repr(C, packed)]
@@ -53,6 +55,8 @@ pub mod entry {
 pub struct ACPIData {
     pub local_apic_addr: PhysAddr,
     pub cpus: Vec<entry::ProcessorLocalAPIC>,
+    pub io_apics: Vec<entry::IoAPIC>,
+    pub int_source_overrides: Vec<entry::InterruptSourceOverride>,
 }
 
 pub static ACPI_DATA: spin::Once<ACPIData> = spin::Once::new();
@@ -75,6 +79,8 @@ pub fn init() {
 
     let local_apic_addr = PhysAddr::new(local_apic_addr_u32 as u64);
     let mut cpus = Vec::new();
+    let mut io_apics = Vec::new();
+    let mut int_source_overrides = Vec::new();
 
     let table_end = virt_addr.as_u64() + header.length as u64;
 
@@ -90,13 +96,14 @@ pub fn init() {
             0 => {
                 assert_eq!(entry_body_size, mem::size_of::<entry::ProcessorLocalAPIC>());
                 let entry: entry::ProcessorLocalAPIC = unsafe { *(ptr as *const _) };
-                log::trace!("{:#?}", entry);
+                log::debug!("{:#?}", entry);
                 cpus.push(entry);
             },
             1 => {
                 assert_eq!(entry_body_size, mem::size_of::<entry::IoAPIC>());
                 let entry: entry::IoAPIC = unsafe { *(ptr as *const _) };
-                log::trace!("{:#?}", entry);
+                log::debug!("{:#?}", entry);
+                io_apics.push(entry);
             },
             2 => {
                 assert_eq!(
@@ -104,7 +111,8 @@ pub fn init() {
                     mem::size_of::<entry::InterruptSourceOverride>()
                 );
                 let entry: entry::InterruptSourceOverride = unsafe { *(ptr as *const _) };
-                log::trace!("{:#?}", entry);
+                log::debug!("{:#?}", entry);
+                int_source_overrides.push(entry);
             },
             4 => {
                 assert_eq!(
@@ -112,7 +120,7 @@ pub fn init() {
                     mem::size_of::<entry::NonMaskableInterrupts>()
                 );
                 let entry: entry::NonMaskableInterrupts = unsafe { *(ptr as *const _) };
-                log::trace!("{:#?}", entry);
+                log::debug!("{:#?}", entry);
             },
             5 => {
                 assert_eq!(
@@ -120,7 +128,7 @@ pub fn init() {
                     mem::size_of::<entry::LocalAPICAddressOverride>()
                 );
                 let entry: entry::LocalAPICAddressOverride = unsafe { *(ptr as *const _) };
-                log::trace!("{:#?}", entry);
+                log::debug!("{:#?}", entry);
             },
             other => panic!("Unknown APIC entry type {}", other),
         }
@@ -137,5 +145,7 @@ pub fn init() {
     ACPI_DATA.call_once(|| ACPIData {
         local_apic_addr,
         cpus: cpus.clone(),
+        io_apics,
+        int_source_overrides,
     });
 }

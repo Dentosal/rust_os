@@ -592,12 +592,12 @@ pub enum SyscallResultAction {
 pub fn handle_syscall(
     pid: ProcessId, page_table: PhysAddr, process_stack: VirtAddr,
 ) -> SyscallResultAction {
+    if !crate::smp::is_bsp() {
+        todo!("Cannot do syscalls with non-BSP cores yet");
+    };
+
     // Map process stack
     memory::configure(|mm| {
-        if !crate::smp::is_bsp() {
-            todo!("Cannot do syscalls with non-BSP cores yet");
-        };
-
         let mut sched = SCHEDULER
             .try_lock()
             .expect("SCHEDULER LOCKED at start of handle_syscall");

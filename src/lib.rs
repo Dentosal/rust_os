@@ -42,6 +42,7 @@
 #![feature(ptr_internals)]
 #![feature(stmt_expr_attributes)]
 #![feature(trait_alias)]
+#![feature(let_else)]
 
 use core::alloc::Layout;
 use core::panic::PanicInfo;
@@ -93,7 +94,7 @@ pub extern "C" fn rust_main() -> ! {
     unsafe {
         driver::acpi::init();
         driver::ioapic::init_bsp();
-        smp::start_all();
+        // smp::start_all();
     }
     services::init();
 
@@ -114,7 +115,7 @@ pub extern "C" fn rust_main() -> ! {
     // Hand over to the process scheduler
     multitasking::SCHEDULER_ENABLED.store(true, Ordering::SeqCst);
     unsafe {
-        asm!("int 0x30");
+        asm!("int 0xd8");
     }
     panic!("Returned from the scheduler");
 }

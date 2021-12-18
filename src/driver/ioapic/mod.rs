@@ -67,7 +67,7 @@ pub fn init_bsp() {
 /// LAPIC initalization, done for each processor
 pub fn per_processor_init() {
     enable_local_apic();
-    lapic::configure_timer(0x30);
+    lapic::configure_timer(0xd8);
 }
 
 /// Wake up a CPU Core

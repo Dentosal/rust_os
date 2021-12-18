@@ -14,8 +14,34 @@ use crate::ipc::{
 
 mod initrd;
 
+
+pub fn acpitest(manager: &mut Manager, pid: ProcessId, message: Message) -> Result<(), DeliveryError> {
+    use alloc::string::String;
+    use crate::ipc::Topic;
+
+    let (reply_to, _): (String, ()) = pinecone::from_bytes(&message.data)
+        .expect("Invalid message: TODO: just reply client error");
+
+
+    let reply_to = Topic::new(&reply_to).ok_or_else(|| {
+        log::warn!("Invalid reply_to topic name from {:?}", pid);
+        DeliveryError::NegativeAcknowledgement
+    })?;
+
+    crate::driver::acpi::read_pci_routing();
+
+    // let data = crate::initrd::read(&path).ok_or_else(|| {
+    //     log::warn!("Missing initrd file requested by {:?}", pid);
+    //     DeliveryError::NegativeAcknowledgement
+    // })?;
+
+    manager.kernel_deliver_reply(reply_to, &())
+}
+
+
 pub fn init() {
     register_exact("initrd/read", initrd::read);
+    register_exact("acpitest/read", acpitest);
 }
 
 fn register(filter: TopicFilter, service: Service) {

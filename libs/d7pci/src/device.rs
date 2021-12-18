@@ -97,6 +97,20 @@ impl Device {
         }
     }
 
+    // https://wiki.osdev.org/PCI#PCI_Device_Structure
+    // Under "Interrupt Pin"
+    pub fn get_interrupt_pin(&self) -> Option<u8> {
+        let pin = unsafe { self.read_u8(0x3d) };
+        if pin == 0 {
+            // No pin connection
+            None
+        } else if pin > 4 {
+            panic!("Interrupt pin value invalid");
+        } else {
+            Some(pin)
+        }
+    }
+
     // http://wiki.osdev.org/RTL8139#PCI_Bus_Mastering
     pub unsafe fn enable_bus_mastering(&self) {
         self.write(0x04, self.read(0x04) | (1 << 2));

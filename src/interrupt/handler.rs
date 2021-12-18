@@ -127,6 +127,9 @@ pub(super) unsafe extern "sysv64" fn exception_tsc_deadline() -> u128 {
 
 /// PIT timer ticked while the kernel was running
 pub(super) unsafe fn exception_irq0() {
+    if !pic::is_enabled() {
+        panic!("Stop! reached 0");
+    }
     crate::driver::pit::callback();
     pic::PICS.try_lock().unwrap().notify_eoi(0x20);
 }
@@ -134,6 +137,9 @@ pub(super) unsafe fn exception_irq0() {
 /// First ps/2 device, keyboard, sent data.
 /// Read the byte and then send it to the keyboard driver.
 pub(super) unsafe fn exception_irq1() {
+    if !pic::is_enabled() {
+        log::debug!("KBDINPUT when pic is disabled");
+    }
     let mut port_ps2_data = cpuio::UnsafePort::<u8>::new(0x60);
     let mut port_ps2_status = cpuio::UnsafePort::<u8>::new(0x64);
 
@@ -157,6 +163,9 @@ pub(super) unsafe fn exception_irq1() {
 
 /// First ATA device is ready for data transfer
 pub(super) unsafe fn exception_irq14() {
+    if !pic::is_enabled() {
+        panic!("Stop! reached 14");
+    }
     // Since we are polling the drive, just ignore the IRQ
     pic::PICS.lock().notify_eoi(0x2e);
 }
@@ -164,6 +173,9 @@ pub(super) unsafe fn exception_irq14() {
 /// (Possibly) spurious interrupt for the primary PIC
 /// https://wiki.osdev.org/8259_PIC#Handling_Spurious_IRQs
 pub(super) unsafe fn exception_irq7() {
+    if !pic::is_enabled() {
+        panic!("Stop! reached 7");
+    }
     let mut pics = pic::PICS.lock();
     // Check if this is a real IRQ
     let is_real = pics.read_isr() & (1 << 7) != 0;
@@ -176,6 +188,9 @@ pub(super) unsafe fn exception_irq7() {
 /// (Possibly) spurious interrupt for the secondary PIC
 /// https://wiki.osdev.org/8259_PIC#Handling_Spurious_IRQs
 pub(super) unsafe fn exception_irq15() {
+    if !pic::is_enabled() {
+        panic!("Stop! reached 15");
+    }
     let mut pics = pic::PICS.try_lock().unwrap();
     // Check if this is a real IRQ
     let is_real = pics.read_isr() & (1 << 15) != 0;
@@ -191,27 +206,28 @@ pub(super) unsafe fn exception_irq15() {
 pub(super) unsafe fn exception_irq_free(interrupt: u8) {
     let irq = interrupt - 0x20;
     log::info!("Triggering free IRQ {:02x}", irq);
+    panic!("Stop! reached");
 
-    let value: u64;
+    // let value: u64;
 
-    // TODO: implment pluggable handlers (SYSCALL::set_irq_handler)
-    if irq == 11 {
-        unsafe {
-            let mut r_isr: cpuio::UnsafePort<u16> = cpuio::UnsafePort::new(0xc000 + 0x3e);
-            let v = r_isr.read();
-            r_isr.write(v);
-            log::trace!("v = {:#x}", v);
-            value = v as u64;
-        };
-    } else {
-        value = 0;
-    }
+    // // TODO: implment pluggable handlers (SYSCALL::set_irq_handler)
+    // if irq == 11 {
+    //     unsafe {
+    //         let mut r_isr: cpuio::UnsafePort<u16> = cpuio::UnsafePort::new(0xc000 + 0x3e);
+    //         let v = r_isr.read();
+    //         r_isr.write(v);
+    //         log::trace!("v = {:#x}", v);
+    //         value = v as u64;
+    //     };
+    // } else {
+    //     value = 0;
+    // }
 
-    let mut sched = SCHEDULER.try_lock().unwrap();
-    crate::ipc::kernel_publish(&mut sched, &format!("irq/{}", irq), &value);
+    // // let mut sched = SCHEDULER.try_lock().unwrap();
+    // // crate::ipc::kernel_publish(&mut sched, &format!("irq/{}", irq), &value);
 
-    let mut pics = pic::PICS.try_lock().unwrap();
-    pics.notify_eoi(interrupt);
+    // let mut pics = pic::PICS.try_lock().unwrap();
+    // pics.notify_eoi(interrupt);
 }
 
 pub(super) unsafe fn exception_irq9() {
@@ -312,6 +328,10 @@ unsafe extern "C" fn process_interrupt_inner(
         }};
     }
 
+    if interrupt != 0xd7 && interrupt != 0xd8 {
+        log::debug!("Handling interrupt {:#02x} while in process", interrupt);
+    }
+
     match interrupt {
         0xd7 => {
             use crate::syscall::{handle_syscall, SyscallResultAction};
@@ -328,7 +348,7 @@ unsafe extern "C" fn process_interrupt_inner(
                 },
             }
         },
-        0x30 => {
+        0xd8 => {
             // TSC deadline
 
             // log::trace!("TSC_DEADLINE");
@@ -367,6 +387,13 @@ unsafe extern "C" fn process_interrupt_inner(
             // Handle spurious interrupts
             exception_irq15();
         },
+        0x30..=0x9f => {
+            // Dynamic range
+            let mut sched = SCHEDULER.try_lock().unwrap();
+            let irq = interrupt-0x30;
+            crate::ipc::kernel_publish(&mut sched, &format!("irq/{}", irq), &());
+            crate::driver::ioapic::lapic::write_eoi();
+        }
         0x00 => fail(pid, process::Error::DivideByZero(stack_frame)),
         0x0e => {
             // TODO:

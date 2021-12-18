@@ -36,6 +36,7 @@ pub struct Driver {
 struct NetState {
     pub mac: MacAddr,
     pub ip: Ipv4Addr,
+    pub arp_table: HashMap<Ipv4Addr, MacAddr>,
     pub sockets: HashMap<u64, SocketAddr>,
     pub next_socket: u64,
 }
@@ -44,6 +45,7 @@ impl NetState {
         Self {
             mac,
             ip: Ipv4Addr([10, 0, 2, 15]), // Use fixed IP until DHCP is implemented
+            arp_table: HashMap::new(),
             sockets: HashMap::new(),
             next_socket: 1,
         }
@@ -66,8 +68,15 @@ impl NetState {
 
         match frame.header.ethertype {
             EtherType::ARP => {
-                // Reply to ARP packets
                 let arp_packet = arp::Packet::from_bytes(&frame.payload);
+
+                // Update arp table
+                if arp_packet.sender_ip != Ipv4Addr::ZERO {
+                    println!("ARP: Mark owner {:?} {:?}", arp_packet.sender_ip, arp_packet.sender_hw);
+                    self.arp_table.insert(arp_packet.sender_ip, arp_packet.sender_hw);
+                }
+
+                // Reply to ARP packets
                 if arp_packet.is_request() && arp_packet.target_ip == self.ip {
                     println!("ARP: Replying");
 
@@ -195,6 +204,8 @@ fn main() -> ! {
 
     // Announce that we are running
     libd7::service::register("netd", false);
+
+    println!("netd running {:?}", mac_addr);
 
     loop {
         println!("--> select!");

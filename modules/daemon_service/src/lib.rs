@@ -142,7 +142,7 @@ impl Services {
             while let Some(i) = completed.pop() {
                 let (_, ack_ctx) = self.waiting_for_all.remove(i);
                 ack_ctx.ack().unwrap();
-                println!("WAKEUP");
+                println!("WAKEUP delayed any");
             }
 
             let mut completed = Vec::new();
@@ -154,19 +154,29 @@ impl Services {
             while let Some(i) = completed.pop() {
                 let (_, ack_ctx) = self.waiting_for_any.remove(i);
                 ack_ctx.ack().unwrap();
-                println!("WAKEUP");
+                println!("WAKEUP delayed all");
             }
         }
     }
 
     /// Ack only after any of the services is available
     fn on_waitfor_any(&mut self, (ack_ctx, names): (AcknowledgeContext, HashSet<ServiceName>)) {
-        self.waiting_for_any.push((names, ack_ctx));
+        if names.iter().any(|s| self.is_registered(s)) {
+            ack_ctx.ack().unwrap();
+            println!("WAKEUP immeadiate any");
+        } else {
+            self.waiting_for_any.push((names, ack_ctx));
+        }
     }
 
     /// Ack only after all of the services are available
     fn on_waitfor_all(&mut self, (ack_ctx, names): (AcknowledgeContext, HashSet<ServiceName>)) {
-        self.waiting_for_all.push((names, ack_ctx));
+        if names.iter().all(|s| self.is_registered(s)) {
+            ack_ctx.ack().unwrap();
+            println!("WAKEUP immeadiate all");
+        } else {
+            self.waiting_for_all.push((names, ack_ctx));
+        }
     }
 
     fn on_process_completed(&mut self, terminated: ProcessTerminated) {

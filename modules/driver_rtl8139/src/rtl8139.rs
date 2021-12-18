@@ -168,7 +168,8 @@ impl RTL8139 {
     /// https://github.com/SerenityOS/serenity/blob/64536f19f04976da00037e349ee665e7550fb2ca/Kernel/Net/RTL8139NetworkAdapter.cpp#L157
     pub unsafe fn new(pci_device: Device) -> Self {
         // RTL8139
-        assert_eq!((pci_device.vendor, pci_device.id), (0x10ec, 0x8139));
+        // XXX: RTL8029 bochs workaround
+        // assert_eq!((pci_device.vendor, pci_device.id), (0x10ec, 0x8139));
         // Ethernet controller
         assert_eq!((pci_device.class.0, pci_device.class.1), (2, 0));
 
@@ -197,6 +198,8 @@ impl RTL8139 {
     }
 
     fn reset(&mut self) {
+        println!("Resetting RTL8139");
+
         self.buffers.rx_offset = 0;
         self.buffers.tx_next = 0;
 
@@ -280,6 +283,8 @@ impl RTL8139 {
             r_imr.write(IntFlags::ALL_SUPPORTED.bits());
             r_isr.write(0xffff);
         }
+
+        println!("Reset of RTL8139 complete");
     }
 
     fn receive(&mut self) -> Option<Vec<u8>> {

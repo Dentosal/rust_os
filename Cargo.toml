@@ -24,6 +24,12 @@ static_assertions = "1.1"       # Compile time assertions
 pinecone = "0.2"                # Message format for process IO
 log = "0.4"                     # Logging macros
 
+acpi = "4.1.0"
+
+# https://github.com/rust-osdev/acpi/pull/114
+aml = {git = "https://github.com/Dentosal/acpi", branch="pci-route-method"}
+# aml = "0.16.0"
+
 [dependencies.cpuio]            # Cpu port IO
 git = "https://github.com/Dentosal/cpuio-rs"
 

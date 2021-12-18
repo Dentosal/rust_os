@@ -9,6 +9,7 @@ use crate::memory;
 use crate::smp::ProcessorId;
 
 pub mod lapic;
+pub mod io;
 
 pub use self::lapic::processor_id as apic_processor_id;
 
@@ -16,82 +17,6 @@ static APIC_ENABLED: AtomicBool = AtomicBool::new(false);
 
 pub fn is_enabled() -> bool {
     APIC_ENABLED.load(Ordering::SeqCst)
-}
-
-#[derive(Debug, Copy, Clone)]
-struct IoApic {
-    addr: PhysAddr,
-}
-impl IoApic {
-    unsafe fn ioregsel(&self) -> *mut u32 {
-        memory::phys_to_virt(self.addr).as_mut_ptr()
-    }
-
-    unsafe fn ioregwin(&self) -> *mut u32 {
-        memory::phys_to_virt(self.addr).as_mut_ptr::<u32>().add(4)
-    }
-
-    fn read(&self, register: u8) -> u32 {
-        unsafe {
-            ptr::write_volatile(self.ioregsel(), register as u32);
-            ptr::read_volatile(self.ioregwin())
-        }
-    }
-
-    fn write(&self, register: u8, value: u32) {
-        unsafe {
-            ptr::write_volatile(self.ioregsel(), register as u32);
-            ptr::write_volatile(self.ioregwin(), value)
-        }
-    }
-
-    pub fn id(&self) -> u8 {
-        let value = self.read(0);
-        (value >> 24 & 0b1111) as u8
-    }
-
-    pub fn version(&self) -> u8 {
-        self.read(1) as u8
-    }
-
-    /// "How many IRQs can this I/O APIC handle - 1"
-    pub fn max_entry(&self) -> u8 {
-        (self.read(1) >> 16) as u8
-    }
-
-    pub fn entry(&self, index: u8) -> u8 {
-        (self.read(1) >> 16) as u8
-    }
-}
-
-#[derive(Debug, Copy, Clone)]
-struct Entry {
-    /// Vector
-    interrupt_number: u8,
-    delivery_mode: DeliveryMode,
-    /// Physical on false, Logical on true
-    destination_logical: bool,
-    pending: bool,
-    /// High on false, Low on true
-    pin_polarity_low: bool,
-    remote_irr: bool,
-    /// Edge on false, Level on true
-    trigger_mode_level: bool,
-    /// No interrupts if set to true
-    mask: bool,
-    /// Interpreted according to destination_logical field
-    destination: u8,
-}
-
-/// How the interrupt will be sent to the CPU(s)
-#[derive(Debug, Copy, Clone)]
-enum DeliveryMode {
-    Fixed = 0,
-    LowPriority = 1,
-    SMI = 2,
-    NMI = 4,
-    Init = 5,
-    ExternalInt = 7,
 }
 
 /// TODO: move to somewhere else?
@@ -118,6 +43,9 @@ fn enable_local_apic() {
 pub fn init_bsp() {
     // Disable old PICs
     crate::driver::pic::disable();
+
+    // I/O APIC initialization
+    io::init();
 
     // Do per-processor initialization
     per_processor_init();

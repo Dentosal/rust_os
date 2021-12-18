@@ -556,7 +556,7 @@ def init(cfg):
     cfg["TARGET"] = "d7os"
     cfg["DISK_SIZE_BYTES"] = DISK_SIZE_BYTES
     cfg["DISK_SIZE_SECTORS"] = DISK_SIZE_SECTORS
-    cfg["IMAGE_MAX_SIZE_SECTORS"] = 0x400
+    cfg["IMAGE_MAX_SIZE_SECTORS"] = 0x500 # Can be increase freely with the new bootloader
 
 
 def init_fs(root_dir, cfg):

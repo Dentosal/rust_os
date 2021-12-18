@@ -39,6 +39,7 @@ impl Pic {
 
 pub struct ChainedPics {
     pics: [Pic; 2],
+    enabled: bool,
 }
 
 impl ChainedPics {
@@ -56,6 +57,7 @@ impl ChainedPics {
                     data_port: UnsafePort::new(PIC2_DATA),
                 },
             ],
+            enabled: false,
         }
     }
     /// Init - remap irqs
@@ -102,6 +104,8 @@ impl ChainedPics {
         // Restore / Set masks
         self.pics[0].data_port.write(mask1);
         self.pics[1].data_port.write(mask2);
+
+        self.enabled = true;
     }
 
     /// Disable PICs by masking all interrupts.
@@ -113,6 +117,7 @@ impl ChainedPics {
                 pic.data_port.write(u8::MAX);
             }
         }
+        self.enabled = false;
     }
 
     /// Verify that an interrupt is produced by pics
@@ -158,4 +163,8 @@ pub fn disable() {
     unsafe {
         PICS.lock().disable();
     }
+}
+
+pub fn is_enabled() -> bool {
+    PICS.lock().enabled
 }

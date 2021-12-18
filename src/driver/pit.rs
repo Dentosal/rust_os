@@ -39,7 +39,7 @@ fn set_freq_and_start(target_freq_hz: u32) -> u64 {
 static ELAPSED_TICKS: AtomicU64 = AtomicU64::new(0);
 
 /// Sleeps specified number of nanoseconds as accurately as possible.
-/// Only usable using kernel initialization.
+/// Only usable during kernel initialization.
 /// Enables and disables exceptions to work.
 pub fn kernel_early_sleep_ns(ns: u64) {
     ELAPSED_TICKS.store(0, Ordering::SeqCst);
@@ -57,4 +57,16 @@ pub fn kernel_early_sleep_ns(ns: u64) {
 #[inline]
 pub fn callback() {
     ELAPSED_TICKS.fetch_add(1, Ordering::SeqCst);
+}
+
+/// After the PIT is no longer used, this disables it
+/// Will cause a single interrupt as it uses one-shot mode
+pub fn disable() {
+    log::debug!("Disabling PIT");
+    unsafe {
+        // Channel 0, lobyte/hibyte, Interrupt On Terminal Count, Binary mode
+        cpuio::outb(0b00_11_000_0, PIT_REG); // command
+        cpuio::outb(0, PIT_CH0); // low
+        cpuio::outb(0, PIT_CH0); // high
+    }
 }

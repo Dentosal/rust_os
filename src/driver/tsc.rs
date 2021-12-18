@@ -51,6 +51,8 @@ fn measure_with_pit() {
     super::pit::kernel_early_sleep_ns(10_000_000);
     let t1 = read();
 
+    super::pit::disable();
+
     let tsc_freq_hz = 100 * (t1 - t0);
     TSC_FREQ_HZ.store(tsc_freq_hz, Ordering::SeqCst);
     log::info!("TSC frequency Hz {}", tsc_freq_hz);

@@ -134,8 +134,8 @@ struct SystemLogger;
 
 // pub const LEVEL_SCREEN: log::Level = log::Level::Info;
 pub const LEVEL_SCREEN: log::Level = log::Level::Debug;
-pub const LEVEL_PORTE9: log::Level = log::Level::Trace;
-// pub const LEVEL_PORTE9: log::Level = log::Level::Debug;
+// pub const LEVEL_PORTE9: log::Level = log::Level::Trace;
+pub const LEVEL_PORTE9: log::Level = log::Level::Debug;
 
 impl log::Log for SystemLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {

@@ -325,7 +325,7 @@ macro_rules! rreset {
 }
 macro_rules! panic_indicator {
     ($x:expr) => ({
-        asm!(
+        ::core::arch::asm!(
             concat!("mov eax, ", stringify!($x), "; mov [0xb809c], eax"),
             out("eax") _,
             options(nostack)

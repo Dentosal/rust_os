@@ -1,3 +1,4 @@
+use core::arch::asm;
 use core::sync::atomic::Ordering;
 use x86_64::structures::idt::{InterruptStackFrame, InterruptStackFrameValue, PageFaultErrorCode};
 use x86_64::{PhysAddr, VirtAddr};

@@ -9,8 +9,10 @@ extern crate alloc;
 #[macro_use]
 extern crate libd7;
 
+use core::arch::asm;
 use alloc::vec::Vec;
 use hashbrown::HashMap;
+
 use libd7::{ipc, select, syscall, process::ProcessId};
 
 mod keyboard;

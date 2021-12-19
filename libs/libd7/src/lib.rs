@@ -30,6 +30,7 @@ pub mod syscall;
 
 use core::alloc::Layout;
 use core::panic::PanicInfo;
+use core::arch::asm;
 
 pub use d7abi;
 pub use pinecone;

@@ -1,11 +1,14 @@
+use core::arch::asm;
+use core::mem;
+
+use spin::{Mutex, Once};
+use x86_64::PhysAddr;
+
 use acpi::{
     fadt::Fadt, platform::address::GenericAddress, sdt::Signature, AcpiHandler, AcpiTables,
     PhysicalMapping,
 };
 use aml::{value::Args, AmlValue};
-use core::mem;
-use spin::{Mutex, Once};
-use x86_64::PhysAddr;
 
 pub mod tables;
 

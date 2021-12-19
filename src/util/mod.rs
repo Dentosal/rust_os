@@ -47,7 +47,7 @@ macro_rules! dump_memory_at {
 
 macro_rules! int {
     ($num:expr) => ({
-        asm!(concat!("int ", stringify!($num)), options(nostack));
+        ::core::arch::asm!(concat!("int ", stringify!($num)), options(nostack));
     });
 }
 
@@ -55,7 +55,7 @@ macro_rules! bochs_magic_bp {
     () => ({
         #![allow(unused_unsafe)]
         unsafe {
-            asm!("xchg bx, bx", options(nostack, nomem));
+            ::core::arch::asm!("xchg bx, bx", options(nostack, nomem));
         };
     });
 }
@@ -63,11 +63,11 @@ macro_rules! bochs_magic_bp {
 macro_rules! no_interrupts {
     ($block:expr) => {
         unsafe {
-            asm!("cli", options(nostack, nomem));
+            ::core::arch::asm!("cli", options(nostack, nomem));
         }
         $block;
         unsafe {
-            asm!("sti", options(nostack, nomem));
+            ::core::arch::asm!("sti", options(nostack, nomem));
         }
     }
 }

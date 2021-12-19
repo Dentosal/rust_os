@@ -1,3 +1,4 @@
+use core::arch::asm;
 use alloc::borrow::ToOwned;
 use alloc::string::String;
 

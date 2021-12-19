@@ -1,6 +1,7 @@
 //! Intel guarantees that TSC will not overflow within 10 years of last
 //! CPU reset (or counter reset).
 
+use core::arch::asm;
 use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 /// TSC frequency in Hz, measured on `init`.

@@ -1,3 +1,4 @@
+use core::arch::asm;
 use x86_64::PrivilegeLevel;
 
 macro_rules! irq_handler {

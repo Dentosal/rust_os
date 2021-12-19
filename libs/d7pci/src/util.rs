@@ -1,3 +1,5 @@
+use core::arch::asm;
+
 use super::device::DeviceLocation;
 
 pub const CONFIG_ADDR: usize = 0xCF8;

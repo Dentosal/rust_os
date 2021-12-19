@@ -44,6 +44,7 @@
 #![feature(trait_alias)]
 #![feature(let_else)]
 
+use core::arch::asm;
 use core::alloc::Layout;
 use core::panic::PanicInfo;
 

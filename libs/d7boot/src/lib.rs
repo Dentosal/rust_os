@@ -17,6 +17,7 @@
 
 use core::intrinsics::copy_nonoverlapping;
 use core::{panic::PanicInfo, ptr};
+use core::arch::asm;
 
 mod ata_pio;
 

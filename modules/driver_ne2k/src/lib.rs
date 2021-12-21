@@ -17,6 +17,7 @@ use libd7::net::d7net::MacAddr;
 use libd7::{ipc, process::ProcessId, select, syscall};
 
 mod dma;
+mod ne2k;
 mod rtl8139;
 
 #[no_mangle]
@@ -28,15 +29,23 @@ fn main() -> ! {
 
     // Get device info
     let pci_device: Option<d7pci::Device> = ipc::request("pci/device", &"rtl8139").unwrap();
+
+    // XXX: bochs ne2k workaround
+    let pci_device = if let Some(d) = pci_device {
+        Some(d)
+    } else {
+        ipc::request("pci/device", &"rtl8029").unwrap()
+    };
+
     let pci_device = pci_device.expect("PCI device resolution failed unexpectedly");
 
     // Initialize the driver
-    let mut device = unsafe { rtl8139::RTL8139::new(pci_device) };
+    // let mut device = unsafe { rtl8139::RTL8139::new(pci_device) };
+    let mut device = unsafe { ne2k::Ne2k::new(pci_device) };
 
     // Subscribe to hardware events
     // TODO: dynamic IRQ detection (in kernel?)
-    let irq = ipc::UnreliableSubscription::<()>::exact(&"irq/11").unwrap();
-    // let irq = ipc::UnreliableSubscription::<()>::exact(&"irq/17").unwrap();
+    let irq = ipc::UnreliableSubscription::<()>::exact(&"irq/17").unwrap();
     // let irq = ipc::UnreliableSubscription::<u64>::exact(&format!("irq/{}", device.irq)).unwrap();
 
     // Subscribe to client requests

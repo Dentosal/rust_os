@@ -1,0 +1,45 @@
+[package]
+name = "d7_driver_rtl8139"
+version = "0.1.0"
+authors = ["Hannes Karppila <hannes.karppila@gmail.com>"]
+publish = false
+edition = "2018"
+
+[lib]
+crate-type = ["staticlib"]
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+
+[dependencies]
+log = "0.4"
+spin = "0.5"
+bitflags = "1.2.1"
+
+[dependencies.cpuio]
+git = "https://github.com/Dentosal/cpuio-rs"
+
+[dependencies.hashbrown]
+version = "0.7"
+features = ["nightly", "inline-more", "serde"]
+
+[dependencies.serde]
+version = "1.0"
+default-features = false
+features = ["alloc", "derive"]
+
+[dependencies.serde_json]
+version = "1.0"
+default-features = false
+features = ["alloc"]
+
+[dependencies.libd7]
+version = "*"
+path = "../../libs/libd7"
+
+[dependencies.d7pci]
+version = "*"
+path = "../../libs/d7pci"

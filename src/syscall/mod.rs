@@ -634,13 +634,13 @@ pub fn handle_syscall(
             routine: reg_rax,
             args: (reg_rdi, reg_rsi, reg_rdx, reg_rcx),
         };
-        log::trace!(
+        log::debug!(
             "[pid={:8}] <= {:?} ",
             pid,
             d7abi::SyscallNumber::try_from(rsc.routine).ok()
         );
         let res = syscall(mm, &mut sched, pid, rsc);
-        log::trace!("[pid={:8}] => {:?} ", pid, res);
+        log::debug!("[pid={:8}] => {:?} ", pid, res);
 
         // Write result register values into the process stack
         if let SyscallResult::Continue(r) | SyscallResult::Switch(r, _) = res {

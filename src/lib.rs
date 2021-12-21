@@ -44,8 +44,8 @@
 #![feature(trait_alias)]
 #![feature(let_else)]
 
-use core::arch::asm;
 use core::alloc::Layout;
+use core::arch::asm;
 use core::panic::PanicInfo;
 
 #[macro_use]
@@ -91,18 +91,18 @@ pub extern "C" fn rust_main() -> ! {
     interrupt::init_after_memory();
     cpuid::init();
     driver::uart::init();
-    driver::tsc::init();
     unsafe {
         driver::acpi::init();
+        smp::sleep::init();
         driver::ioapic::init_bsp();
         // smp::start_all();
     }
     services::init();
 
-    rreset!();
+    // rreset!();
     log::info!("Kernel initialized.");
 
-    syslog::disable_direct_vga();
+    // syslog::disable_direct_vga();
 
     // Start service daemon
     crate::memory::configure(|mut mem_ctrl| {
@@ -146,7 +146,7 @@ pub extern "C" fn rust_ap_main() -> ! {
 
     log::trace!("INTO @ {}", self::driver::ioapic::lapic::processor_id());
     loop {
-        self::driver::tsc::sleep_ns(1_000_000_000);
+        crate::smp::sleep::sleep_ns(1_000_000_000);
         // log::info!("TICK @ {}", self::driver::ioapic::lapic::processor_id());
     }
 }

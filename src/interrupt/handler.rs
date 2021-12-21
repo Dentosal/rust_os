@@ -105,10 +105,14 @@ pub(super) unsafe extern "sysv64" fn exception_tsc_deadline() -> u128 {
     if crate::smp::is_bsp() && SCHEDULER_ENABLED.load(Ordering::SeqCst) {
         let next_process = {
             let mut sched = SCHEDULER.try_lock().expect("SCHEDUELR LOCKED");
-            sched.tick()
+            let target = sched.tick();
+            if let Some(deadline) = sched.next_tick() {
+                crate::smp::sleep::set_deadline(deadline);
+            }
+            target
         };
 
-        crate::driver::tsc::set_deadline_ns(1_000_000);
+        log::debug!("nextk {:?}", next_process);
         match next_process {
             ProcessSwitch::Switch(p) => return_process(p),
             ProcessSwitch::RepeatSyscall(p) => {
@@ -333,6 +337,8 @@ unsafe extern "C" fn process_interrupt_inner(
         log::debug!("Handling interrupt {:#02x} while in process", interrupt);
     }
 
+    log::debug!("Handling interrupt {:#02x} while in process", interrupt);
+
     match interrupt {
         0xd7 => {
             use crate::syscall::{handle_syscall, SyscallResultAction};
@@ -343,8 +349,14 @@ unsafe extern "C" fn process_interrupt_inner(
                     // get the next process
                     let next_process = {
                         let mut sched = SCHEDULER.try_lock().unwrap();
-                        sched.switch(Some(schedule))
+                        let target = sched.switch(Some(schedule));
+                        log::debug!("sc next_t {:?}", sched.next_tick());
+                        if let Some(deadline) = sched.next_tick() {
+                            crate::smp::sleep::set_deadline(deadline);
+                        }
+                        target
                     };
+                    log::debug!("sc next {:?}", next_process);
                     handle_switch!(next_process);
                 },
             }
@@ -353,15 +365,20 @@ unsafe extern "C" fn process_interrupt_inner(
             // TSC deadline
 
             // log::trace!("TSC_DEADLINE");
+            log::debug!("TSC_DEADLINE");
             crate::driver::ioapic::lapic::write_eoi();
 
             assert!(SCHEDULER_ENABLED.load(Ordering::SeqCst)); // TODO: remove
             if crate::smp::is_bsp() {
-                crate::driver::tsc::set_deadline_ns(1_000_000);
-                let switch_target = {
+                let switch_target  = {
                     let mut sched = SCHEDULER.try_lock().expect("SCHEDUELR LOCKED");
-                    sched.tick()
+                    let target = sched.tick();
+                    if let Some(deadline) = sched.next_tick() {
+                        crate::smp::sleep::set_deadline(deadline);
+                    }
+                    target
                 };
+                log::debug!("next {:?}", switch_target);
                 handle_switch!(switch_target);
             } else {
                 handle_switch!(ProcessSwitch::Idle);
@@ -391,10 +408,10 @@ unsafe extern "C" fn process_interrupt_inner(
         0x30..=0x9f => {
             // Dynamic range
             let mut sched = SCHEDULER.try_lock().unwrap();
-            let irq = interrupt-0x30;
+            let irq = interrupt - 0x30;
             crate::ipc::kernel_publish(&mut sched, &format!("irq/{}", irq), &());
             crate::driver::ioapic::lapic::write_eoi();
-        }
+        },
         0x00 => fail(pid, process::Error::DivideByZero(stack_frame)),
         0x0e => {
             // TODO:

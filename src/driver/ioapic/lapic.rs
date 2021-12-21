@@ -6,6 +6,7 @@ use x86_64::VirtAddr;
 use crate::driver::acpi::ACPI_DATA;
 use crate::memory;
 use crate::smp::ProcessorId;
+use crate::smp::sleep::lapic_freq_hz;
 
 mod reg {
     #[derive(Debug, Clone, Copy)]
@@ -43,6 +44,21 @@ mod reg {
     pub const TIMER_DIVIDE_CONFIG: LapicReg = LapicReg(0x3e0);
 }
 
+const TIMER_MODE_ONE_SHOT: u32 = 0x00000;
+const TIMER_MODE_DISABLED: u32 = 0x10000;
+const TIMER_MODE_PERIODIC: u32 = 0x20000;
+const TIMER_MODE_DEADLINE: u32 = 0x40000;
+
+
+const TIMER_DIVIDE_BY_1: u32	= 0xb;
+const TIMER_DIVIDE_BY_2: u32	= 0x0;
+const TIMER_DIVIDE_BY_4: u32	= 0x8;
+const TIMER_DIVIDE_BY_8: u32	= 0x2;
+const TIMER_DIVIDE_BY_16: u32	= 0xa;
+const TIMER_DIVIDE_BY_32: u32	= 0x1;
+const TIMER_DIVIDE_BY_64: u32	= 0x9;
+const TIMER_DIVIDE_BY_128: u32	= 0x3;
+
 /// Address of the processor-local APIC
 pub fn addr() -> VirtAddr {
     let phys_addr = ACPI_DATA
@@ -53,6 +69,7 @@ pub fn addr() -> VirtAddr {
     memory::phys_to_virt(phys_addr)
 }
 
+#[must_use]
 pub fn read_u32(offset: reg::LapicReg) -> u32 {
     unsafe { ptr::read_volatile((addr().as_u64() + offset.get()) as *const u32) }
 }
@@ -72,7 +89,38 @@ pub fn write_eoi() {
 }
 
 pub fn configure_timer(vector_number: u8) {
-    // vector number, TSC-deadline mode, and unmask
-    write_u32(reg::LVT_TIMER, (vector_number as u32) | 0x40000);
-    log::trace!("TSC-deadline timer configured");
+    if crate::cpuid::tsc_supports_deadline_mode() {
+        // Vector number, TSC-deadline mode, and unmask
+        write_u32(reg::LVT_TIMER, (vector_number as u32) | TIMER_MODE_DEADLINE);
+        log::trace!("TSC-deadline timer configured");
+    } else {
+        // Use divider 2, as 1 is buggy on some devices
+        write_u32(reg::TIMER_DIVIDE_CONFIG, TIMER_DIVIDE_BY_2);
+
+        //  Vector number, Oneshot mode
+        write_u32(reg::LVT_TIMER, (vector_number as u32) | TIMER_MODE_ONE_SHOT);
+
+        log::trace!("TSC-one-shot timer configured");
+    }
+}
+
+#[inline]
+pub fn set_timer_ticks(ticks: u32) {
+    assert!(
+        !crate::cpuid::tsc_supports_deadline_mode(),
+        "Not supported in TSC-deadline mode"
+    );
+    log::debug!("TSC-one-shot timer ticks {}", ticks);
+    log::debug!("TSC-one-shot timer hz {}", lapic_freq_hz());
+    set_timer_raw(ticks / 2);
+}
+
+#[inline]
+pub fn set_timer_raw(ticks: u32) {
+    write_u32(reg::TIMER_INITIAL_COUNT, ticks);
+}
+
+#[inline]
+pub fn get_timer_raw() -> u32 {
+    read_u32(reg::TIMER_CURRENT_COUNT)
 }

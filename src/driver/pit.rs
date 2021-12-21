@@ -4,8 +4,8 @@
 
 #![allow(unused_variables)]
 
-use core::sync::atomic::{AtomicU64, Ordering};
 use core::arch::asm;
+use core::sync::atomic::{AtomicU64, Ordering};
 
 const PIT_CH0: u16 = 0x40; // Channel 0 data port (read/write) (PIC TIMER)
 const PIT_CH1: u16 = 0x41; // Channel 1 data port (read/write) (UNUSED)

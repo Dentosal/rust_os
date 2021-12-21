@@ -1,6 +1,6 @@
-use core::arch::asm;
 use alloc::borrow::ToOwned;
 use alloc::string::String;
+use core::arch::asm;
 
 bitflags::bitflags! {
     pub struct FlagsECX: u32 {
@@ -85,7 +85,7 @@ fn call_cpuid(a: u32, b: u32) -> [u32; 4] {
             options(nostack, nomem)
         );
     }
-    [ra,rb,rc,rd]
+    [ra, rb, rc, rd]
 }
 
 pub fn cpu_brand() -> String {
@@ -109,8 +109,8 @@ pub fn cpu_brand() -> String {
 /// Returns tuple (max_standard_level, max_extended_level)
 fn get_max_levels() -> (u32, u32) {
     let max_standard_level: u32;
-    let [max_standard_level,_,_,_] = call_cpuid(0, 0);
-    let [max_extended_level,_,_,_] = call_cpuid(0x8000_0000u32, 0);
+    let [max_standard_level, _, _, _] = call_cpuid(0, 0);
+    let [max_extended_level, _, _, _] = call_cpuid(0x8000_0000u32, 0);
     (max_standard_level, max_extended_level)
 }
 
@@ -144,14 +144,20 @@ fn run_feature_checks() {
     let f_edx = FlagsEDX::from_bits_truncate(edx);
 
     assert_feature!(f_edx, FlagsEDX::TSC);
-    assert_feature!(f_ecx, FlagsECX::TSCD);
+    // assert_feature!(f_ecx, FlagsECX::TSCD);
     assert_feature!(f_edx, FlagsEDX::SSE);
     assert_feature!(f_edx, FlagsEDX::APIC);
 
     let edx: u32;
     // Get extended capabilities
     let [_, _, _, edx] = call_cpuid(0x8000_0007u32, 0);
-    assert!(edx & (1 << 8) != 0, "CPUID: invariant TSC not supported");
+    // assert!(edx & (1 << 8) != 0, "CPUID: invariant TSC not supported");
+}
+
+pub fn tsc_supports_deadline_mode() -> bool {
+    // let [_, _, ecx, _] = call_cpuid(1, 0);
+    // FlagsECX::from_bits_truncate(ecx).contains(FlagsECX::TSCD)
+    false
 }
 
 pub fn init() {

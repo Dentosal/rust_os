@@ -14,14 +14,14 @@ use crate::ipc::{
 
 mod initrd;
 
-
-pub fn acpitest(manager: &mut Manager, pid: ProcessId, message: Message) -> Result<(), DeliveryError> {
-    use alloc::string::String;
+pub fn acpitest(
+    manager: &mut Manager, pid: ProcessId, message: Message,
+) -> Result<(), DeliveryError> {
     use crate::ipc::Topic;
+    use alloc::string::String;
 
     let (reply_to, _): (String, ()) = pinecone::from_bytes(&message.data)
         .expect("Invalid message: TODO: just reply client error");
-
 
     let reply_to = Topic::new(&reply_to).ok_or_else(|| {
         log::warn!("Invalid reply_to topic name from {:?}", pid);
@@ -37,7 +37,6 @@ pub fn acpitest(manager: &mut Manager, pid: ProcessId, message: Message) -> Resu
 
     manager.kernel_deliver_reply(reply_to, &())
 }
-
 
 pub fn init() {
     register_exact("initrd/read", initrd::read);

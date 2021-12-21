@@ -171,9 +171,13 @@ pub fn init() {
             src_irq,
             RedirectEntry::new(
                 0x30 + irq,
-                RedirectEntryFlags::new(DeliveryMode::Fixed, false, false, pin_polarity_low,
+                RedirectEntryFlags::new(
+                    DeliveryMode::Fixed,
                     false,
-                    trigger_mode_level
+                    false,
+                    pin_polarity_low,
+                    false,
+                    trigger_mode_level,
                 ),
                 false, // !enabled.contains(&irq),
                 handling_cpu_id,

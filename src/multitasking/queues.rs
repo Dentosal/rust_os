@@ -112,7 +112,8 @@ impl Queues {
             return;
         }
 
-        log::trace!("Queuing process {} until {:?}", pid, s);
+        log::debug!("Queuing process {} until {:?}", pid, s);
+        log::debug!("now {:?}", BSPInstant::now());
 
         let wait_id = self.create_wait(pid);
         if let WaitFor::FirstOf(targets) = s {
@@ -135,6 +136,7 @@ impl Queues {
     /// Update when clock ticks
     pub fn on_tick(&mut self, now: &BSPInstant) {
         while let Some((wakeup, _)) = self.wait_sleeping.front() {
+            log::debug!("slepes {:?}", (now >= wakeup, now, wakeup));
             if now >= wakeup {
                 let (_, wait_id) = self.wait_sleeping.pop_front().unwrap();
                 self.trigger_wait(wait_id);
@@ -142,6 +144,11 @@ impl Queues {
                 break;
             }
         }
+    }
+
+    /// Next process wakeup from sleep
+    pub fn next_wakeup(&self) -> Option<BSPInstant> {
+        self.wait_sleeping.front().map(|(time, _)| *time)
     }
 
     /// Update when a process completes

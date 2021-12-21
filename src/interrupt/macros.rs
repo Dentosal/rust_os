@@ -54,7 +54,7 @@ macro_rules! irq_handler_switch {
 
         #[naked]
         unsafe extern "sysv64" fn wrapper(_: &mut InterruptStackFrame) {
-            asm!(concat!(
+            ::core::arch::asm!(concat!(
                     asm_save_scratch_registers!(), "
                     push rcx            // Save COMMON_ADDRESS_VIRT
                     //sub rsp, 8        // Align the stack pointer

@@ -34,8 +34,8 @@ fn main() -> u64 {
 
     for i in 0..100 {
         syscall::debug_print(&format!("TICK {} - {}", pid, i));
+        // break;
         syscall::sched_sleep_ns(1_000_000_000).unwrap();
-        break;
     }
 
 

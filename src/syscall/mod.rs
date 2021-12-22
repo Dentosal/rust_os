@@ -51,7 +51,7 @@ pub enum SyscallResult {
 macro_rules! try_str {
     ($slice:expr) => {{
         // Sanity check
-        assert!($slice.len() < 1000, "String length sanity check"); // TODO: client error
+        assert!($slice.len() < 10000, "String length sanity check"); // TODO: client error
         match ::core::str::from_utf8($slice) {
             Ok(value) => value,
             Err(err) => {

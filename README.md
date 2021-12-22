@@ -12,10 +12,12 @@ D7 is an operating system written in Rust. It aims to be an event-driven quasi-m
     * ATA PIO (Read only)
     * VirtIO-blk (Read only)
 * Networking:
-    * RTL8139 driver
+    * Drivers for NE2000 and RTL8139
+    * DHCP autoconfiguration
+    * ARP cache
 * Services
     * Serviced - startup and service status queries
-    * Netd - ARP responsder, manages network sockets
+    * Netd - Manages network interfaces and sockets
 
 ## Planned in the near future:
 * Usable TCP/IP stack

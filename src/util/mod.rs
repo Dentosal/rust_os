@@ -46,18 +46,18 @@ macro_rules! dump_memory_at {
 }
 
 macro_rules! int {
-    ($num:expr) => ({
+    ($num:expr) => {{
         ::core::arch::asm!(concat!("int ", stringify!($num)), options(nostack));
-    });
+    }};
 }
 
 macro_rules! bochs_magic_bp {
-    () => ({
+    () => {{
         #![allow(unused_unsafe)]
         unsafe {
             ::core::arch::asm!("xchg bx, bx", options(nostack, nomem));
         };
-    });
+    }};
 }
 
 macro_rules! no_interrupts {
@@ -69,7 +69,7 @@ macro_rules! no_interrupts {
         unsafe {
             ::core::arch::asm!("sti", options(nostack, nomem));
         }
-    }
+    };
 }
 
 macro_rules! sizeof {

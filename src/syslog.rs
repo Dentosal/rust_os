@@ -1,11 +1,11 @@
 use alloc::collections::VecDeque;
 use alloc::vec::Vec;
+use core::arch::asm;
 use core::fmt::Write;
-use core::sync::atomic::{AtomicBool, Ordering};
 use core::hint;
+use core::sync::atomic::{AtomicBool, Ordering};
 use log::{Level, Metadata, Record};
 use spin::Mutex;
-use core::arch::asm;
 
 /// Disable logging directly to the built-in vga buffer.
 /// This MUST NOT BE done before memory map has been initialized,

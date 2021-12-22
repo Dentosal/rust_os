@@ -392,7 +392,7 @@ impl Manager {
     }
 
     /// Acknowledge reliable delivery.
-    /// If positive==false, then negative-adknowledge
+    /// If positive==false, then negative-acknowledge
     pub fn acknowledge(
         &mut self, _subscription: SubscriptionId, ack_id: AcknowledgeId, positive: bool,
     ) -> IpcResult<()> {

@@ -22,23 +22,35 @@ impl BSPInstant {
         Self(tsc::read())
     }
 
+    pub fn tsc_value(self) -> u64 {
+        self.0
+    }
+
     pub fn add_ticks(self, ticks: u64) -> Self {
         Self(self.0 + ticks)
     }
 
     pub fn add_ns(self, ns: u64) -> Self {
-        Self(self.0 + tsc::ns_to_ticks(ns))
+        Self(self.0 + crate::smp::sleep::ns_to_ticks(ns))
+    }
+
+    pub fn try_ticks_from(self, earlier: BSPInstant) -> Option<u64> {
+        if earlier <= self {
+            Some(self.0 - earlier.0)
+        } else {
+            None
+        }
     }
 
     /// Panics if times in wrong order
     pub fn ticks_from(self, earlier: BSPInstant) -> u64 {
-        assert!(earlier <= self);
-        self.0 - earlier.0
+        self.try_ticks_from(earlier)
+            .expect("Timestamps in wrong order")
     }
 
     /// Panics if times in wrong order
     pub fn duration_from(self, earlier: BSPInstant) -> d7time::Duration {
-        d7time::Duration::from_nanos(tsc::ticks_to_ns(self.ticks_from(earlier)))
+        d7time::Duration::from_nanos(crate::smp::sleep::ticks_to_ns(self.ticks_from(earlier)))
     }
 
     pub fn ticks_since(self) -> u64 {

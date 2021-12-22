@@ -1,5 +1,5 @@
-use alloc::vec::Vec;
 use alloc::string::String;
+use alloc::vec::Vec;
 use core::sync::atomic::{AtomicBool, Ordering};
 use hashbrown::HashMap;
 use spin::Mutex;
@@ -8,6 +8,7 @@ use x86_64::{PhysAddr, VirtAddr};
 use crate::memory;
 use crate::memory::MemoryController;
 use crate::multitasking::{loader::ElfImage, ExplicitEventId};
+use crate::smp::sleep::ns_to_ticks;
 use crate::time::BSPInstant;
 
 use super::process::{Process, ProcessResult};
@@ -35,24 +36,24 @@ pub enum ProcessSwitch {
 
 #[derive(Debug)]
 pub struct Scheduler {
-    /// Time of the next switch if set, otherwise immediately
-    next_switch: Option<BSPInstant>,
     /// Processes by id
     processes: HashMap<ProcessId, Process>,
     /// Queues for different types of scheduling
     queues: Queues,
     /// Id of the currently running process
     running: Option<ProcessId>,
+    /// End of the timeslice of the currently running process
+    running_timeslice_end: Option<BSPInstant>,
     /// Next available process id
     next_pid: ProcessId,
 }
 impl Scheduler {
     pub unsafe fn new() -> Self {
         Self {
-            next_switch: None,
             processes: HashMap::new(),
             queues: Queues::new(),
             running: None,
+            running_timeslice_end: None,
             next_pid: ProcessId::first(),
         }
     }
@@ -127,6 +128,7 @@ impl Scheduler {
 
         if self.running == Some(target) {
             self.running = None;
+            self.running_timeslice_end = None;
         }
     }
 
@@ -172,6 +174,8 @@ impl Scheduler {
 
         if let Some(pid) = self.queues.take() {
             self.running = Some(pid);
+            self.running_timeslice_end =
+                Some(BSPInstant::now().add_ticks(ns_to_ticks(TIME_SLICE_NS)));
             let process = self
                 .processes
                 .get_mut(&pid)
@@ -186,6 +190,7 @@ impl Scheduler {
         } else {
             log::trace!("Switch to idle");
             self.running = None;
+            self.running_timeslice_end = None;
             ProcessSwitch::Idle
         }
     }
@@ -209,25 +214,23 @@ impl Scheduler {
         }
     }
 
+    /// Returns process to switch to, if any, and deadline for the next tick
     pub fn tick(&mut self) -> ProcessSwitch {
         let now = BSPInstant::now();
         self.queues.on_tick(&now);
-        match self.next_switch {
-            Some(s) => {
-                if now >= s {
-                    self.next_switch = Some(now.add_ns(TIME_SLICE_NS));
-                    unsafe { self.switch(Some(WaitFor::None)) }
-                } else {
-                    ProcessSwitch::Continue
-                }
-            },
-            None => {
-                // start switching
-                log::trace!("Start switching");
-                self.next_switch = Some(now.add_ns(TIME_SLICE_NS));
-                unsafe { self.switch(Some(WaitFor::None)) }
-            },
-        }
+        let target = unsafe { self.switch(Some(WaitFor::None)) };
+        target
+    }
+
+    /// When `tick()` should be called again
+    pub fn next_tick(&self) -> Option<BSPInstant> {
+        let Some(wakeup) = self.queues.next_wakeup() else {
+            return self.running_timeslice_end;
+        };
+        let Some(slice_end) = self.running_timeslice_end else {
+            return Some(wakeup);
+        };
+        return Some(wakeup.min(slice_end));
     }
 
     /// Tries to resolve a WaitFor in the current context

@@ -30,7 +30,3 @@ git = "https://github.com/Dentosal/num_enum_simplified"
 [dependencies.x86_64]
 git = "https://github.com/Dentosal/x86_64"
 features = ["use-serde"]
-
-[dependencies.d7time]
-version = "*"
-path = "../d7time"

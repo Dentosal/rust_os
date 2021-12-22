@@ -2,9 +2,9 @@ use core::arch::asm;
 use x86_64::PrivilegeLevel;
 
 macro_rules! irq_handler {
-    ($name:ident, $ist:expr) => {{
+    ($name:ident, $ist:expr $(, $arg:literal)?) => {{
         unsafe extern "x86-interrupt" fn wrapper(_: &mut InterruptStackFrame) {
-            ($name)();
+            ($name)($($arg)?);
         }
         idt::Descriptor::new(true, wrapper as u64, PrivilegeLevel::Ring0, $ist)
     }};
@@ -54,7 +54,7 @@ macro_rules! irq_handler_switch {
 
         #[naked]
         unsafe extern "sysv64" fn wrapper(_: &mut InterruptStackFrame) {
-            asm!(concat!(
+            ::core::arch::asm!(concat!(
                     asm_save_scratch_registers!(), "
                     push rcx            // Save COMMON_ADDRESS_VIRT
                     //sub rsp, 8        // Align the stack pointer

@@ -8,8 +8,8 @@ use crate::driver::acpi::ACPI_DATA;
 use crate::memory;
 use crate::smp::ProcessorId;
 
-pub mod lapic;
 pub mod io;
+pub mod lapic;
 
 pub use self::lapic::processor_id as apic_processor_id;
 
@@ -89,7 +89,7 @@ pub fn apic_wakeup_processor(acpi_id: u8) {
         ptr::write_volatile(field_hi, (acpi_id as u32) << 24);
         ptr::write_volatile(field_lo, 0x00004500);
 
-        crate::driver::tsc::sleep_ns(10_000_000);
+        crate::smp::sleep::sleep_ns(10_000_000);
 
         // Startup IPI
         log::trace!("Sending Startup IPI to core {}", acpi_id);

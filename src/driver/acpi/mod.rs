@@ -257,42 +257,10 @@ pub fn init() {
 
         ctx.initialize_objects().expect("init");
 
-        log::debug!("{:?}", ctx.namespace);
-
         // Invoke _PIC, it's optinal so ignore any errors
         let _ = ctx.invoke_method(
-        &aml::AmlName::from_str("\\_PIC").unwrap(),
+            &aml::AmlName::from_str("\\_PIC").unwrap(),
             Args::from_list(vec![AmlValue::Integer(1)]).expect("args"),
-        );
-    }
-}
-
-pub fn read_pci_routing() {
-    let mut ctx = AML_CTX.lock();
-
-    unsafe {
-        let pci_routing = aml::pci_routing::PciRoutingTable::from_prt_path(
-            &aml::AmlName::from_str("\\_SB.PCI0._PRT").unwrap(),
-            &mut ctx,
-        )
-        .expect("Could not read PCI routing table");
-
-        log::debug!("{:?}", pci_routing);
-        log::debug!(
-            "{:?}",
-            pci_routing.route(1, 0, aml::pci_routing::Pin::IntA, &mut ctx)
-        );
-        log::debug!(
-            "{:?}",
-            pci_routing.route(1, 0, aml::pci_routing::Pin::IntB, &mut ctx)
-        );
-        log::debug!(
-            "{:?}",
-            pci_routing.route(1, 0, aml::pci_routing::Pin::IntC, &mut ctx)
-        );
-        log::debug!(
-            "{:?}",
-            pci_routing.route(1, 0, aml::pci_routing::Pin::IntD, &mut ctx)
         );
     }
 }

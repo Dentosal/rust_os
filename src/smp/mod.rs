@@ -11,6 +11,7 @@ use crate::driver::ioapic;
 use crate::memory;
 
 pub mod data;
+pub mod sleep;
 
 pub fn current_processor_id() -> ProcessorId {
     if ioapic::is_enabled() {
@@ -83,7 +84,7 @@ unsafe fn start_one(acpi_id: ProcessorId) {
     // Sleep until the core is online, one second timeout
     let mut is_online = false;
     for _ in 0..50_000 {
-        crate::driver::tsc::sleep_ns(200_000);
+        sleep::sleep_ns(200_000);
         if AP_FREE_STACK.load(Ordering::SeqCst) == 0 {
             is_online = true;
             break;
@@ -117,7 +118,7 @@ pub fn start_all() {
     // Wait for all cores to be ready
     while AP_READY_COUNT.load(Ordering::SeqCst) < count {
         // TODO: timeout
-        crate::driver::tsc::sleep_ns(200_000);
+        sleep::sleep_ns(200_000);
     }
     log::info!("All CPU cores ready");
 }

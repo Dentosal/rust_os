@@ -155,11 +155,6 @@ impl Ne2k {
 
         pci_device.enable_bus_mastering();
 
-        let _: () = libd7::ipc::request("acpitest/read", ()).unwrap();
-
-        println!("line {:?}", pci_device.get_interrupt_line());
-        println!("pin {:?}", pci_device.get_interrupt_pin());
-
         let mut device = Self {
             pci_device,
             irq: pci_device

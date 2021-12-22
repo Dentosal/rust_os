@@ -144,6 +144,11 @@ impl Queues {
         }
     }
 
+    /// Next process wakeup from sleep
+    pub fn next_wakeup(&self) -> Option<BSPInstant> {
+        self.wait_sleeping.front().map(|(time, _)| *time)
+    }
+
     /// Update when a process completes
     pub fn on_process_over(&mut self, completed: ProcessId) {
         log::trace!("on_process_over {:?}", completed);

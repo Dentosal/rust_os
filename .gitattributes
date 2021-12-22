@@ -1,0 +1,7 @@
+* text=auto
+
+*.rs            eol=lf
+*.asm           eol=lf
+*.md            eol=lf
+*.conf          eol=lf
+*.cfg           eol=lf

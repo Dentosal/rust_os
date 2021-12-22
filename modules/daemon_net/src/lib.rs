@@ -1,8 +1,12 @@
 //! Networking daemon
 //!
+//! TODO: route broadcast packets to correct interfaces
 //!
+//! TODO: allow multiple NICs, including virtual ones, by separating
+//!     NetState to multiple interfaces and providing APIs for those
 
 #![no_std]
+#![feature(let_else)]
 #![deny(unused_must_use)]
 
 #[macro_use]
@@ -11,9 +15,10 @@ extern crate alloc;
 #[macro_use]
 extern crate libd7;
 
-use alloc::vec::Vec;
-use alloc::string::String;
 use alloc::borrow::ToOwned;
+use alloc::boxed::Box;
+use alloc::string::String;
+use alloc::vec::Vec;
 use hashbrown::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
@@ -27,6 +32,11 @@ use libd7::{
     syscall::{SyscallErrorCode, SyscallResult},
 };
 
+mod dhcp_client;
+mod interface;
+
+use self::interface::{Interface, InterfaceSettings};
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub struct Driver {
     name: String,
@@ -34,28 +44,36 @@ pub struct Driver {
 }
 
 struct NetState {
-    pub mac: MacAddr,
-    pub ip: Ipv4Addr,
+    pub interfaces: Vec<Interface>,
     pub arp_table: HashMap<Ipv4Addr, MacAddr>,
-    pub sockets: HashMap<u64, SocketAddr>,
-    pub next_socket: u64,
+    pub udp_handlers:
+        HashMap<SocketAddr, fn(&mut Self, ethernet::FrameHeader, ipv4::Header, udp::Packet)>,
 }
 impl NetState {
-    pub fn new(mac: MacAddr) -> Self {
+    pub fn new() -> Self {
         Self {
-            mac,
-            ip: Ipv4Addr([10, 0, 2, 15]), // Use fixed IP until DHCP is implemented
+            interfaces: Vec::new(),
             arp_table: HashMap::new(),
-            sockets: HashMap::new(),
-            next_socket: 1,
+            udp_handlers: HashMap::new(),
         }
     }
 
-    pub fn create_socket(&mut self, addr: SocketAddr) -> u64 {
-        let id = self.next_socket;
-        self.next_socket += 1;
-        self.sockets.insert(id, addr);
-        id
+    pub fn interface(&self, mac_addr: MacAddr) -> Option<&Interface> {
+        if mac_addr == MacAddr::BROADCAST {
+            return self.interfaces.get(0);
+        }
+        self.interfaces
+            .iter()
+            .find(|intf| intf.mac_addr == mac_addr)
+    }
+
+    pub fn interface_mut(&mut self, mac_addr: MacAddr) -> Option<&mut Interface> {
+        if mac_addr == MacAddr::BROADCAST {
+            return self.interfaces.get_mut(0);
+        }
+        self.interfaces
+            .iter_mut()
+            .find(|intf| intf.mac_addr == mac_addr)
     }
 
     pub fn on_event(&mut self, packet: &[u8]) {
@@ -72,27 +90,38 @@ impl NetState {
 
                 // Update arp table
                 if arp_packet.sender_ip != Ipv4Addr::ZERO {
-                    println!("ARP: Mark owner {:?} {:?}", arp_packet.sender_ip, arp_packet.sender_hw);
-                    self.arp_table.insert(arp_packet.sender_ip, arp_packet.sender_hw);
+                    println!(
+                        "ARP: Mark owner {:?} {:?}",
+                        arp_packet.sender_ip, arp_packet.sender_hw
+                    );
+                    self.arp_table
+                        .insert(arp_packet.sender_ip, arp_packet.sender_hw);
                 }
 
-                // Reply to ARP packets
-                if arp_packet.is_request() && arp_packet.target_ip == self.ip {
-                    println!("ARP: Replying");
+                // Reply to ARP packets if the corresponding interface has an ip
+                if let Some(intf) = self.interface(frame.header.dst_mac) {
+                    if !intf.arp_probe_ok {
+                        return;
+                    }
+                    if let Some(ip) = intf.settings.ipv4 {
+                        if arp_packet.is_request() && arp_packet.target_ip == ip {
+                            println!("ARP: Replying");
 
-                    let reply = (ethernet::Frame {
-                        header: ethernet::FrameHeader {
-                            dst_mac: frame.header.src_mac,
-                            src_mac: self.mac,
-                            ethertype: EtherType::ARP,
-                        },
-                        payload: arp_packet.to_reply(self.mac, self.ip).to_bytes(),
-                    })
-                    .to_bytes();
+                            let reply = (ethernet::Frame {
+                                header: ethernet::FrameHeader {
+                                    dst_mac: frame.header.src_mac,
+                                    src_mac: intf.mac_addr,
+                                    ethertype: EtherType::ARP,
+                                },
+                                payload: arp_packet.to_reply(intf.mac_addr, ip).to_bytes(),
+                            })
+                            .to_bytes();
 
-                    ipc::deliver("nic/send", &reply).unwrap();
+                            ipc::deliver("nic/send", &reply).unwrap();
+                        }
+                    }
                 }
-            }
+            },
             EtherType::Ipv4 => {
                 let ip_packet = ipv4::Packet::from_bytes(&frame.payload);
                 println!("{:?}", ip_packet);
@@ -101,105 +130,83 @@ impl NetState {
                     IpProtocol::TCP => {
                         let tcp_packet = tcp::Segment::from_bytes(&ip_packet.payload);
                         println!("{:?}", tcp_packet);
-                    }
-                    _ => {}
-                }
+                    },
+                    IpProtocol::UDP => {
+                        let udp_packet = udp::Packet::from_bytes(&ip_packet.payload);
+                        println!("{:?}", udp_packet);
 
-                panic!("IP!!!");
-            }
-            _ => {}
+                        let addr_exact = SocketAddr {
+                            host: IpAddr::V4(ip_packet.header.dst_ip),
+                            port: udp_packet.header.dst_port,
+                        };
+
+                        let addr_any_ip = SocketAddr {
+                            host: IpAddr::V4(Ipv4Addr::ZERO),
+                            port: udp_packet.header.dst_port,
+                        };
+
+                        if let Some(handler) = self
+                            .udp_handlers
+                            .get(&addr_exact)
+                            .or(self.udp_handlers.get(&addr_any_ip))
+                        {
+                            handler(self, frame.header, ip_packet.header, udp_packet);
+                            return;
+                        } else {
+                            println!("No UDP handlers assigned for {:?}", addr_exact);
+                        }
+                    },
+                    _ => {},
+                }
+            },
+            _ => {},
         }
     }
 }
-
-// fn handle_attachment(a: &mut attachment::BufferedAttachment, net_state: &mut NetState) {
-//     let r = match a.next_request() {
-//         Some(v) => v,
-//         None => return,
-//     }.unwrap();
-//     match &r.operation {
-//         attachment::RequestFileOperation::Read(count) => a.reply(r.response({
-//             if let Some(path) = r.suffix.clone() {
-//                 match path.as_ref() {
-//                     "socket" => {
-//                         // Read socket directory
-//                         let mut hs = HashSet::new();
-//                         for s in net_state.sockets.keys() {
-//                             hs.insert(s.to_string());
-//                         }
-//                         attachment::ResponseFileOperation::Read(pinecone::to_vec(&hs).unwrap())
-//                     }
-//                     "newsocket" => attachment::ResponseFileOperation::Error(
-//                         SyscallErrorCode::fs_operation_not_supported,
-//                     ),
-//                     other => todo!("????"),
-//                 }
-//             } else {
-//                 // Read root branch
-//                 let mut hs = HashSet::new();
-//                 hs.insert("socket");
-//                 hs.insert("newsocket");
-//                 attachment::ResponseFileOperation::Read(pinecone::to_vec(&hs).unwrap())
-//             }
-//         })).unwrap(),
-//         attachment::RequestFileOperation::Write(data) => {
-//             if let Some(path) = r.suffix.clone() {
-//                 match path.as_ref() {
-//                     "socket" => a.reply(r.response(attachment::ResponseFileOperation::Error(
-//                         SyscallErrorCode::fs_operation_not_supported,
-//                     ))).unwrap(),
-//                     "newsocket" => {
-//                         // Create a new socket
-//                         let addr: SocketAddr = pinecone::from_bytes(&data).unwrap();
-//                         let socket_id = net_state.create_socket(addr);
-//                         let response_bytes = pinecone::to_vec(&socket_id).unwrap();
-//                         a.reply(r.response(attachment::ResponseFileOperation::Write(
-//                             response_bytes.len() as u64
-//                         ))).unwrap();
-//                         a.buffer_reply(r.response(attachment::ResponseFileOperation::Read(
-//                             response_bytes
-//                         )));
-//                     }
-//                     other => todo!("????"),
-//                 }
-//             } else {
-//                 // Read root branch
-//                 let mut hs = HashSet::new();
-//                 hs.insert("socket");
-//                 hs.insert("newsocket");
-
-//                 a.reply(r.response(attachment::ResponseFileOperation::Error(
-//                     SyscallErrorCode::fs_operation_not_supported,
-//                 ))).unwrap();
-//             }
-//         }
-//         other => {
-//             a.reply(r.response(attachment::ResponseFileOperation::Error(
-//                 SyscallErrorCode::fs_operation_not_supported,
-//             ))).unwrap();
-//         }
-//     }
-// }
 
 #[no_mangle]
 fn main() -> ! {
     println!("Network daemon starting");
 
-    // Wait until a driver is available
-    service::wait_for_one("driver_rtl8139");
+    let nics = ["ne2k", "rtl8139"];
 
-    let mac_addr: MacAddr = match ipc::request("nic/rtl8139/mac", &()) {
-        Ok(mac) => mac,
-        Err(SyscallErrorCode::ipc_delivery_no_target) => {
-            panic!("No NIC drivers available");
-        }
-        Err(err) => panic!("NIC ping failed {:?}", err),
+    // Wait until a driver is available
+    let drivers: &[String] = &nics.map(|nic| format!("driver_{}", nic));
+    service::wait_for_any(drivers);
+
+    let mut mac_addr: Option<MacAddr> = None;
+    for nic in nics {
+        if let Ok(addr) = ipc::request(&format!("nic/{}/mac", nic), &()) {
+            mac_addr = Some(addr);
+            break;
+        };
+    }
+    let Some(mac_addr) = mac_addr else {
+        panic!("No MAC address received");
     };
 
-    let mut net_state = NetState::new(mac_addr);
+    let mut net_state = NetState::new();
+    net_state.interfaces.push(Interface::new(mac_addr));
+
+    fn handle_udp_dhcp(
+        ns: &mut NetState, e: ethernet::FrameHeader, h: ipv4::Header, p: udp::Packet,
+    ) {
+        println!("{:?}", ns.interfaces);
+        println!("{:?}", e.dst_mac);
+        let mut intf = ns.interface_mut(e.dst_mac).unwrap();
+        intf.on_dhcp_packet(e, h, p)
+    }
+
+    net_state.udp_handlers.insert(
+        SocketAddr {
+            host: IpAddr::V4(Ipv4Addr::ZERO),
+            port: 68,
+        },
+        handle_udp_dhcp,
+    );
 
     // Subscribe to messages
-    let a: ipc::Server<SocketAddr, u64> = ipc::Server::exact("netd/newsocket").unwrap();
+    let get_mac: ipc::Server<(), MacAddr> = ipc::Server::exact("netd/mac").unwrap();
     let received = ipc::ReliableSubscription::<Vec<u8>>::exact("netd/received").unwrap();
 
     // Announce that we are running
@@ -207,14 +214,19 @@ fn main() -> ! {
 
     println!("netd running {:?}", mac_addr);
 
+    for intf in &mut net_state.interfaces {
+        intf.dhcp_client.send_discover();
+    }
+
     loop {
         println!("--> select!");
         select! {
+            one(get_mac) => get_mac.handle(|()| Ok(mac_addr)).unwrap(),
             one(received) => {
                 let packet = received.ack_receive().unwrap();
+                println!("RECV {}", packet.len());
                 net_state.on_event(&packet);
             },
-            // one(a.inner.fd) => handle_attachment(&mut a, &mut net_state),
             error -> e => panic!("ERROR {:?}", e)
         };
     }

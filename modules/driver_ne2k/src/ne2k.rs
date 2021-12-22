@@ -7,8 +7,6 @@ use cpuio::UnsafePort;
 use d7pci::Device;
 use libd7::net::d7net::MacAddr;
 
-use super::dma::DMARegion;
-
 const TX_BUFFER_COUNT: usize = 4;
 
 mod reg {
@@ -422,12 +420,13 @@ impl Ne2k {
 
             while curr != self.next_packet {
                 println!("loop {} != {}", curr, self.next_packet);
+
                 // Read packet info
                 let mut buf = [0; 4];
                 self.read_dma(self.next_packet, 0, &mut buf);
                 let rsr = RxStatus::from_bits_truncate(buf[0]);
                 let next = buf[1];
-                let len = (buf[2] as u16) | ((buf[3] as u16) >> 8);
+                let len = (buf[2] as u16) | ((buf[3] as u16) << 8);
                 let len = len - 4; // ???
 
                 println!("pckt info {:?} {} {}", rsr, next, len);

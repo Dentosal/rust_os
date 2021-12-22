@@ -51,7 +51,7 @@ pub enum SyscallResult {
 macro_rules! try_str {
     ($slice:expr) => {{
         // Sanity check
-        assert!($slice.len() < 1000, "String length sanity check"); // TODO: client error
+        assert!($slice.len() < 10000, "String length sanity check"); // TODO: client error
         match ::core::str::from_utf8($slice) {
             Ok(value) => value,
             Err(err) => {
@@ -634,13 +634,13 @@ pub fn handle_syscall(
             routine: reg_rax,
             args: (reg_rdi, reg_rsi, reg_rdx, reg_rcx),
         };
-        log::debug!(
+        log::trace!(
             "[pid={:8}] <= {:?} ",
             pid,
             d7abi::SyscallNumber::try_from(rsc.routine).ok()
         );
         let res = syscall(mm, &mut sched, pid, rsc);
-        log::debug!("[pid={:8}] => {:?} ", pid, res);
+        log::trace!("[pid={:8}] => {:?} ", pid, res);
 
         // Write result register values into the process stack
         if let SyscallResult::Continue(r) | SyscallResult::Switch(r, _) = res {

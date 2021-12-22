@@ -13,7 +13,7 @@ pub fn read(manager: &mut Manager, pid: ProcessId, message: Message) -> Result<(
     })?;
 
     let data = crate::initrd::read(&path).ok_or_else(|| {
-        log::warn!("Missing initrd file requested by {:?}", pid);
+        log::warn!("Missing initrd {} file requested by {:?}", path, pid);
         DeliveryError::NegativeAcknowledgement
     })?;
 

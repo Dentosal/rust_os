@@ -64,9 +64,19 @@ impl Header {
         }
     }
 
-    pub fn to_bytes(self) -> Vec<u8> {
+    pub fn to_bytes(self, payload_len: usize) -> Vec<u8> {
         let mut result = Vec::new();
-        todo!();
+        result.push(0x45); // Version and IHL
+        result.push(self.dscp_and_ecn);
+        result.extend(&u16::to_be_bytes(20 + (payload_len as u16)));
+        result.extend(&u16::to_be_bytes(self.identification));
+        result.extend(&u16::to_be_bytes(self.flags_and_frament));
+        result.push(self.ttl);
+        result.push(self.protocol as u8);
+        let checksum = crate::checksum::inet_checksum(&result);
+        result.extend(&u16::to_be_bytes(checksum));
+        result.extend(&self.src_ip.0);
+        result.extend(&self.dst_ip.0);
         result
     }
 }

@@ -112,7 +112,6 @@ pub(super) unsafe extern "sysv64" fn exception_tsc_deadline() -> u128 {
             target
         };
 
-        log::debug!("nextk {:?}", next_process);
         match next_process {
             ProcessSwitch::Switch(p) => return_process(p),
             ProcessSwitch::RepeatSyscall(p) => {
@@ -207,44 +206,11 @@ pub(super) unsafe fn exception_irq15() {
     }
 }
 
-/// Free IRQs, i.e. {9,10,11} for peripherals
-pub(super) unsafe fn exception_irq_free(interrupt: u8) {
-    let irq = interrupt - 0x20;
-    log::info!("Triggering free IRQ {:02x}", irq);
-    panic!("Stop! reached");
-
-    // let value: u64;
-
-    // // TODO: implment pluggable handlers (SYSCALL::set_irq_handler)
-    // if irq == 11 {
-    //     unsafe {
-    //         let mut r_isr: cpuio::UnsafePort<u16> = cpuio::UnsafePort::new(0xc000 + 0x3e);
-    //         let v = r_isr.read();
-    //         r_isr.write(v);
-    //         log::trace!("v = {:#x}", v);
-    //         value = v as u64;
-    //     };
-    // } else {
-    //     value = 0;
-    // }
-
-    // // let mut sched = SCHEDULER.try_lock().unwrap();
-    // // crate::ipc::kernel_publish(&mut sched, &format!("irq/{}", irq), &value);
-
-    // let mut pics = pic::PICS.try_lock().unwrap();
-    // pics.notify_eoi(interrupt);
-}
-
-pub(super) unsafe fn exception_irq9() {
-    exception_irq_free(0x29)
-}
-
-pub(super) unsafe fn exception_irq10() {
-    exception_irq_free(0x2a)
-}
-
-pub(super) unsafe fn exception_irq11() {
-    exception_irq_free(0x2b)
+pub(super) unsafe fn irq_dynamic(interrupt: u8) {
+    let mut sched = SCHEDULER.try_lock().unwrap();
+    let irq = interrupt - 0x30;
+    crate::ipc::kernel_publish(&mut sched, &format!("irq/{}", irq), &());
+    crate::driver::ioapic::lapic::write_eoi();
 }
 
 /// Some other core paniced, stopping the system
@@ -337,8 +303,6 @@ unsafe extern "C" fn process_interrupt_inner(
         log::debug!("Handling interrupt {:#02x} while in process", interrupt);
     }
 
-    log::debug!("Handling interrupt {:#02x} while in process", interrupt);
-
     match interrupt {
         0xd7 => {
             use crate::syscall::{handle_syscall, SyscallResultAction};
@@ -350,13 +314,11 @@ unsafe extern "C" fn process_interrupt_inner(
                     let next_process = {
                         let mut sched = SCHEDULER.try_lock().unwrap();
                         let target = sched.switch(Some(schedule));
-                        log::debug!("sc next_t {:?}", sched.next_tick());
                         if let Some(deadline) = sched.next_tick() {
                             crate::smp::sleep::set_deadline(deadline);
                         }
                         target
                     };
-                    log::debug!("sc next {:?}", next_process);
                     handle_switch!(next_process);
                 },
             }
@@ -365,7 +327,6 @@ unsafe extern "C" fn process_interrupt_inner(
             // TSC deadline
 
             // log::trace!("TSC_DEADLINE");
-            log::debug!("TSC_DEADLINE");
             crate::driver::ioapic::lapic::write_eoi();
 
             assert!(SCHEDULER_ENABLED.load(Ordering::SeqCst)); // TODO: remove
@@ -378,7 +339,6 @@ unsafe extern "C" fn process_interrupt_inner(
                     }
                     target
                 };
-                log::debug!("next {:?}", switch_target);
                 handle_switch!(switch_target);
             } else {
                 handle_switch!(ProcessSwitch::Idle);
@@ -393,9 +353,6 @@ unsafe extern "C" fn process_interrupt_inner(
         0x22..=0x26 | 0x28 | 0x2c..=0x2d => {
             // pic::PICS.lock().notify_eoi(interrupt);
             panic!("Unhandled interrupt: {:02x}", interrupt);
-        },
-        0x29..=0x2b => {
-            exception_irq_free(interrupt);
         },
         0x2e => {
             // Handle (ignore) ata interrupts

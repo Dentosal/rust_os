@@ -16,12 +16,11 @@ use libd7::{
     // fs::{list_dir, File},
     // process::Process,
     ipc,
+    net::d7net::*,
+    // net::tcp,
     service,
     syscall,
-    net::{d7net::*},
-    // net::tcp,
 };
-
 
 #[no_mangle]
 fn main() -> u64 {
@@ -34,67 +33,69 @@ fn main() -> u64 {
 
     for i in 0..100 {
         syscall::debug_print(&format!("TICK {} - {}", pid, i));
-        // break;
+        break;
         syscall::sched_sleep_ns(1_000_000_000).unwrap();
     }
-
 
     // Wait until netd is available
     println!("Wait for netd >");
     service::wait_for_one("netd");
     println!("Wait for netd <");
 
-    let mac_addr: MacAddr = match ipc::request("nic/rtl8139/mac", &()) {
+    let mac_addr: MacAddr = match ipc::request("netd/mac", &()) {
         Ok(mac) => mac,
         Err(err) => panic!("NIC ping failed {:?}", err),
     };
 
-    // ARP
+    let arpp = arp::Packet {
+        ptype: EtherType::Ipv4,
+        operation: arp::Operation::Request,
+        sender_hw: mac_addr,
+        sender_ip: Ipv4Addr::from_bytes(&[192, 178, 10, 16]),
+        target_hw: MacAddr::ZERO,
+        target_ip: Ipv4Addr::from_bytes(&[192, 168, 10, 1]),
+    };
 
-    let mut packet = Vec::new();
+    let ef = ethernet::Frame {
+        header: ethernet::FrameHeader {
+            dst_mac: MacAddr::BROADCAST,
+            src_mac: mac_addr,
+            ethertype: EtherType::ARP,
+        },
+        payload: arpp.to_bytes(),
+    };
 
-    // dst mac: broadcast
-    packet.extend(&MacAddr::BROADCAST.0);
-
-    // src mac: this computer
-    packet.extend(&mac_addr.0);
-
-    // ethertype: arp
-    packet.extend(&EtherType::ARP.to_bytes());
-
-    // arp: HTYPE: ethernet
-    packet.extend(&1u16.to_be_bytes());
-
-    // arp: PTYPE: ipv4
-    packet.extend(&0x0800u16.to_be_bytes());
-
-    // arp: HLEN: 6 for mac addr
-    packet.push(6);
-
-    // arp: PLEN: 4 for ipv4
-    packet.push(4);
-
-    // arp: Opeeration: request
-    packet.extend(&1u16.to_be_bytes());
-
-    // arp: SHA: our mac
-    packet.extend(&mac_addr.0);
-
-    // arp: SPA: our ip (hardcoded for now)
-    packet.extend(&[192, 168, 10, 15]);
-
-    // arp: THA: target mac, ignored
-    packet.extend(&[0, 0, 0, 0, 0, 0]);
-
-    // arp: TPA: target ip (bochs vnet router)
-    packet.extend(&[192, 168, 10, 1]);
-
-    // padding
+    let mut packet = ef.to_bytes();
     while packet.len() < 64 {
         packet.push(0);
     }
 
     ipc::deliver("nic/send", &packet).expect("Delivery failed");
+
+    // let ef = ethernet::Frame {
+    //     header: ethernet::FrameHeader {
+    //         dst_mac: MacAddr::BROADCAST,
+    //         src_mac: mac_addr,
+    //         ethertype: EtherType::Ipv4,
+    //     },
+    //     payload: builder::ipv4_udp::Builder::new(
+    //         Ipv4Addr::ZERO,
+    //         Ipv4Addr::BROADCAST,
+    //         68,
+    //         67,
+    //         dhcp::Payload::discover(xid, mac_addr).to_bytes(),
+    //     )
+    //     .build(),
+    // };
+
+    // let mut packet = ef.to_bytes();
+    // while packet.len() < 64 {
+    //     packet.push(0);
+    // }
+
+    // ipc::deliver("nic/send", &packet).expect("Delivery failed");
+
+    println!("Delivered");
 
     0
 

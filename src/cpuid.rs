@@ -155,9 +155,8 @@ fn run_feature_checks() {
 }
 
 pub fn tsc_supports_deadline_mode() -> bool {
-    // let [_, _, ecx, _] = call_cpuid(1, 0);
-    // FlagsECX::from_bits_truncate(ecx).contains(FlagsECX::TSCD)
-    false
+    let [_, _, ecx, _] = call_cpuid(1, 0);
+    FlagsECX::from_bits_truncate(ecx).contains(FlagsECX::TSCD)
 }
 
 pub fn init() {

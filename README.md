@@ -12,6 +12,7 @@ D7 is an operating system written in Rust. It aims to be an event-driven quasi-m
     * ATA PIO (Read only)
     * VirtIO-blk (Read only)
 * Networking:
+    * NE2000 driver
     * RTL8139 driver
 * Services
     * Serviced - startup and service status queries

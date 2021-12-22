@@ -11,6 +11,7 @@ pub struct Ipv6Addr(pub [u8; 16]);
 impl Ipv4Addr {
     pub const ZERO: Self = Self([0, 0, 0, 0]);
     pub const LOCALHOST: Self = Self([127, 0, 0, 1]);
+    pub const BROADCAST: Self = Self([255, 255, 255, 255]);
 
     pub fn from_bytes(bytes: &[u8]) -> Self {
         assert!(bytes.len() == 4);
@@ -58,7 +59,7 @@ impl IpAddr {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Hash)]
 pub struct SocketAddr {
     pub host: IpAddr,
     pub port: u16,

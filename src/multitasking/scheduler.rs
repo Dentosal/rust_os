@@ -15,7 +15,7 @@ use super::process::{Process, ProcessResult};
 use super::queues::Queues;
 use super::{ProcessId, WaitFor};
 
-const TIME_SLICE_NS: u64 = 10_000_000_000;
+const TIME_SLICE_NS: u64 = 100_000_000;
 
 /// Process switch an related alternatives
 #[allow(clippy::large_enum_variant)]

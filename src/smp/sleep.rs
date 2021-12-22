@@ -70,7 +70,6 @@ pub fn lapic_freq_hz() -> u64 {
 }
 
 pub fn set_deadline(instant: BSPInstant) {
-    log::debug!("deadline {:?} (now {:?})", instant, BSPInstant::now());
     if crate::cpuid::tsc_supports_deadline_mode() {
         tsc::set_deadline(instant.tsc_value());
     } else {

@@ -2,9 +2,9 @@ use core::arch::asm;
 use x86_64::PrivilegeLevel;
 
 macro_rules! irq_handler {
-    ($name:ident, $ist:expr) => {{
+    ($name:ident, $ist:expr $(, $arg:literal)?) => {{
         unsafe extern "x86-interrupt" fn wrapper(_: &mut InterruptStackFrame) {
-            ($name)();
+            ($name)($($arg)?);
         }
         idt::Descriptor::new(true, wrapper as u64, PrivilegeLevel::Ring0, $ist)
     }};

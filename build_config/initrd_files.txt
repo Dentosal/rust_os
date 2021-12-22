@@ -14,6 +14,7 @@ netd=build/modules/daemon_net.elf
 driver_ata_pio=build/modules/driver_ata_pio.elf
 driver_ps2=build/modules/driver_ps2.elf
 driver_pci=build/modules/driver_pci.elf
+driver_ne2k=build/modules/driver_ne2k.elf
 driver_rtl8139=build/modules/driver_rtl8139.elf
 
 # Applications

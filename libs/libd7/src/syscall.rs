@@ -92,6 +92,13 @@ pub fn exec(image: &[u8]) -> SyscallResult<ProcessId> {
     }
 }
 
+/// Access kernel entropy pool
+pub fn random(seed: u64) -> u64 {
+    unsafe {
+        syscall!(SyscallNumber::random; seed).expect("random returned an error")
+    }
+}
+
 /// This system call never fails, and does not return anything
 pub fn sched_yield() {
     let _ = unsafe { syscall!(SyscallNumber::sched_yield) };

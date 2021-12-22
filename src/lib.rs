@@ -43,6 +43,7 @@
 #![feature(stmt_expr_attributes)]
 #![feature(trait_alias)]
 #![feature(let_else)]
+#![feature(inline_const)]
 
 use core::alloc::Layout;
 use core::arch::asm;
@@ -74,6 +75,7 @@ mod smp;
 mod syscall;
 mod syslog;
 mod time;
+mod random;
 
 use self::multitasking::SCHEDULER;
 
@@ -90,6 +92,7 @@ pub extern "C" fn rust_main() -> ! {
     memory::init();
     interrupt::init_after_memory();
     cpuid::init();
+    random::init();
     driver::uart::init();
     unsafe {
         driver::acpi::init();

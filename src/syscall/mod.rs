@@ -139,6 +139,11 @@ fn syscall(
                     ))
                 }
             },
+            SC::random => {
+                let (entropy, _, _, _) = rsc.args;
+                crate::random::insert_entropy(entropy);
+                SyscallResult::Switch(Ok(crate::random::read()), WaitFor::None)
+            },
             SC::sched_yield => {
                 let (_, _, _, _) = rsc.args;
                 SyscallResult::Switch(Ok(0), WaitFor::None)

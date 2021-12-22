@@ -99,6 +99,9 @@ pub(super) unsafe fn exception_snp(stack_frame: &InterruptStackFrame, error_code
 
 /// LAPIC TSC-deadline timer ticked
 pub(super) unsafe extern "sysv64" fn exception_tsc_deadline() -> u128 {
+    // Interrupt timing
+    crate::random::insert_entropy(0);
+
     // log::trace!("TSC_DEADLINE");
     crate::driver::ioapic::lapic::write_eoi();
 
@@ -279,6 +282,9 @@ unsafe extern "C" fn process_interrupt_inner(
         sched.store_state(pid, page_table, process_stack);
         pid
     };
+
+    // Interrupt timing and number
+    crate::random::insert_entropy(interrupt as u64);
 
     macro_rules! handle_switch {
         ($next_process:expr) => {{

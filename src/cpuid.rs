@@ -70,7 +70,7 @@ bitflags::bitflags! {
 }
 
 /// Returns (a,b,c,d)
-fn call_cpuid(a: u32, b: u32) -> [u32; 4] {
+fn call_cpuid(a: u32) -> [u32; 4] {
     let ra: u32;
     let rb: u32;
     let rc: u32;
@@ -79,7 +79,7 @@ fn call_cpuid(a: u32, b: u32) -> [u32; 4] {
         asm!(
             "xchg r10, rbx; cpuid; xchg r10, rbx",
             inlateout("eax") a => ra,
-            inlateout("r10") b => rb,
+            inlateout("r10") 0 => rb,
             inlateout("ecx") 0 => rc,
             inlateout("edx") 0 => rd,
             options(nostack, nomem)
@@ -92,7 +92,7 @@ pub fn cpu_brand() -> String {
     let mut result = String::new();
 
     'outer: for index in 0x80000002u32..=0x80000004u32 {
-        for v in call_cpuid(0, 0).iter() {
+        for v in call_cpuid(0).iter() {
             for i in 0..=3 {
                 let bytepos = i * 8;
                 let byte = ((v & (0xFF << bytepos)) >> bytepos) as u8;
@@ -109,8 +109,8 @@ pub fn cpu_brand() -> String {
 /// Returns tuple (max_standard_level, max_extended_level)
 fn get_max_levels() -> (u32, u32) {
     let max_standard_level: u32;
-    let [max_standard_level, _, _, _] = call_cpuid(0, 0);
-    let [max_extended_level, _, _, _] = call_cpuid(0x8000_0000u32, 0);
+    let [max_standard_level, _, _, _] = call_cpuid(0);
+    let [max_extended_level, _, _, _] = call_cpuid(0x8000_0000u32);
     (max_standard_level, max_extended_level)
 }
 
@@ -137,7 +137,7 @@ fn run_feature_checks() {
         level_ext
     );
 
-    let [_, _, ecx, edx] = call_cpuid(1, 0);
+    let [_, _, ecx, edx] = call_cpuid(1);
     log::debug!("CPU: FEATURE BITS: {:b} {:b}", ecx, edx);
 
     let f_ecx = FlagsECX::from_bits_truncate(ecx);
@@ -148,7 +148,7 @@ fn run_feature_checks() {
     assert_feature!(f_edx, FlagsEDX::APIC);
 
     // Get extended capabilities
-    let [_, _, _, edx] = call_cpuid(0x8000_0007u32, 0);
+    let [_, _, _, edx] = call_cpuid(0x8000_0007u32);
     let tsc_invariant = edx & (1 << 8) != 0;
     if !tsc_invariant {
         log::warn!("CPUID: invariant TSC not supported");
@@ -156,8 +156,16 @@ fn run_feature_checks() {
 }
 
 pub fn tsc_supports_deadline_mode() -> bool {
-    let [_, _, ecx, _] = call_cpuid(1, 0);
+    let [_, _, ecx, _] = call_cpuid(1);
     FlagsECX::from_bits_truncate(ecx).contains(FlagsECX::TSCD)
+}
+
+pub fn supports_rdrand() -> (bool, bool) {
+    let [_, ebx, _, _] = call_cpuid(7);
+    let rdseed = ebx & (1 << 18) != 0;
+    let [_, _, ecx, _] = call_cpuid(1);
+    let rdrand = ecx & (1 << 30) != 0;
+    (rdseed, rdrand)
 }
 
 pub fn init() {

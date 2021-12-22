@@ -22,6 +22,7 @@ Number | Name              | Arguments (logical)   | On success  | Short descrip
 0x02   | debug_print       | **string**            | -           | Print a UTF-8 string to the kernel terminal
 0x03   | mem_set_size      | total_bytes           | total_bytes | Set memory size, rounds up to page size
 0x30   | exec              | **image**             | pid         | Execute a file from an elf image
+0x40   | random            | seeddata              | random      | Read and seed rng
 0x50   | sched_yield       | -                     | -           | Yield control to schedule next process
 0x51   | sched_sleep_ns    | ns                    | -           | Sleep specified number of nanoseconds
 0x70   | ipc_subscribe     | **f**,exact?,reliable?| SubId       | Subscribes to message by filter **f**

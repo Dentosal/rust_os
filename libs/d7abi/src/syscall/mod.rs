@@ -14,6 +14,7 @@ pub enum SyscallNumber {
     debug_print = 0x02,
     mem_set_size = 0x03,
     exec = 0x30,
+    random = 0x40,
     sched_yield = 0x50,
     sched_sleep_ns = 0x51,
     ipc_subscribe = 0x70,

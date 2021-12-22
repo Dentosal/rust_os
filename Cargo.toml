@@ -47,6 +47,11 @@ version = "1.0"
 default-features = false
 features = ["alloc"]
 
+[dependencies.sha2]
+version = "0.10"
+default-features = false
+features = ["force-soft"]
+
 [dependencies.lazy_static]      # Non-const_fn static intialization
 version = "1.4"
 features = ["spin_no_std"]

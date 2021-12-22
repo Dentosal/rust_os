@@ -28,7 +28,9 @@ impl<T> PerCpu<T> {
         }
 
         unsafe {
-            let v = self.values.get_unchecked_mut(current_processor_id().0 as usize);
+            let v = self
+                .values
+                .get_unchecked_mut(current_processor_id().0 as usize);
             *v = Some(value);
         }
     }
@@ -36,7 +38,9 @@ impl<T> PerCpu<T> {
     pub fn get(&self) -> Option<&T> {
         if self.initialized() {
             unsafe {
-                self.values.get_unchecked(current_processor_id().0 as usize).as_ref()
+                self.values
+                    .get_unchecked(current_processor_id().0 as usize)
+                    .as_ref()
             }
         } else {
             None
@@ -46,7 +50,9 @@ impl<T> PerCpu<T> {
     pub fn get_mut(&mut self) -> Option<&mut T> {
         if self.initialized() {
             unsafe {
-                self.values.get_unchecked_mut(current_processor_id().0 as usize).as_mut()
+                self.values
+                    .get_unchecked_mut(current_processor_id().0 as usize)
+                    .as_mut()
             }
         } else {
             None

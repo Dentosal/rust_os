@@ -377,10 +377,14 @@ impl Manager {
         &mut self, pid: ProcessId, subscription: SubscriptionId,
     ) -> IpcResult<Result<Message, ExplicitEventId>> {
         verify_owner!(self, pid, subscription);
-        let mailbox = self
+        let Some(mailbox) = self
             .mailboxes
             .get_mut(&subscription)
-            .expect("Attempt to receive from an unsubscribed topic")
+        else {
+            return IpcResult::error(Error::Unsubscribed);
+        };
+
+        let mailbox = mailbox
             .as_mut()
             .expect("The kernel cannot manually receive events");
 

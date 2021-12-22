@@ -16,12 +16,11 @@ use libd7::{
     // fs::{list_dir, File},
     // process::Process,
     ipc,
+    net::d7net::*,
+    // net::tcp,
     service,
     syscall,
-    net::{d7net::*},
-    // net::tcp,
 };
-
 
 #[no_mangle]
 fn main() -> u64 {
@@ -32,69 +31,10 @@ fn main() -> u64 {
     //     port: 22,
     // }).expect("Could not open socket");
 
-    for i in 0..100 {
-        syscall::debug_print(&format!("TICK {} - {}", pid, i));
-        syscall::sched_sleep_ns(1_000_000_000).unwrap();
-        break;
-    }
-
-
     // Wait until netd is available
     println!("Wait for netd >");
     service::wait_for_one("netd");
     println!("Wait for netd <");
-
-    let mac_addr: MacAddr = match ipc::request("nic/rtl8139/mac", &()) {
-        Ok(mac) => mac,
-        Err(err) => panic!("NIC ping failed {:?}", err),
-    };
-
-    // ARP
-
-    let mut packet = Vec::new();
-
-    // dst mac: broadcast
-    packet.extend(&MacAddr::BROADCAST.0);
-
-    // src mac: this computer
-    packet.extend(&mac_addr.0);
-
-    // ethertype: arp
-    packet.extend(&EtherType::ARP.to_bytes());
-
-    // arp: HTYPE: ethernet
-    packet.extend(&1u16.to_be_bytes());
-
-    // arp: PTYPE: ipv4
-    packet.extend(&0x0800u16.to_be_bytes());
-
-    // arp: HLEN: 6 for mac addr
-    packet.push(6);
-
-    // arp: PLEN: 4 for ipv4
-    packet.push(4);
-
-    // arp: Opeeration: request
-    packet.extend(&1u16.to_be_bytes());
-
-    // arp: SHA: our mac
-    packet.extend(&mac_addr.0);
-
-    // arp: SPA: our ip (hardcoded for now)
-    packet.extend(&[192, 168, 10, 15]);
-
-    // arp: THA: target mac, ignored
-    packet.extend(&[0, 0, 0, 0, 0, 0]);
-
-    // arp: TPA: target ip (bochs vnet router)
-    packet.extend(&[192, 168, 10, 1]);
-
-    // padding
-    while packet.len() < 64 {
-        packet.push(0);
-    }
-
-    ipc::deliver("nic/send", &packet).expect("Delivery failed");
 
     0
 

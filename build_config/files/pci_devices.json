@@ -16,10 +16,10 @@
     },
     "10ec:8029": {
         "shortname": "rtl8029",
-        "name": "Bochs ne2k mis-identifying as rtl8029, using rtl8139 driver",
+        "name": "Bochs RTL8029 (NE2000)",
         "driver": {
             "from_initrd": true,
-            "executable": "driver_rtl8139"
+            "executable": "driver_ne2k"
         }
     },
     "10ec:8139": {

@@ -388,11 +388,11 @@ impl RTL8139 {
         }
     }
 
-    pub fn notify_irq(&mut self, initial_status: u16) -> Vec<Vec<u8>> {
-        let mut r_isr: UnsafePort<u16> = unsafe { UnsafePort::new(self.io_base + reg::ISR) };
+    pub fn notify_irq(&mut self) -> Vec<Vec<u8>> {
         let mut received_packets = Vec::new();
-
-        let mut status = IntFlags::from_bits_truncate(initial_status);
+        
+        let mut r_isr: UnsafePort<u16> = unsafe { UnsafePort::new(self.io_base + reg::ISR) };
+        let mut status = IntFlags::from_bits_truncate(unsafe {r_isr.read()});
 
         loop {
             // No known flags on

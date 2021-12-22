@@ -1,7 +1,7 @@
 //! Initial ramdisk driver
 
-use alloc::vec::Vec;
 use alloc::string::String;
+use alloc::vec::Vec;
 use hashbrown::HashMap;
 use x86_64::{PhysAddr, VirtAddr};
 

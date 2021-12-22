@@ -1,5 +1,5 @@
-use core::convert::TryFrom;
 use core::arch::asm;
+use core::convert::TryFrom;
 use core::hint::unreachable_unchecked;
 use x86_64::{PhysAddr, VirtAddr};
 

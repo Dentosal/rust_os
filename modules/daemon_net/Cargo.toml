@@ -18,6 +18,10 @@ panic = "abort"
 version = "0.7"
 features = ["nightly", "inline-more", "serde"]
 
+[dependencies.spin]
+version = "0.9"
+features = ["rwlock"]
+
 [dependencies.libd7]
 version = "*"
 path = "../../libs/libd7"

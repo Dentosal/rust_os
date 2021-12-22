@@ -1,0 +1,2 @@
+# ne2k: enabled=1, mac=B0:C5:AA:BB:CC:02, ethmod=vnet, script=""
+ne2k: enabled=1, mac=B0:C5:AA:BB:CC:02, ethmod=slirp, script="./dbgenv_config/slirp.conf"

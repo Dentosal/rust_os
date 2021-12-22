@@ -4,6 +4,7 @@ target/
 build/
 *.o
 *.bin
+*.dat
 
 # Cargo
 Cargo.lock
@@ -25,6 +26,7 @@ readelf.txt
 
 # Log files
 *.log
+*.pcap
 
 # Python scripting stuff
 __pycache__/
@@ -35,4 +37,5 @@ __pycache__/
 
 # Misc
 .DS_Store
+win_home
 old_*/

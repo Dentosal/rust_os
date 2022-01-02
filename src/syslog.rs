@@ -32,16 +32,8 @@ impl ::core::fmt::Write for PortE9 {
                 if byte == b'\n' {
                     port.write(b'\r');
                     port.write(b'\n');
-                } else if 0x20 <= byte && byte <= 0x7e {
-                    port.write(byte);
                 } else {
-                    port.write(b'?');
-                    bochs_magic_bp!();
-                    loop {
-                        unsafe {
-                            asm!("cli; hlt");
-                        }
-                    }
+                    port.write(byte);
                 }
             }
         }
@@ -83,16 +75,8 @@ impl ::core::fmt::Write for Uart {
                 if byte == b'\n' {
                     write_com1(b'\r');
                     write_com1(b'\n');
-                } else if 0x20 <= byte && byte <= 0x7e {
-                    write_com1(byte);
                 } else {
-                    write_com1(b'?');
-                    bochs_magic_bp!();
-                    loop {
-                        unsafe {
-                            asm!("cli; hlt");
-                        }
-                    }
+                    write_com1(byte);
                 }
             }
 

@@ -213,7 +213,7 @@ process_interrupt:
 
 ;# Description
 ; Idle loop to run when all processes are sleeping
-; Does not modify any registers, memory, or stack
+; Does not trash any registers, memory, or stack
 ; Uses iretq to return from interrupt state.
 ; The looped hlt instruction is interrupted by
 ; the timer periodically.

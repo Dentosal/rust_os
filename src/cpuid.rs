@@ -171,4 +171,9 @@ pub fn supports_rdrand() -> (bool, bool) {
 pub fn init() {
     log::debug!("CPU: {}", cpu_brand());
     run_feature_checks();
+    if tsc_supports_deadline_mode() {
+        log::debug!("Using TSC deadline mode for scheduling");
+    } else {
+        log::debug!("TSC deadline mode unsupported, using LAPIC timer");
+    }
 }

@@ -56,13 +56,22 @@ Only for the kernel, of course. Processes have a separate layout.
 
 Begin       | Size    |rwx| Content
 ------------|---------|---|---------
-           0| 200_000 |r--| IDT, GDT, Global pointers, DMA buffers
-     200_000| 200_000 |r-x| Common code for process switching
-   1_000_000|       ? |+++| Kernel (ELF image)
-  10_000_000| 200_000 |rw-| Kernel page tables, identity mapped
-  11_000_000| 200_000 |rw-| System call kernel stack (grows downwards)
- 100_000_000|       ? |???| Allocated virtual memory for processes
+           0| 20_0000 |r--| IDT, GDT, Global pointers, DMA buffers
+     20_0000| 20_0000 |r-x| Common code for process switching
+    100_0000|       ? |+++| Kernel (ELF image)
+   1000_0000| 20_0000 |rw-| Kernel page tables, identity mapped
+   1100_0000| 20_0000 |rw-| System call kernel stack (grows downwards)
+ 1_0000_0000|       ? |???| Allocated virtual memory for processes
 HIGHER_HALF | ?       |rw-| Physical memory mapped here for fast and convenient access
+
+## The first page
+
+Begin  | Size | Content
+--------------|---------|---------
+      0| 1000 | IDT
+   1000|    ? | GDT
+   a000|    8 | Ptr to the process interrupt handler
+
 
 # Interrupts
 
@@ -79,12 +88,22 @@ Numbers     | Description
 
 Begin         | Size    |rwx| Content
 --------------|---------|---|---------
-             0| 20_0000 |r--| IDT, GDT
+             0| 20_0000 |r--| IDT, GDT, static kernel data
        20_0000| 20_0000 |r-x| Common code for process switching
        40_0000| 40_0000 |rw-| Process stack
       100_0000|       ? |+++| Process elf image
  100_0000_0000|*dynamic*|rw-| Process heap (At 1 TiB)
 
+## The first page
+
+Begin         | Size    | Content
+--------------|---------|---------
+             0|    1000 | IDT
+          1000|    ? 10 | GDT
+          8000|       ? | Per-processor info table
+
+
+IDT, GDT, static kernel data
 
 
 # Scheduler tick and process switch procedure

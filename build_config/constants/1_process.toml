@@ -1,5 +1,10 @@
 # Process virtual memory area
 [[constant]]
+name = "PROCESS_PROCESSOR_INFO_TABLE"
+type = "VirtAddr"
+value = "0x8000"
+
+[[constant]]
 name = "PROCESS_COMMON_CODE"
 type = "VirtAddr"
 value = "0x20_0000"

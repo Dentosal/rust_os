@@ -107,7 +107,7 @@ fn read_one() -> u64 {
 /// This is the only way to read randomness from this module,
 /// and it should be reasonably secure against entropy poisoning.
 pub fn read() -> u64 {
-    use sha2::{Sha256, Digest};
+    use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     hasher.update(read_one().to_le_bytes());
     let hash = hasher.finalize();

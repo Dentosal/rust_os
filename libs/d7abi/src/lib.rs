@@ -19,6 +19,7 @@ mod syscall;
 pub mod fs;
 pub mod ipc;
 pub mod process;
+pub mod processor_info;
 
 pub use self::kernel_constants::PROCESS_DYNAMIC_MEMORY;
 pub use self::syscall::*;

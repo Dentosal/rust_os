@@ -70,12 +70,12 @@ mod interrupt;
 mod ipc;
 mod memory;
 mod multitasking;
+mod random;
 mod services;
 mod smp;
 mod syscall;
 mod syslog;
 mod time;
-mod random;
 
 use self::multitasking::SCHEDULER;
 
@@ -96,7 +96,7 @@ pub extern "C" fn rust_main() -> ! {
     driver::uart::init();
     unsafe {
         driver::acpi::init();
-        smp::sleep::init();
+        smp::init();
         driver::ioapic::init_bsp();
         // smp::start_all();
     }

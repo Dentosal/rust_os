@@ -2,14 +2,14 @@ use core::intrinsics::copy_nonoverlapping;
 use core::ptr;
 use x86_64::structures::paging::PageTableFlags as Flags;
 
-use crate::memory::{self, prelude::*};
+use crate::memory::{self, phys_to_virt, prelude::*};
 
 use super::super::MemoryController;
 
 pub static mut COMMON_ADDRESS_PHYS: u64 = 0; // Temp value
 pub const COMMON_ADDRESS_VIRT: u64 = 0x20_0000;
 
-pub static mut PROCESS_IDT_PHYS_ADDR: u64 = 0;
+pub static mut PROCESS_IDT_PHYS_ADDR: u64 = 0; // Temp value
 
 unsafe fn load_common_code(mem_ctrl: &mut MemoryController) {
     let common_addr = VirtAddr::new_unsafe(COMMON_ADDRESS_VIRT);
@@ -49,6 +49,7 @@ unsafe fn load_common_code(mem_ctrl: &mut MemoryController) {
 }
 
 /// Create process descriptor tables
+/// These are shared for all processes
 unsafe fn create_process_dts(mem_ctrl: &mut MemoryController) {
     use crate::interrupt::write_process_dts;
 
@@ -57,24 +58,16 @@ unsafe fn create_process_dts(mem_ctrl: &mut MemoryController) {
     let interrupt_table_start = VirtAddr::new_unsafe(ptr::read(p.offset(1)));
 
     // Allocate memory
-    let (frames, area) =
-        mem_ctrl.alloc_both(1, Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE);
-    let frame = frames[0];
+    let frame = mem_ctrl
+        .frame_allocator
+        .allocate_frame()
+        .expect("Could not allocate frame");
 
-    PROCESS_IDT_PHYS_ADDR = frame.start_address().as_u64();
+    let paddr = frame.start_address();
 
-    write_process_dts(area.start, interrupt_table_start);
+    PROCESS_IDT_PHYS_ADDR = paddr.as_u64();
 
-    // Remap to remove write flag (TODO: unmap?)
-    mem_ctrl
-        .page_map
-        .map_to(
-            PT_VADDR,
-            Page::from_start_address(area.start).unwrap(),
-            frame,
-            Flags::PRESENT | Flags::NO_EXECUTE,
-        )
-        .flush();
+    write_process_dts(phys_to_virt(paddr), interrupt_table_start);
 }
 
 /// Must be called when disk driver (and staticfs) are available

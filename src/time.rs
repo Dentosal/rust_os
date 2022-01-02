@@ -10,6 +10,8 @@
 use crate::driver::tsc;
 use crate::smp::is_bsp;
 
+use core::time::Duration;
+
 /// Timestamp relative to the TSC of the BSP core.
 /// All functions are requiring read access to the TSC
 /// are only accessible on the BSP core and panic otherwise.
@@ -49,15 +51,15 @@ impl BSPInstant {
     }
 
     /// Panics if times in wrong order
-    pub fn duration_from(self, earlier: BSPInstant) -> d7time::Duration {
-        d7time::Duration::from_nanos(crate::smp::sleep::ticks_to_ns(self.ticks_from(earlier)))
+    pub fn duration_from(self, earlier: BSPInstant) -> Duration {
+        Duration::from_nanos(crate::smp::sleep::ticks_to_ns(self.ticks_from(earlier)))
     }
 
     pub fn ticks_since(self) -> u64 {
         Self::now().ticks_from(self)
     }
 
-    pub fn duration_since(self) -> d7time::Duration {
+    pub fn duration_since(self) -> Duration {
         Self::now().duration_from(self)
     }
 }

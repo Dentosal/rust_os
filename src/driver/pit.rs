@@ -49,7 +49,8 @@ pub fn kernel_early_sleep_ns(ns: u64) {
     unsafe {
         asm!("sti");
         while ELAPSED_TICKS.load(Ordering::SeqCst) < total_ticks {
-            asm!("hlt");
+            asm!("xor rax, rax", lateout("rax") _);
+            // asm!("hlt");
         }
         asm!("cli");
     }

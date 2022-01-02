@@ -71,7 +71,3 @@ path = "libs/d7alloc"
 [dependencies.d7initrd]
 version = "*"
 path = "libs/d7initrd"
-
-[dependencies.d7time]
-version = "*"
-path = "libs/d7time"

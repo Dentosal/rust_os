@@ -109,22 +109,22 @@ pub fn sleep_ns(ns: u64) {
 fn measure_with_pit() {
     // TSC
     let t0 = tsc::read();
-    pit::kernel_early_sleep_ns(10_000_000);
+    pit::kernel_early_sleep_ns(100_000_000);
     let t1 = tsc::read();
 
     // LAPIC timer
     lapic::set_timer_raw(0xffff_ffff);
-    pit::kernel_early_sleep_ns(10_000_000);
+    pit::kernel_early_sleep_ns(100_000_000);
     let after = lapic::get_timer_raw();
     let tick_count = 0xffff_ffff - after;
 
     pit::disable();
 
-    let tsc_freq_hz = 100 * (t1 - t0);
+    let tsc_freq_hz = 10 * (t1 - t0);
     TSC_FREQ_HZ.store(tsc_freq_hz, Ordering::SeqCst);
     log::info!("TSC frequency Hz {}", tsc_freq_hz);
 
-    let lapic_freq_hz = 100 * (tick_count as u64);
+    let lapic_freq_hz = 10 * (tick_count as u64);
     LAPIC_FREQ_HZ.store(lapic_freq_hz, Ordering::SeqCst);
     log::info!("LAPIC frequency Hz {}", lapic_freq_hz);
 }

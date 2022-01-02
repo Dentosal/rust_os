@@ -28,6 +28,7 @@ pub mod process;
 pub mod service;
 pub mod syscall;
 pub mod random;
+pub mod time;
 
 use core::alloc::Layout;
 use core::panic::PanicInfo;

@@ -4,11 +4,12 @@ use alloc::vec::Vec;
 use core::fmt;
 use core::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 use spin::Mutex;
-use x86_64::VirtAddr;
+use x86_64::{PhysAddr, VirtAddr};
 
 use crate::driver::acpi;
 use crate::driver::ioapic;
-use crate::memory;
+use crate::memory::{self, phys_to_virt};
+use crate::smp::sleep::tsc_freq_hz;
 
 pub mod data;
 pub mod sleep;
@@ -126,4 +127,38 @@ pub fn start_all() {
 /// Not to be used before start_all has been called.
 pub fn cpu_count() -> u64 {
     AP_READY_COUNT.load(Ordering::SeqCst)
+}
+
+fn init_processor_info() {
+    use crate::memory::process_common_code::PROCESS_IDT_PHYS_ADDR;
+    use crate::memory::PROCESS_PROCESSOR_INFO_TABLE;
+    use d7abi::processor_info::ProcessorInfo;
+
+    // Write processor info structure
+    let paddr = unsafe { PROCESS_IDT_PHYS_ADDR };
+    assert!(paddr != 0);
+    let table_start: *mut ProcessorInfo = unsafe {
+        let start_addr = phys_to_virt(PhysAddr::new(paddr));
+        let ptr: *mut u8 = start_addr.as_mut_ptr();
+        ptr.add(PROCESS_PROCESSOR_INFO_TABLE.as_u64() as usize) as *mut ProcessorInfo
+    };
+
+    let tsc_freq_hz = tsc_freq_hz();
+
+    let acpi_data = acpi::ACPI_DATA.r#try().expect("acpi::init not called");
+    for cpu in acpi_data.cpus.iter() {
+        let info = ProcessorInfo {
+            tsc_freq_hz,
+            tsc_offset: 0,
+        };
+        log::debug!("Setting {:?} for cpu {}", info, cpu.acpi_id);
+        unsafe {
+            *table_start.add(cpu.acpi_id as usize) = info;
+        }
+    }
+}
+
+pub fn init() {
+    self::sleep::init();
+    init_processor_info();
 }

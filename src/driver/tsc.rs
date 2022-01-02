@@ -29,7 +29,7 @@ pub fn read() -> u64 {
             "rdtscp", // Serializing read
             out("rdx") rdx,
             out("rax") rax,
-            out("rcx") _,
+            out("rcx") _, // processor id
             options(nomem, nostack)
         )
     }

@@ -1,11 +1,11 @@
 # D7 - An operating system
 
-D7 is an operating system written in Rust. It aims to be an event-driven quasi-microkernel. By design, it runs only on x86-64. The system is in fairly early stage, and is developed by fearlessly breaking things, trying new stuff before older stubs are even working and most importantly experimenting with weird ideas.
+D7 is an operating system written in Rust. It aims to be an event-driven quasi-microkernel. By design, it runs only on moder x86-64 processors. The system is in fairly early stage, and is developed by fearlessly breaking things, trying new stuff before older stubs are even working and most importantly experimenting with weird ideas.
 
 ## Current features:
-* Multitasking: event-driven round-robin scheduler
+* Multitasking: tickless event-driven round-robin scheduler
 * Executable programs, in ELF format
-* PubSub-based IPC
+* IPC: PubSub messaging and named pipes
 * Keyboard input
 * Virtual TTYs
 * Disk IO:
@@ -13,16 +13,14 @@ D7 is an operating system written in Rust. It aims to be an event-driven quasi-m
     * VirtIO-blk (Read only)
 * Networking:
     * Drivers for NE2000 and RTL8139
-    * DHCP autoconfiguration
-    * ARP cache
+    * IPv4 stack, supporting TCP, UDP, DHCP, ARP
 * Services
     * Serviced - startup and service status queries
     * Netd - Manages network interfaces and sockets
 
 ## Planned in the near future:
-* Usable TCP/IP stack
 * Shell
-* More filesystems and writing to disk
+* Writing to disk, and a real filesystem
 
 ## Not-in-so-near future features:
 * Networking

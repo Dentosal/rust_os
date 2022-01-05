@@ -5,12 +5,13 @@ System call reference
 
 Numbers| Description
 -------|-----------------
-0x0X   | Misc essentials/utilities for the current process calls
-0x30   | Process control
-0x50   | Scheduler
-0x70   | IPC
-0x80   | Misc driver-kernel interfaces
-0x90   | Memory block control
+0x0_   | Misc essentials/utilities for the current process calls
+0x3_   | Process control
+0x4_   | Misc kernel-provided services
+0x5_   | Scheduler
+0x7_   | IPC
+0x8_   | Misc driver-kernel interfaces
+0x9_   | Memory block control
 
 
 # List
@@ -18,7 +19,7 @@ Numbers| Description
 Number | Name              | Arguments (logical)   | On success  | Short description
 -------|-------------------|-----------------------|-------------|-------------------
 0x00   | exit              | status_code           | !           | Terminate the calling process
-0x01   | get_pid           |                       | pid         | Get pid of the calling process
+0x01   | get_pid           | -                     | pid         | Get pid of the calling process
 0x02   | debug_print       | **string**            | -           | Print a UTF-8 string to the kernel terminal
 0x03   | mem_set_size      | total_bytes           | total_bytes | Set memory size, rounds up to page size
 0x30   | exec              | **image**             | pid         | Execute a file from an elf image

@@ -20,7 +20,6 @@
 
 mod allocator;
 
-// pub mod attachment;
 // pub mod console;
 pub mod ipc;
 pub mod net;

@@ -41,26 +41,6 @@ pub enum SyscallErrorCode {
     empty_list_argument,
     /// System call done in nonblocking mode would block
     would_block,
-    /// Trying to create a node which already exists
-    fs_node_exists,
-    /// Trying to create a node but parent path is blocked by a leaf
-    /// If the last element is leaf, fs_node_exists is returned instead
-    fs_node_path_blocked,
-    /// Node is requested but does not exist
-    fs_node_not_found,
-    /// This operation requires a leaf node
-    fs_node_not_leaf,
-    /// This operation requires a non-leaf node
-    fs_node_is_leaf,
-    /// Invalid control function
-    fs_unknown_control_function,
-    /// File operation not supported, e.g. read-only files
-    fs_operation_not_supported,
-    /// File was destroyed while an operation was pending
-    /// Normal files never do this, but processes, attachments and pipes do
-    fs_file_destroyed,
-    /// File is (is not | does not have an associated) process
-    fs_node_not_process,
     /// Invalid topic or topic filter
     ipc_invalid_topic,
     /// Mutually exclusive filter is already in use

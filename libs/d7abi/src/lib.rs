@@ -16,7 +16,6 @@ extern crate alloc;
 mod kernel_constants;
 mod syscall;
 
-pub mod fs;
 pub mod ipc;
 pub mod process;
 pub mod processor_info;

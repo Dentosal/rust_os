@@ -69,11 +69,24 @@ pub fn lapic_freq_hz() -> u64 {
     value
 }
 
-pub fn set_deadline(instant: BSPInstant) {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AlreadyExpired;
+
+#[must_use]
+pub fn set_deadline(instant: BSPInstant) -> Result<(), AlreadyExpired> {
+    let now = BSPInstant::now();
+    log::trace!("Setting sleep deadline to {:?} (now={:?}", instant, now);
     if crate::cpuid::tsc_supports_deadline_mode() {
         tsc::set_deadline(instant.tsc_value());
+        Ok(()) // TODO
     } else {
-        lapic::set_timer_ticks(instant.try_ticks_from(BSPInstant::now()).unwrap_or(0) as u32);
+        let ticks = instant.try_ticks_from(now).unwrap_or(10) as u32;
+        lapic::set_timer_ticks(ticks);
+        if ticks == 0 {
+            Err(AlreadyExpired)
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -87,7 +100,10 @@ pub fn clear_deadline() {
 
 /// Interrupts must be disabled before calling this
 pub fn sleep_until(deadline: BSPInstant) {
-    set_deadline(deadline);
+    let r = set_deadline(deadline);
+    if r == Err(AlreadyExpired) {
+        return;
+    }
     unsafe {
         while BSPInstant::now() < deadline {
             // This hlt is executed before the first interrupt is processed.

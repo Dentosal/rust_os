@@ -15,7 +15,11 @@ use super::process::{Process, ProcessResult};
 use super::queues::Queues;
 use super::{ProcessId, WaitFor};
 
+/// Time slice given to each process
 const TIME_SLICE_NS: u64 = 100_000_000;
+
+/// Smallest time that a process will be scheduled for exection
+const MIN_EXEC_TIME_NS: u64 = TIME_SLICE_NS / 10;
 
 /// Process switch an related alternatives
 #[allow(clippy::large_enum_variant)]
@@ -219,18 +223,19 @@ impl Scheduler {
         let now = BSPInstant::now();
         self.queues.on_tick(&now);
         let target = unsafe { self.switch(Some(WaitFor::None)) };
+
         target
     }
 
     /// When `tick()` should be called again
     pub fn next_tick(&self) -> Option<BSPInstant> {
-        let Some(wakeup) = self.queues.next_wakeup() else {
-            return self.running_timeslice_end;
+        let mut wakeup = self.queues.next_wakeup();
+
+        if let Some(slice_end) = self.running_timeslice_end {
+            wakeup = Some(wakeup.map(|w| w.min(slice_end)).unwrap_or(slice_end));
         };
-        let Some(slice_end) = self.running_timeslice_end else {
-            return Some(wakeup);
-        };
-        return Some(wakeup.min(slice_end));
+
+        wakeup.map(|w| w.min(BSPInstant::now().add_ns(MIN_EXEC_TIME_NS)))
     }
 
     /// Tries to resolve a WaitFor in the current context

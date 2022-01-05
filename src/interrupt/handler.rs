@@ -102,7 +102,7 @@ pub(super) unsafe extern "sysv64" fn exception_tsc_deadline() -> u128 {
     // Interrupt timing
     crate::random::insert_entropy(0);
 
-    // log::trace!("TSC_DEADLINE");
+    log::trace!("Deadline");
     crate::driver::ioapic::lapic::write_eoi();
 
     if crate::smp::is_bsp() && SCHEDULER_ENABLED.load(Ordering::SeqCst) {
@@ -110,7 +110,7 @@ pub(super) unsafe extern "sysv64" fn exception_tsc_deadline() -> u128 {
             let mut sched = SCHEDULER.try_lock().expect("SCHEDUELR LOCKED");
             let target = sched.tick();
             if let Some(deadline) = sched.next_tick() {
-                crate::smp::sleep::set_deadline(deadline);
+                crate::smp::sleep::set_deadline(deadline).expect("TODO: Deadline too soon");
             }
             target
         };
@@ -321,7 +321,8 @@ unsafe extern "C" fn process_interrupt_inner(
                         let mut sched = SCHEDULER.try_lock().unwrap();
                         let target = sched.switch(Some(schedule));
                         if let Some(deadline) = sched.next_tick() {
-                            crate::smp::sleep::set_deadline(deadline);
+                            crate::smp::sleep::set_deadline(deadline)
+                                .expect("TODO: Deadline too soon");
                         }
                         target
                     };
@@ -341,7 +342,7 @@ unsafe extern "C" fn process_interrupt_inner(
                     let mut sched = SCHEDULER.try_lock().expect("SCHEDUELR LOCKED");
                     let target = sched.tick();
                     if let Some(deadline) = sched.next_tick() {
-                        crate::smp::sleep::set_deadline(deadline);
+                        crate::smp::sleep::set_deadline(deadline).expect("TODO: Deadline too soon");
                     }
                     target
                 };

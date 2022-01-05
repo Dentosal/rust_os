@@ -109,8 +109,8 @@ pub fn set_timer_ticks(ticks: u32) {
         !crate::cpuid::tsc_supports_deadline_mode(),
         "Not supported in TSC-deadline mode"
     );
-    log::debug!("TSC-one-shot timer ticks {}", ticks);
-    log::debug!("TSC-one-shot timer hz {}", lapic_freq_hz());
+    log::trace!("TSC-one-shot timer ticks {}", ticks);
+    log::trace!("TSC-one-shot timer hz {}", lapic_freq_hz());
     set_timer_raw(ticks / 2);
 }
 

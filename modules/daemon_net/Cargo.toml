@@ -18,7 +18,7 @@ panic = "abort"
 log = "0.4"
 
 [dependencies.hashbrown]
-version = "0.7"
+version = "0.11"
 features = ["nightly", "inline-more", "serde"]
 
 [dependencies.spin]
@@ -37,8 +37,3 @@ path = "../../libs/libd7"
 version = "1.0"
 default-features = false
 features = ["alloc", "derive"]
-
-[dependencies.serde_json]
-version = "1.0"
-default-features = false
-features = ["alloc"]

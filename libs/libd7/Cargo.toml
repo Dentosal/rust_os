@@ -17,18 +17,13 @@ pinecone = "0.2"
 log = "0.4"
 
 [dependencies.hashbrown]        # HashMap for no_std contexts
-version = "0.7"
+version = "0.11"
 features = ["nightly", "inline-more", "serde"]
 
 [dependencies.serde]            # Serde
 version = "1.0"
 default-features = false
 features = ["alloc", "derive"]
-
-[dependencies.serde_json]       # JSON support
-version = "1.0"
-default-features = false
-features = ["alloc"]
 
 [dependencies.lazy_static]
 version = "1.4"

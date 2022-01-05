@@ -1,7 +1,6 @@
 use alloc::vec::Vec;
 use core::intrinsics::copy_nonoverlapping;
 use core::ptr;
-use serde::{Deserialize, Serialize};
 use x86_64::structures::idt::{InterruptStackFrameValue, PageFaultErrorCode};
 use x86_64::structures::paging::PageTableFlags as Flags;
 use x86_64::{PhysAddr, VirtAddr};

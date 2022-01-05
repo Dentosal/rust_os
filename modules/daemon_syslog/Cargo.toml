@@ -18,18 +18,13 @@ panic = "abort"
 unicode-segmentation = "1.6.0"
 
 [dependencies.hashbrown]
-version = "0.7"
+version = "0.11"
 features = ["nightly", "inline-more", "serde"]
 
 [dependencies.serde]
 version = "1.0"
 default-features = false
 features = ["alloc", "derive"]
-
-[dependencies.serde_json]
-version = "1.0"
-default-features = false
-features = ["alloc"]
 
 [dependencies.libd7]
 version = "*"

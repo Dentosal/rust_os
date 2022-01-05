@@ -16,7 +16,7 @@ panic = "abort"
 
 [dependencies]
 spin = "0.5"                    # Spinlocks
-bitflags = "1.2"                # Bitflags
+bitflags = "1.3"                # Bitflags
 bit_field = "0.10.0"            # Bit fields
 volatile = "0.2.6"              # Volatile read and write functions
 static_assertions = "1.1"       # Compile time assertions
@@ -24,27 +24,19 @@ pinecone = "0.2"                # Message format for process IO
 log = "0.4"                     # Logging macros
 
 acpi = "4.1.0"
-
-# https://github.com/rust-osdev/acpi/pull/114
-aml = {git = "https://github.com/Dentosal/acpi", branch="pci-route-method"}
-# aml = "0.16.0"
+aml = "0.16.1"
 
 [dependencies.cpuio]            # Cpu port IO
 git = "https://github.com/Dentosal/cpuio-rs"
 
 [dependencies.hashbrown]        # HashMap for no_std contexts
-version = "0.7"
+version = "0.11"
 features = ["nightly", "inline-more", "serde"]
 
-[dependencies.serde]            # Serde
+[dependencies.serde]
 version = "1.0"
 default-features = false
 features = ["alloc", "derive"]
-
-[dependencies.serde_json]       # JSON support
-version = "1.0"
-default-features = false
-features = ["alloc"]
 
 [dependencies.sha2]
 version = "0.10"

@@ -46,14 +46,15 @@ then
     fi
 fi
 
+qemu_flags=''
 
 if [ -d "/mnt/c/Windows" ]; then
     # This is Windows subsystem for Linux
     qemucmd='qemu-system-x86_64.exe'
     vboxcmd='VBoxManage.exe'
 else
-    # Generic posix
-    qemucmd='qemu-system-x86_64'
+    # Generic posix, assume kvm is available
+    qemucmd='qemu-system-x86_64 --enable-kvm'
     vboxcmd='VirtualBox'
 fi
 
@@ -86,11 +87,15 @@ then
         # -object filter-dump,id=f1,netdev=u1,file=dump.dat
         # -drive file=build/disk.img,format=raw,if=virtio
         # -cpu qemu64,+invtsc,+rdtscp,+tsc-deadline
+        flags="-cpu max -smp 4 -m 4G -no-reboot -no-shutdown"
+        flags="$flags -drive file=build/disk.img,format=raw,if=ide"
+        flags="$flags -nic user,model=rtl8139,hostfwd=tcp::5555-:22"
+        flags="$flags -monitor stdio -serial file:CON"
+
         if [ $flag_debug -eq 1 ]
         then
-            $qemucmd -cpu max -enable-kvm -smp 4 -d int,in_asm,guest_errors -m 4G -no-reboot -drive file=build/disk.img,format=raw,if=ide -monitor stdio -serial file:CON
-        else
-            $qemucmd -cpu max -enable-kvm -smp 4 -m 4G -no-reboot -no-shutdown -drive file=build/disk.img,format=raw,if=ide -monitor stdio -nic user,model=rtl8139,hostfwd=tcp::5555-:22
+            flags="$flags -d int,in_asm,guest_errors"
         fi
+        $qemucmd $flags
     fi
 fi

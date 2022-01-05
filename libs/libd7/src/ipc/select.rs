@@ -1,19 +1,4 @@
 #[macro_export(local_inner_macros)]
-macro_rules! if_chain {
-    (
-        $cond:expr => $body:block , $( $c:expr => $b:block , )+ else $ebody:block
-    ) => {
-        if $cond $body else { if_chain!($( $c => $b , )+ else $ebody ) }
-    };
-
-    (
-        $cond:expr => $body:block , else $ebody:block
-    ) => {
-        if $cond $body else $ebody
-    };
-}
-
-#[macro_export(local_inner_macros)]
 macro_rules! select_inner {
     (
         $( any ($any:expr) -> $var:ident => $abody:expr , )*
@@ -28,18 +13,21 @@ macro_rules! select_inner {
             $(subs.push($sub.sub_id());)*
             $(subs.extend($any.iter().map(|v| v.sub_id()));)*
             match $crate::syscall::ipc_select(&subs, $nonblocking) {
-                Ok(avail_sub) => {
-                    $crate::if_chain!(
-                        $(
-                            $any.iter().map(|v| v.sub_id()).any(|s| s == avail_sub) =>
-                                { let $var = avail_sub; { $abody} } ,
-                        )*
-                        $( $sub.sub_id() == avail_sub => { $cbody } , )*
-                        else {
-                            ::core::unreachable!("Select returned unknown alternative");
+                Ok(index) => 'select: loop { // TODO: remove "loop" when block labels are stabilized
+                    let mut i = 0;
+                    $(
+                        if index == i {
+                            break 'select $cbody;
                         }
-                    )
-
+                        i += 1;
+                    )*
+                    $(
+                        if index <= i + $any.len() {
+                            let $var = index - i;
+                            break 'select $abody;
+                        }
+                    )*
+                    ::core::unreachable!("Select returned unknown alternative");
                 },
                 Err(SyscallErrorCode::would_block) => $bbody ,
                 Err($e) => $ebody ,

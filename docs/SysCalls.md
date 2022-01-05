@@ -32,7 +32,7 @@ Number | Name              | Arguments (logical)   | On success  | Short descrip
 0x74   | ipc_deliver_reply | **topic**, **data**   | -           | Reply to a reliable message before ack
 0x75   | ipc_acknowledge   | SubId,AckId,ok?       | -           | Acknowledge a reliable message
 0x76   | ipc_receive       | SubId, **buf**        | byte_count  | Receive a message to **buf** (blocking)
-0x77   | ipc_select        | **SubIds**, noblock?  | SubId       | Wait until first message is available
+0x77   | ipc_select        | **SubIds**, noblock?  | index       | Wait until first message is available
 0x80   | kernel_log_read   | **buffer**            | byte_count  | Read all new logs to **buf** (nonblocking)
 0x84   | irq_set_handler   | irq_number, **code**  | -           | Assignes **code** to be ran on irq
 0x90   | mmap_physical     | len,paddr,vaddr,flags | *ptr*       | Map phys memory location to process memory

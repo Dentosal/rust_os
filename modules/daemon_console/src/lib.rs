@@ -84,14 +84,11 @@ fn main() -> ! {
 
     loop {
         select! {
-            any(c_sub_ids) -> sub_id => {
-                for (i, console) in consoles.iter_mut().enumerate() {
-                    if console.sub_print.sub_id() == sub_id {
-                        console.receive_print();
-                        if i == active_index {
-                            console.device.render(&mut vga_buffer);
-                        }
-                    }
+            any(c_sub_ids) -> c_index => {
+                let console = consoles.get_mut(c_index).unwrap();
+                console.receive_print();
+                if c_index == active_index {
+                    console.device.render(&mut vga_buffer);
                 }
             },
             one(kbd_sub) => {

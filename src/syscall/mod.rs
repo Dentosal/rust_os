@@ -435,7 +435,7 @@ fn syscall(
                     unsafe { m.process_slice(process, subs_len * size, subs) }
                 {
                     let mut conditions = Vec::new();
-                    for sub_bytes in subs_slice.chunks_exact(8) {
+                    for (index, sub_bytes) in subs_slice.chunks_exact(8).enumerate() {
                         let sub_id = ipc::SubscriptionId::from_u64(u64::from_le_bytes(
                             sub_bytes.try_into().unwrap(),
                         ));
@@ -444,7 +444,7 @@ fn syscall(
 
                         if condition == WaitFor::None {
                             unsafe { m.unmap_area(area) };
-                            return SyscallResult::Continue(Ok(sub_id.as_u64()));
+                            return SyscallResult::Continue(Ok(index as u64));
                         }
 
                         conditions.push(condition);

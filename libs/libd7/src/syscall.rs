@@ -203,18 +203,18 @@ pub fn ipc_acknowledge(
 }
 
 /// Select first available message from a list of subscriptions
-pub fn ipc_select(sub_ids: &[SubscriptionId], nonblocking: bool) -> SyscallResult<SubscriptionId> {
+pub fn ipc_select(sub_ids: &[SubscriptionId], nonblocking: bool) -> SyscallResult<usize> {
     if sub_ids.is_empty() {
         panic!("Cannot ipc_select from an empty list");
     }
 
     unsafe {
-        Ok(SubscriptionId::from_u64(syscall!(
+        Ok(syscall!(
             SyscallNumber::ipc_select;
             sub_ids.len() as u64,
             sub_ids.as_ptr() as u64,
             nonblocking as u64
-        )?))
+        )? as usize)
     }
 }
 

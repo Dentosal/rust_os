@@ -24,14 +24,14 @@ pub struct UnreliableSubscription<T: DeserializeOwned> {
 impl<T: DeserializeOwned> UnreliableSubscription<T> {
     pub fn exact(filter: &str) -> SyscallResult<Self> {
         Ok(Self {
-            id: syscall::ipc_subscribe(filter, true, false)?,
+            id: syscall::ipc_subscribe(filter, SubscriptionFlags::empty())?,
             msg_type: PhantomData,
         })
     }
 
     pub fn prefix(filter: &str) -> SyscallResult<Self> {
         Ok(Self {
-            id: syscall::ipc_subscribe(filter, false, false)?,
+            id: syscall::ipc_subscribe(filter, SubscriptionFlags::PREFIX)?,
             msg_type: PhantomData,
         })
     }
@@ -70,14 +70,27 @@ pub struct ReliableSubscription<T: DeserializeOwned> {
 impl<T: DeserializeOwned> ReliableSubscription<T> {
     pub fn exact(filter: &str) -> SyscallResult<Self> {
         Ok(Self {
-            id: syscall::ipc_subscribe(filter, true, true)?,
+            id: syscall::ipc_subscribe(filter, SubscriptionFlags::RELIABLE)?,
             msg_type: PhantomData,
         })
     }
 
     pub fn prefix(filter: &str) -> SyscallResult<Self> {
         Ok(Self {
-            id: syscall::ipc_subscribe(filter, false, true)?,
+            id: syscall::ipc_subscribe(
+                filter,
+                SubscriptionFlags::RELIABLE | SubscriptionFlags::PREFIX,
+            )?,
+            msg_type: PhantomData,
+        })
+    }
+
+    pub fn pipe(filter: &str) -> SyscallResult<Self> {
+        Ok(Self {
+            id: syscall::ipc_subscribe(
+                filter,
+                SubscriptionFlags::PIPE,
+            )?,
             msg_type: PhantomData,
         })
     }
@@ -162,6 +175,7 @@ impl Drop for AcknowledgeContext {
     /// if not manually acknowledged
     fn drop(&mut self) {
         if let Some(ack_id) = self.ack_id {
+            log::trace!("Dropped AckCtx NACK");
             syscall::ipc_acknowledge(self.sub_id, ack_id, false)
                 .expect("Failed to negative-acknowledge in drop");
         }

@@ -65,12 +65,19 @@ impl<T> IpcResult<T> {
         }
     }
 }
+impl<T> core::convert::From<Error> for IpcResult<T> {
+    fn from(error: Error) -> Self {
+        Self::error(error)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Error {
     InvalidTopic,
     Unsubscribed,
     ReAcknowledge,
+    PipeReserved,
+    PipeSenderTerminated,
     Subscription(SubscriptionError),
     Delivery(DeliveryError),
     Permission(PermissionError),
@@ -96,6 +103,8 @@ impl core::convert::Into<SyscallErrorCode> for Error {
             Self::InvalidTopic => SyscallErrorCode::ipc_invalid_topic,
             Self::Unsubscribed => SyscallErrorCode::ipc_unsubscribed,
             Self::ReAcknowledge => SyscallErrorCode::ipc_re_acknowledge,
+            Self::PipeReserved => SyscallErrorCode::ipc_pipe_reserved,
+            Self::PipeSenderTerminated => SyscallErrorCode::ipc_pipe_sender_terminated,
             Self::Subscription(e) => e.into(),
             Self::Delivery(e) => e.into(),
             Self::Permission(e) => e.into(),

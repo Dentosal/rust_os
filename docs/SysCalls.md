@@ -25,7 +25,7 @@ Number | Name              | Arguments (logical)   | On success  | Short descrip
 0x40   | random            | seeddata              | random      | Read and seed rng
 0x50   | sched_yield       | -                     | -           | Yield control to schedule next process
 0x51   | sched_sleep_ns    | ns                    | -           | Sleep specified number of nanoseconds
-0x70   | ipc_subscribe     | **f**,exact?,reliable?| SubId       | Subscribes to message by filter **f**
+0x70   | ipc_subscribe     | **f**, flags          | SubId       | Subscribes to message by filter **f**
 0x71   | ipc_unsubscribe   | SubId                 | -           | Unsubscribes from messages
 0x72   | ipc_publish       | **topic**, **data**   | -           | Publish unreliable message (nonblocking)
 0x73   | ipc_deliver       | **topic**, **data**   | -           | Deliver reliable message (blocking)

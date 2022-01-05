@@ -47,6 +47,10 @@ impl<RQ: Serialize + DeserializeOwned, RS: Serialize + DeserializeOwned> Server<
         Ok(Self::new(ReliableSubscription::prefix(filter)?))
     }
 
+    pub fn pipe(filter: &str) -> SyscallResult<Self> {
+        Ok(Self::new(ReliableSubscription::pipe(filter)?))
+    }
+
     /// Handle one request
     pub fn handle<F>(&self, f: F) -> SyscallResult<()>
     where F: FnOnce(RQ) -> SyscallResult<RS> {
@@ -63,6 +67,21 @@ impl<RQ: Serialize + DeserializeOwned, RS: Serialize + DeserializeOwned> Server<
         ack_ctx.ack()?;
         Ok(())
     }
+
+    /// Handle one request
+    /// This can be used to delay the response
+    pub fn receive(&self) -> SyscallResult<(ReplyCtx<RS>, RQ)> {
+        let (reply_ctx, value, _topic) = self.receive_topic()?;
+        Ok((reply_ctx, value))
+    }
+
+    /// Handle one request, including topic name
+    /// This can be used to delay the response
+    pub fn receive_topic(&self) -> SyscallResult<(ReplyCtx<RS>, RQ, String)> {
+        let (ack_ctx, request, topic): (_, Request<RQ>, _) = self.sub.receive_topic()?;
+        let (reply_topic, message): (String, RQ) = request;
+        Ok((ReplyCtx::new(reply_topic, ack_ctx), message, topic))
+    }
 }
 
 impl<RQ: Serialize + DeserializeOwned, RS: Serialize + DeserializeOwned> InternalSubscription
@@ -70,6 +89,29 @@ impl<RQ: Serialize + DeserializeOwned, RS: Serialize + DeserializeOwned> Interna
 {
     fn sub_id(&self) -> SubscriptionId {
         self.sub.sub_id()
+    }
+}
+
+/// Client of the server is suspended while the ReplyCtx exists
+pub struct ReplyCtx<RS: Serialize + DeserializeOwned> {
+    reply_topic: String,
+    ack_ctx: AcknowledgeContext,
+    response_type: PhantomData<RS>,
+}
+impl<RS: Serialize + DeserializeOwned> ReplyCtx<RS> {
+    fn new(reply_topic: String, ack_ctx: AcknowledgeContext) -> Self {
+        Self {
+            reply_topic,
+            ack_ctx,
+            response_type: PhantomData,
+        }
+    }
+}
+impl<RS: Serialize + DeserializeOwned> ReplyCtx<RS> {
+    /// Consumes this context to send a reply
+    pub fn reply(self, data: RS) -> SyscallResult<()> {
+        deliver_reply(&self.reply_topic, &data)?;
+        self.ack_ctx.ack()
     }
 }
 

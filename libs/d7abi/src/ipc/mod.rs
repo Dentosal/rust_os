@@ -3,6 +3,26 @@ use alloc::{vec::Vec, string::String};
 
 pub mod protocol;
 
+bitflags::bitflags! {
+    #[derive(Default)]
+    pub struct SubscriptionFlags: u64 {
+        /// Topic filter is used as a prefix
+        const PREFIX    = (1 << 0);
+        /// Subscription is reliable, see ipc docs for more info
+        const RELIABLE  = (1 << 1);
+        /// First process sending to this subscription is marked
+        /// as it's corresponding pipe pair. No messages from other
+        /// processes will be accepted. If the sender is terminated
+        /// all operations to this socket return an error.
+        ///
+        /// This can be used to release server resources if caller gets terminated,
+        /// without needing to implement two-way communication.
+        ///
+        /// PIPE subscriptions are always EXACT and RELIABLE.
+        const PIPE      = (1 << 2) | Self::PREFIX.bits | Self::RELIABLE.bits;
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
 pub struct SubscriptionId(u64);
 impl SubscriptionId {

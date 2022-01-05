@@ -75,6 +75,10 @@ pub enum SyscallErrorCode {
     ipc_unsubscribed,
     /// Attempt to acknowledge a message again
     ipc_re_acknowledge,
+    /// Someone else has already connected to this pipe
+    ipc_pipe_reserved,
+    /// Sender side process of the pipe has been terminated
+    ipc_pipe_sender_terminated,
     /// Permission error
     ipc_permission_error,
     /// Invalid UTF-8

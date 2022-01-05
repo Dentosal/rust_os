@@ -44,7 +44,11 @@ impl<T> EventQueue<T> {
         self.queue.pop_front().ok_or_else(|| self.get_event())
     }
 
-    pub fn get_event(&mut self) -> ExplicitEventId {
+    pub fn take_event(&mut self) -> Option<ExplicitEventId> {
+        self.event.take()
+    }
+
+    fn get_event(&mut self) -> ExplicitEventId {
         *self.event.get_or_insert_with(WaitFor::new_event_id)
     }
 

@@ -7,6 +7,7 @@ use hashbrown::HashSet;
 use x86_64::structures::paging::PageTableFlags as Flags;
 use x86_64::{PhysAddr, VirtAddr};
 
+use d7abi::ipc::SubscriptionFlags;
 use d7abi::SyscallErrorCode as ErrorCode;
 
 use crate::ipc;
@@ -157,20 +158,32 @@ fn syscall(
                 }
             },
             SC::ipc_subscribe => {
-                let (filter_len, filter_ptr, exact, reliable) = rsc.args;
-                let exact = exact != 0;
-                let reliable = reliable != 0;
+                let (filter_len, filter_ptr, flags, _) = rsc.args;
+                let Some(flags) = SubscriptionFlags::from_bits(flags) else {
+                    return SyscallResult::Terminate(process::ProcessResult::Failed(
+                        process::Error::SyscallArgument,
+                    ));
+                };
+
                 let filter_ptr = VirtAddr::new(filter_ptr);
                 if let Some((area, slice)) =
                     unsafe { m.process_slice(process, filter_len, filter_ptr) }
                 {
                     let filter_str = try_str!(slice);
-                    let filter = try_ipc!(ipc::TopicFilter::try_new(filter_str, exact));
+                    let filter = try_ipc!(ipc::TopicFilter::try_new(
+                        filter_str,
+                        !flags.contains(SubscriptionFlags::PREFIX)
+                    ));
 
-                    log::trace!("[pid={:8}] ipc_subscribe {:?}", pid, filter);
+                    log::trace!("[pid={:8}] ipc_subscribe {:?} {:?}", pid, filter, flags);
 
                     let mut ipc_manager = ipc::IPC.try_lock().expect("IPC LOCKED");
-                    let sub_id = try_ipc!(ipc_manager.subscribe(pid, filter, reliable));
+                    let sub_id = try_ipc!(ipc_manager.subscribe(
+                        pid,
+                        filter,
+                        flags.contains(SubscriptionFlags::RELIABLE),
+                        flags.contains(SubscriptionFlags::PIPE),
+                    ));
 
                     unsafe { m.unmap_area(area) };
                     m.free_virtual_area(area);

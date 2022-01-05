@@ -16,7 +16,7 @@ use d7abi::process::ProcessResult;
 
 pub use d7abi::ipc::{AcknowledgeId, Message, SubscriptionId};
 
-use crate::multitasking::{ExplicitEventId, ProcessId, Scheduler, WaitFor};
+use crate::multitasking::{ExplicitEventId, Process, ProcessId, Scheduler, WaitFor};
 
 mod event_queue;
 mod list;
@@ -34,13 +34,27 @@ pub use self::topic::{Topic, TopicFilter, TopicPrefix};
 const MAILBOX_BUFFER_LIMIT: usize = 100;
 
 #[derive(Debug)]
+enum PipeMode {
+    /// This is not a pipe mailbox
+    None,
+    /// No process has connected yet
+    NotConnected,
+    /// Process has connected
+    ConnectedTo(ProcessId),
+    /// Previously-connected process has been terminated
+    Disconnected,
+}
+
+#[derive(Debug)]
 struct Mailbox {
     queue: EventQueue<Message>,
+    pub pipe_mode: PipeMode,
 }
 impl Mailbox {
-    pub fn new() -> Self {
+    pub fn new(pipe_mode: PipeMode) -> Self {
         Self {
             queue: EventQueue::new(MAILBOX_BUFFER_LIMIT),
+            pipe_mode,
         }
     }
 
@@ -50,16 +64,22 @@ impl Mailbox {
 
     #[must_use]
     pub fn push_unreliable(&mut self, message: Message) -> Option<TriggerEvent> {
+        assert!(matches!(self.pipe_mode, PipeMode::None));
         match self.queue.push(message) {
             Ok(v) => v.map(TriggerEvent),
-            Err(()) => None,
+            Err(()) => {
+                log::debug!("Unreliable delivery queue full");
+                None
+            },
         }
     }
 
+    /// Caller must ensure that PipeMode is updated and checked first
     #[must_use]
     pub fn push_reliable(
         &mut self, message: Message,
     ) -> Result<Option<TriggerEvent>, DeliveryError> {
+        assert!(!matches!(self.pipe_mode, PipeMode::NotConnected));
         self.queue
             .push(message)
             .map(|opt| opt.map(TriggerEvent))
@@ -91,7 +111,7 @@ macro_rules! verify_owner {
 
 #[derive(Debug)]
 pub struct Manager {
-    /// All subscriptions
+    /// Topic to subscription id mapping
     subscriptions: SubscriptionList,
     /// All mailboxes by subscription id.
     /// Mailbox is None if the message is handled byu the kernel instead.
@@ -102,7 +122,7 @@ pub struct Manager {
     /// Reliable messages that have been delivered (or caused an error).
     /// The value field contains success status.
     delivery_result: HashMap<ProcessId, Result<(), DeliveryError>>,
-    /// Next AcknowledgeId
+    /// Next free acknowledge id
     next_acknowledge_id: AcknowledgeId,
     /// ProcessId -> SubscriptionId mapping for process-exit cleanup
     process_subscriptions: HashMap<ProcessId, HashSet<SubscriptionId>>,
@@ -139,14 +159,21 @@ impl Manager {
         }
     }
 
-    /// Subscribe to events by a filter
+    /// Subscribe to normal events by a filter
     /// Reliable subscriptions are mutually exclusive: there cannot be
     /// any other endpoint subscribed to the any events matched by this.
     pub fn subscribe(
-        &mut self, pid: ProcessId, filter: TopicFilter, reliable: bool,
+        &mut self, pid: ProcessId, filter: TopicFilter, reliable: bool, pipe: bool,
     ) -> Result<SubscriptionId, SubscriptionError> {
         if let Some(id) = self.subscriptions.insert(filter, reliable) {
-            self.mailboxes.insert(id, Some(Mailbox::new()));
+            self.mailboxes.insert(
+                id,
+                Some(Mailbox::new(if pipe {
+                    PipeMode::NotConnected
+                } else {
+                    PipeMode::None
+                })),
+            );
             self.process_subscriptions
                 .entry(pid)
                 .or_default()
@@ -178,6 +205,7 @@ impl Manager {
             .remove(&subscription)
             .unwrap()
             .expect("Kernel cannot unsubscribe");
+
         // Release reliable messages
         let mut events = HashSet::new();
         for msg in mailbox.queue.into_iter() {
@@ -244,6 +272,22 @@ impl Manager {
         let sub = all.into_iter().next().unwrap();
         if let Some(mailbox) = self.mailboxes.get_mut(&sub).unwrap() {
             // Deliver to another process
+
+            match mailbox.pipe_mode {
+                PipeMode::None => {},
+                PipeMode::NotConnected => {
+                    mailbox.pipe_mode = PipeMode::ConnectedTo(pid);
+                },
+                PipeMode::ConnectedTo(c_pid) => {
+                    if c_pid != pid {
+                        return Error::PipeReserved.into();
+                    }
+                },
+                PipeMode::Disconnected => {
+                    return Error::PipeReserved.into();
+                },
+            }
+
             let result = mailbox.push_reliable(Message {
                 topic: topic.string(),
                 data: data.to_vec(),
@@ -287,6 +331,10 @@ impl Manager {
         let sub = all.into_iter().next().unwrap();
         if let Some(mailbox) = self.mailboxes.get_mut(&sub).unwrap() {
             // Deliver to another process
+            assert!(
+                matches!(mailbox.pipe_mode, PipeMode::None),
+                "TODO: Error: reply to pipe not allowed"
+            );
             let result = mailbox.push_reliable(Message {
                 topic: topic.string(),
                 data: data.to_vec(),
@@ -329,6 +377,7 @@ impl Manager {
             .expect("Kernel cannot reply to itself");
 
         // Deliver to process, returning any errors to the caller
+        assert!(matches!(mailbox.pipe_mode, PipeMode::None));
         let result = mailbox.push_reliable(Message {
             topic: topic.string(),
             data: pinecone::to_vec(data).unwrap(),
@@ -416,11 +465,27 @@ impl Manager {
     pub fn on_process_over(
         &mut self, sched: &mut Scheduler, pid: ProcessId, status: ProcessResult,
     ) {
+        // Unsubscribes from all events
         if let Some(subs) = self.process_subscriptions.remove(&pid) {
             for subscription in subs {
                 self._force_unsubscribe(subscription)
                     .consume_events(sched)
                     .unwrap();
+            }
+        }
+
+        // Is this process is connected to any pipes, disconnect them
+        // TODO: optimize by caching these when created?
+        for (sub_id, mailbox) in self.mailboxes.iter_mut() {
+            if let Some(mailbox) = mailbox {
+                if let PipeMode::ConnectedTo(target) = mailbox.pipe_mode {
+                    if target == pid {
+                        mailbox.pipe_mode = PipeMode::Disconnected;
+                        if let Some(event) = mailbox.queue.take_event() {
+                            sched.on_explicit_event(event);
+                        }
+                    }
+                }
             }
         }
     }

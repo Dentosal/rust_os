@@ -9,7 +9,7 @@ use d7abi::{
     SyscallNumber,
 };
 
-pub use d7abi::{MemoryProtectionFlags, SyscallErrorCode};
+pub use d7abi::{ipc::SubscriptionFlags, MemoryProtectionFlags, SyscallErrorCode};
 
 macro_rules! syscall {
     ($n:expr; $a0:expr, $a1:expr, $a2:expr, $a3:expr) => {
@@ -109,16 +109,15 @@ pub fn sched_sleep_ns(ns: u64) -> SyscallResult<()> {
     unsafe { syscall!(SyscallNumber::sched_sleep_ns; ns).map(|_| ()) }
 }
 
-/// Subscribes to message by a filter. If exact is false, filter is used as a prefix.
-pub fn ipc_subscribe(filter: &str, exact: bool, reliable: bool) -> SyscallResult<SubscriptionId> {
+/// Subscribes to message by a filter
+pub fn ipc_subscribe(filter: &str, flags: SubscriptionFlags) -> SyscallResult<SubscriptionId> {
     let len = filter.len() as u64;
     let slice = filter.as_ptr() as u64;
     unsafe {
         Ok(SubscriptionId::from_u64(syscall!(
             SyscallNumber::ipc_subscribe;
             len, slice,
-            exact as u64,
-            reliable as u64
+            flags.bits()
         )?))
     }
 }

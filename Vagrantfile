@@ -54,8 +54,6 @@ Vagrant.configure(2) do |config|
     rustup component add rustfmt
 
     export PATH="$HOME/.cargo/bin:$HOME/.bin:$PATH"
-    rustup component add rust-src
-    cargo install --force cargo-xbuild
 
     git clone https://github.com/Dentosal/factory.git /tmp/factory || true
     cd /tmp/factory

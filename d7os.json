@@ -10,6 +10,5 @@
   "linker-flavor": "ld",
   "features": "-mmx,-sse,+soft-float",
   "disable-redzone": true,
-  "panic-strategy": "abort",
-  "panic": "abort"
+  "panic-strategy": "abort"
 }

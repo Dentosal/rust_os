@@ -15,7 +15,6 @@ panic = "abort"
 panic = "abort"
 
 [dependencies]
-rlibc = "*"                     # Raw libc
 spin = "0.5"                    # Spinlocks
 bitflags = "1.2"                # Bitflags
 bit_field = "0.10.0"            # Bit fields

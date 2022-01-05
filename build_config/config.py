@@ -148,7 +148,13 @@ def cmd_cargo_xbuild(pdir: Path, target_json: Path) -> Cmd:
     return Cmd(
         inputs={target_json}.union(package.sources),
         output=out_path,
-        cmd=["cargo", "xbuild", "--target", target_json, "--release", "--color=always"],
+        cmd=["cargo", "build",
+            "--target",
+            target_json,
+            "-Zbuild-std=core,alloc",
+            "-Zbuild-std-features=compiler-builtins-mem",
+            "--release",
+            "--color=always"],
         cwd=pdir,
     )
 

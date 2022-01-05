@@ -40,9 +40,7 @@ impl Instant {
     /// * We do no support multi-socket systems yet.
     fn freq_hz() -> u64 {
         // Safety: Safe, this is in userspace
-        unsafe {
-            d7abi::processor_info::read_current().tsc_freq_hz
-        }
+        unsafe { d7abi::processor_info::read_current().tsc_freq_hz }
     }
 
     #[inline]
@@ -68,7 +66,10 @@ impl Instant {
         // duration.subsec_nanos() * freq fits into u64 iff (freq < 18GhZ)
         // not too future-proof, if we are optimistic about CPUs, so using kHz here
         let freq_khz = freq / 1000;
-        let inc_b = (duration.subsec_nanos() as u64).checked_mul(freq_khz).unwrap() / 1_000_000;
+        let inc_b = (duration.subsec_nanos() as u64)
+            .checked_mul(freq_khz)
+            .unwrap()
+            / 1_000_000;
 
         inc_a.checked_add(inc_b)
     }

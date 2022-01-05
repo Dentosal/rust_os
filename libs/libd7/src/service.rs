@@ -19,7 +19,8 @@ pub fn wait_for_one(name: &str) {
     crate::ipc::deliver("serviced/waitfor/any", &hs).unwrap();
 }
 
-pub fn wait_for_any<T>(names: T) where
+pub fn wait_for_any<T>(names: T)
+where
     T: IntoIterator,
     T::Item: AsRef<str>,
 {
@@ -30,7 +31,8 @@ pub fn wait_for_any<T>(names: T) where
     crate::ipc::deliver("serviced/waitfor/any", &hs).unwrap();
 }
 
-pub fn wait_for_all<T>(names: T) where
+pub fn wait_for_all<T>(names: T)
+where
     T: IntoIterator,
     T::Item: AsRef<str>,
 {

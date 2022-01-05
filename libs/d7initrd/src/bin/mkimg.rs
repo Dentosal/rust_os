@@ -9,7 +9,6 @@ use std::u64;
 
 use d7initrd::*;
 
-
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
 

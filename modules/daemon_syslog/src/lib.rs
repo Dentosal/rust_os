@@ -13,12 +13,12 @@ extern crate alloc;
 #[macro_use]
 extern crate libd7;
 
-use alloc::collections::VecDeque;
-use alloc::vec::Vec;
-use alloc::string::String;
 use alloc::borrow::ToOwned;
+use alloc::collections::VecDeque;
+use alloc::string::String;
+use alloc::vec::Vec;
 
-use libd7::{ipc, select, syscall, process::ProcessId};
+use libd7::{ipc, process::ProcessId, select, syscall};
 
 #[no_mangle]
 fn main() -> ! {

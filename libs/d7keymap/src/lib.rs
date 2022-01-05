@@ -5,13 +5,13 @@
 
 extern crate alloc;
 
-use core::str::FromStr;
 use core::hash::{Hash, Hasher};
+use core::str::FromStr;
 
-use alloc::vec::Vec;
-use alloc::string::String;
 use alloc::borrow::ToOwned;
-use hashbrown::{HashSet, HashMap};
+use alloc::string::String;
+use alloc::vec::Vec;
+use hashbrown::{HashMap, HashSet};
 
 use serde::{de, Deserialize, Deserializer};
 
@@ -46,7 +46,10 @@ impl FromStr for Combination {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut modifiers: Vec<_> = s.split("+").map(|m| KeySymbol(m.to_owned())).collect();
         let main = modifiers.pop().unwrap();
-        Ok(Self { modifiers: modifiers.into_iter().collect(), main })
+        Ok(Self {
+            modifiers: modifiers.into_iter().collect(),
+            main,
+        })
     }
 }
 impl Hash for Combination {

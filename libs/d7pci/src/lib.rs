@@ -3,10 +3,9 @@
 #[macro_use]
 extern crate alloc;
 
+mod device;
 mod scan;
 mod util;
-mod device;
-
 
 pub use self::device::*;
 pub use self::scan::list_devices;

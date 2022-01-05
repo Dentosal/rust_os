@@ -1,10 +1,10 @@
-use core::num::NonZeroU64;
 use core::fmt;
+use core::num::NonZeroU64;
 use core::u64;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use x86_64::structures::idt::InterruptStackFrameValue;
-use x86_64::VirtAddr;
 use x86_64::structures::idt::PageFaultErrorCode;
+use x86_64::VirtAddr;
 
 /// ProcessId is stores as `NonZeroU64`, so that `Option<ProcessId>`
 /// still has uses only `size_of<Processid>` bytes
@@ -14,7 +14,7 @@ pub struct ProcessId(NonZeroU64);
 impl ProcessId {
     /// Must be called only once
     pub const fn first() -> Self {
-        Self(unsafe {NonZeroU64::new_unchecked(1)})
+        Self(unsafe { NonZeroU64::new_unchecked(1) })
     }
 
     /// Must be only called for an actual process ids

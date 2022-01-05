@@ -1,5 +1,5 @@
+use alloc::{string::String, vec::Vec};
 use serde::{Deserialize, Serialize};
-use alloc::{vec::Vec, string::String};
 
 pub mod protocol;
 

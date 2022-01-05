@@ -1,7 +1,7 @@
-use alloc::collections::VecDeque;
-use alloc::vec::Vec;
-use alloc::string::String;
 use alloc::borrow::ToOwned;
+use alloc::collections::VecDeque;
+use alloc::string::String;
+use alloc::vec::Vec;
 use core::ptr::Unique;
 
 use super::{keyboard::EventAction, vga};
@@ -103,27 +103,27 @@ impl Input {
                     }
                     self.input_buffer.push_str(&text);
                     self.input_buffer = self.input_buffer.nfc().collect();
-                }
+                },
                 KeyAction::Buffer(text) => {
                     self.dead_key_buffer.push_str(&text);
-                }
+                },
                 KeyAction::Remap(_) => unreachable!(),
-                KeyAction::Ignore => {}
+                KeyAction::Ignore => {},
             },
             EventAction::Unmatched(symbol, modifiers) => match symbol.as_str() {
                 "Enter" if modifiers.is_empty() => {
                     self.input_buffer.push('\n');
-                }
+                },
                 "Backspace" if modifiers.is_empty() => {
                     self.dead_key_buffer.clear();
                     let mut c: Vec<_> =
                         UnicodeSegmentation::graphemes(self.input_buffer.as_str(), true).collect();
                     c.pop();
                     self.input_buffer = c.join("");
-                }
-                _ => {}
+                },
+                _ => {},
             },
-            EventAction::Ignore | EventAction::NoSuchSymbol => {}
+            EventAction::Ignore | EventAction::NoSuchSymbol => {},
         }
     }
 }

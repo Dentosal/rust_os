@@ -5,8 +5,8 @@
 #[macro_use]
 extern crate alloc;
 
-use alloc::vec::Vec;
 use alloc::string::String;
+use alloc::vec::Vec;
 use core::convert::TryInto;
 
 #[macro_use]

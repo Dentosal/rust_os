@@ -14,16 +14,14 @@
 #![feature(lang_items)]
 #![feature(naked_functions)]
 
+use core::arch::asm;
 use core::intrinsics::copy_nonoverlapping;
 use core::{panic::PanicInfo, ptr};
-use core::arch::asm;
 
 mod ata_pio;
 
 macro_rules! sizeof {
-    ($t:ty) => {{
-        ::core::mem::size_of::<$t>()
-    }};
+    ($t:ty) => {{ ::core::mem::size_of::<$t>() }};
 }
 
 macro_rules! panic_indicator {

@@ -397,7 +397,7 @@ impl RTL8139 {
         let mut received_packets = Vec::new();
 
         let mut r_isr: UnsafePort<u16> = unsafe { UnsafePort::new(self.io_base + reg::ISR) };
-        let mut status = IntFlags::from_bits_truncate(unsafe {r_isr.read()});
+        let mut status = IntFlags::from_bits_truncate(unsafe { r_isr.read() });
 
         loop {
             // No known flags on

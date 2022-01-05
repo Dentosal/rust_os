@@ -49,7 +49,7 @@ impl AtaPio {
 
         let mut drives = Vec::new();
         for d in 0..=1 {
-            if let Some(drive) = unsafe {Self::identify(d)} {
+            if let Some(drive) = unsafe { Self::identify(d) } {
                 drives.push(drive);
             }
         }

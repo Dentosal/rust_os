@@ -8,11 +8,11 @@ extern crate alloc;
 #[macro_use]
 extern crate libd7;
 
-use core::arch::asm;
 use alloc::vec::Vec;
+use core::arch::asm;
 use hashbrown::HashMap;
 
-use libd7::{ipc, select, syscall, process::ProcessId};
+use libd7::{ipc, process::ProcessId, select, syscall};
 
 mod keyboard;
 mod state;
@@ -37,7 +37,6 @@ fn main() -> ! {
 
     // Subscribe to hardware events
     let irq = ipc::UnreliableSubscription::<u8>::exact("irq/keyboard").unwrap();
-
 
     // Inform serviced that we are running
     libd7::service::register("driver_ps2", false);

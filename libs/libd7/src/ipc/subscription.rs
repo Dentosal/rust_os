@@ -85,10 +85,7 @@ impl<T: DeserializeOwned> ReliableSubscription<T> {
 
     pub fn pipe(filter: &str) -> SyscallResult<Self> {
         Ok(Self {
-            id: syscall::ipc_subscribe(
-                filter,
-                SubscriptionFlags::PIPE,
-            )?,
+            id: syscall::ipc_subscribe(filter, SubscriptionFlags::PIPE)?,
             msg_type: PhantomData,
         })
     }

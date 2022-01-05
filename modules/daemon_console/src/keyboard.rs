@@ -1,6 +1,6 @@
-use alloc::vec::Vec;
-use alloc::string::String;
 use alloc::borrow::ToOwned;
+use alloc::string::String;
+use alloc::vec::Vec;
 use hashbrown::HashSet;
 
 use d7keymap::{KeyAction, KeyCodes, KeyMap, KeySymbol};

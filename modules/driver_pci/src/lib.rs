@@ -11,9 +11,9 @@ extern crate alloc;
 #[macro_use]
 extern crate libd7;
 
-use alloc::vec::Vec;
-use alloc::string::String;
 use alloc::borrow::ToOwned;
+use alloc::string::String;
+use alloc::vec::Vec;
 
 use hashbrown::HashMap;
 use serde::Deserialize;

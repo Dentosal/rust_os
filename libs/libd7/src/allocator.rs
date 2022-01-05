@@ -1,8 +1,6 @@
 use core::alloc::{AllocError, Allocator, GlobalAlloc, Layout};
 use core::ptr::NonNull;
 
-use spin::Mutex;
-
 use super::syscall::mem_set_size;
 use d7abi::PROCESS_DYNAMIC_MEMORY;
 

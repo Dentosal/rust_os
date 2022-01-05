@@ -1,5 +1,4 @@
 #![no_std]
-#![feature(asm)]
 #![feature(allocator_api)]
 #![deny(unused_must_use)]
 

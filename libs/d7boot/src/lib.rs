@@ -11,7 +11,6 @@
 #![deny(safe_packed_borrows)]
 #![deny(unused_must_use)]
 // Unstable features
-#![feature(asm)]
 #![feature(lang_items)]
 #![feature(naked_functions)]
 

@@ -3,6 +3,8 @@
 #![warn(bare_trait_objects)]
 #![deny(unused_must_use)]
 #![deny(unused_assignments)]
+#![deny(overflowing_literals)]
+#![deny(unaligned_references)]
 #![deny(clippy::missing_safety_doc)]
 // no_std
 #![no_std]

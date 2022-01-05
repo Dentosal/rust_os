@@ -12,7 +12,6 @@
 #![feature(allocator_api)]
 #![feature(slice_ptr_get)]
 #![feature(nonnull_slice_from_raw_parts)]
-#![feature(asm)]
 #![feature(integer_atomics)]
 #![feature(panic_info_message)]
 #![feature(trait_alias)]
@@ -25,14 +24,14 @@ mod allocator;
 pub mod ipc;
 pub mod net;
 pub mod process;
+pub mod random;
 pub mod service;
 pub mod syscall;
-pub mod random;
 pub mod time;
 
 use core::alloc::Layout;
-use core::panic::PanicInfo;
 use core::arch::asm;
+use core::panic::PanicInfo;
 
 pub use d7abi;
 pub use pinecone;

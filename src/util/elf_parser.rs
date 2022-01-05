@@ -27,6 +27,7 @@ impl ELFData {
 }
 
 bitflags! {
+    #[repr(transparent)]
     pub struct ELFPermissionFlags: u32 {
         const EXECUTABLE    = 1 << 0;
         const WRITABLE      = 1 << 1;

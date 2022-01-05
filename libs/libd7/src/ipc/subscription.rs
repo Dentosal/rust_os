@@ -1,10 +1,8 @@
 use core::marker::PhantomData;
 
-use alloc::vec::Vec;
 use alloc::string::String;
-use alloc::borrow::ToOwned;
 
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::de::DeserializeOwned;
 
 use d7abi::ipc::*;
 

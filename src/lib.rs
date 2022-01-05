@@ -31,7 +31,7 @@
 #![feature(abi_x86_interrupt)]
 #![feature(alloc_error_handler)]
 #![feature(allocator_api)]
-#![feature(asm, asm_const, asm_sym)]
+#![feature(asm_const, asm_sym)]
 #![feature(box_syntax, box_patterns)]
 #![feature(core_intrinsics)]
 #![feature(integer_atomics)]

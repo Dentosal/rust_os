@@ -1,5 +1,3 @@
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-
 pub use d7abi::ipc::*;
 
 mod select;

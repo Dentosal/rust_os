@@ -1,6 +1,5 @@
 use core::arch::asm;
 use core::convert::TryFrom;
-use core::hint::unreachable_unchecked;
 use x86_64::{PhysAddr, VirtAddr};
 
 use d7abi::{
@@ -54,8 +53,7 @@ pub fn exit(return_code: u64) -> ! {
             in("rax") SyscallNumber::exit as u64,
             in("rdi") return_code,
             options(nomem, nostack, noreturn)
-        );
-        unreachable_unchecked();
+        )
     }
 }
 
@@ -94,9 +92,7 @@ pub fn exec(image: &[u8]) -> SyscallResult<ProcessId> {
 
 /// Access kernel entropy pool
 pub fn random(seed: u64) -> u64 {
-    unsafe {
-        syscall!(SyscallNumber::random; seed).expect("random returned an error")
-    }
+    unsafe { syscall!(SyscallNumber::random; seed).expect("random returned an error") }
 }
 
 /// This system call never fails, and does not return anything
@@ -221,7 +217,7 @@ pub fn ipc_select(sub_ids: &[SubscriptionId], nonblocking: bool) -> SyscallResul
 /// Read (and clear) kernel log buffer. Nonblocking.
 pub fn kernel_log_read(buffer: &mut [u8]) -> SyscallResult<usize> {
     if buffer.is_empty() {
-        panic!("Cannot ipc_select from an empty list");
+        panic!("Cannot read to an empty buffer");
     }
 
     unsafe {

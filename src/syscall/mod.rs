@@ -23,10 +23,6 @@ mod PROCESS_OUTPUT {
 
     pub fn print(pid: ProcessId, string: &str) {
         log::info!("[pid={:8}] {}", pid.as_u64(), string);
-        // TODO: Sometimes terminal is locked when this happens
-        // if crate::syslog::LEVEL_SCREEN < log::Level::Debug {
-        //     rprintln!("[pid={}] {}", pid.as_u64(), string);
-        // }
     }
 }
 
@@ -79,6 +75,8 @@ pub struct RawSyscall {
     args: (u64, u64, u64, u64),
 }
 
+/// TODO: This leaks virtual memory areas at some places,
+///       those should have a destructor that frees them.
 fn syscall(
     m: &mut MemoryController, sched: &mut Scheduler, pid: ProcessId, rsc: RawSyscall,
 ) -> SyscallResult {

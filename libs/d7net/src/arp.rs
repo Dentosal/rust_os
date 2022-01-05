@@ -11,10 +11,10 @@ use crate::{EtherType, Ipv4Addr, MacAddr};
 pub struct Packet {
     pub ptype: EtherType,
     pub operation: Operation,
-    pub sender_hw: MacAddr,
-    pub sender_ip: Ipv4Addr,
-    pub target_hw: MacAddr,
-    pub target_ip: Ipv4Addr,
+    pub src_hw: MacAddr,
+    pub src_ip: Ipv4Addr,
+    pub dst_hw: MacAddr,
+    pub dst_ip: Ipv4Addr,
 }
 impl Packet {
     pub fn from_bytes(input: &[u8]) -> Self {
@@ -29,10 +29,10 @@ impl Packet {
         Self {
             ptype: EtherType::from_bytes(&input[2..4]),
             operation: Operation::from_bytes(&input[6..8]),
-            sender_hw: MacAddr::from_bytes(&input[8..8 + hlen]),
-            sender_ip: Ipv4Addr::from_bytes(&input[8 + hlen..8 + hlen + plen]),
-            target_hw: MacAddr::from_bytes(&input[8 + hlen + plen..8 + hlen * 2 + plen]),
-            target_ip: Ipv4Addr::from_bytes(&input[8 + hlen * 2 + plen..8 + hlen * 2 + plen * 2]),
+            src_hw: MacAddr::from_bytes(&input[8..8 + hlen]),
+            src_ip: Ipv4Addr::from_bytes(&input[8 + hlen..8 + hlen + plen]),
+            dst_hw: MacAddr::from_bytes(&input[8 + hlen + plen..8 + hlen * 2 + plen]),
+            dst_ip: Ipv4Addr::from_bytes(&input[8 + hlen * 2 + plen..8 + hlen * 2 + plen * 2]),
         }
     }
 
@@ -56,13 +56,13 @@ impl Packet {
             Operation::Reply => 2,
         });
         // Sender MacAddr
-        result.extend(&self.sender_hw.0);
+        result.extend(&self.src_hw.0);
         // Sender Ipv4
-        result.extend(&self.sender_ip.0);
+        result.extend(&self.src_ip.0);
         // Target MacAddr
-        result.extend(&self.target_hw.0);
+        result.extend(&self.dst_hw.0);
         // Target Ipv4
-        result.extend(&self.target_ip.0);
+        result.extend(&self.dst_ip.0);
         // Return
         result
     }
@@ -75,10 +75,10 @@ impl Packet {
         assert!(self.is_request());
 
         self.operation = Operation::Reply;
-        self.target_hw = self.sender_hw;
-        self.target_ip = self.sender_ip;
-        self.sender_hw = mac;
-        self.sender_ip = ip;
+        self.dst_hw = self.src_hw;
+        self.dst_ip = self.src_ip;
+        self.src_hw = mac;
+        self.src_ip = ip;
 
         self
     }
@@ -115,10 +115,10 @@ mod test {
         assert_eq!(packet, Packet {
             ptype: EtherType::Ipv4,
             operation: Operation::Request,
-            sender_hw: MacAddr::from_bytes(&[1, 2, 3, 4, 5, 6]),
-            sender_ip: Ipv4Addr::from_bytes(&[10, 0, 2, 2]),
-            target_hw: MacAddr::from_bytes(&[0, 0, 0, 0, 0, 0]),
-            target_ip: Ipv4Addr::from_bytes(&[10, 0, 2, 15]),
+            src_hw: MacAddr::from_bytes(&[1, 2, 3, 4, 5, 6]),
+            src_ip: Ipv4Addr::from_bytes(&[10, 0, 2, 2]),
+            dst_hw: MacAddr::from_bytes(&[0, 0, 0, 0, 0, 0]),
+            dst_ip: Ipv4Addr::from_bytes(&[10, 0, 2, 15]),
         });
 
         assert_eq!(packet.to_bytes(), example);

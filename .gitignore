@@ -27,6 +27,7 @@ readelf.txt
 # Log files
 *.log
 *.pcap
+slirp-pktlog.txt
 
 # Python scripting stuff
 __pycache__/

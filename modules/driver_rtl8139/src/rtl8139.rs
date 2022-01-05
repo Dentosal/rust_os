@@ -299,6 +299,11 @@ impl RTL8139 {
 
             log::debug!("receive status: {:?}", status);
 
+            if status.is_empty() {
+                log::warn!("receive status empty");
+                return None;
+            }
+
             if !status.contains(RxStatus::OK) {
                 log::warn!("receive status not ok");
                 todo!("reset?");
@@ -390,7 +395,7 @@ impl RTL8139 {
 
     pub fn notify_irq(&mut self) -> Vec<Vec<u8>> {
         let mut received_packets = Vec::new();
-        
+
         let mut r_isr: UnsafePort<u16> = unsafe { UnsafePort::new(self.io_base + reg::ISR) };
         let mut status = IntFlags::from_bits_truncate(unsafe {r_isr.read()});
 

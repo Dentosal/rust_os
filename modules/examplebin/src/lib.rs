@@ -6,18 +6,15 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
+use alloc::string::String;
+use core::convert::TryInto;
 
 #[macro_use]
 extern crate libd7;
 
 use libd7::{
-    // attachment::*,
     // console::Console,
-    // fs::{list_dir, File},
-    // process::Process,
-    ipc,
-    net::d7net::*,
-    // net::tcp,
+    net::tcp,
     service,
     syscall,
 };
@@ -26,17 +23,43 @@ use libd7::{
 fn main() -> u64 {
     let pid = syscall::get_pid();
 
-    // let tcp_server = tcp::Socket::bind(SocketAddr {
-    //     host: IpAddr::V4(Ipv4Addr([0,0,0,0])),
-    //     port: 22,
-    // }).expect("Could not open socket");
-
     // Wait until netd is available
     println!("Wait for netd >");
     service::wait_for_one("netd");
     println!("Wait for netd <");
 
-    0
+    syscall::sched_sleep_ns(2_000_000_000).unwrap();
+
+    if let Err(err) = main_inner() {
+        println!("Error: {:?}", err);
+        return 1;
+    }
+
+    return 0;
+}
+
+fn main_inner() -> Result<(), tcp::Error> {
+    println!("Connect");
+    let socket = tcp::Stream::connect(("93.184.216.34", 80).try_into().unwrap())?;
+    println!("Send request");
+    socket.send(b"GET / HTTP/1.1\r\nHost: example.org\r\nConnection: close\r\n\r\n")?;
+    println!("Shutdown");
+    socket.shutdown()?;
+    println!("Read response");
+    let mut fetched = String::new();
+    let mut buffer = [0; 1024];
+    loop {
+        let n = socket.recv(&mut buffer)?;
+        fetched.push_str(core::str::from_utf8(&buffer[..n]).expect("Invalid utf-8"));
+        if n < buffer.len() {
+            break;
+        }
+    }
+
+    println!("reply {}", fetched);
+    socket.close()?;
+
+    Ok(())
 
     // // Console
     // let mut console = Console::open(
@@ -51,9 +74,6 @@ fn main() -> u64 {
     //     syscall::debug_print(&format!("Line {:?}", line));
     //     if line == "exit" {
     //         break;
-    //     } else {
-    //         let dirlist = list_dir("/net").unwrap();
-    //         syscall::debug_print(&format!("/net: {:?}", dirlist));
     //     }
     // }
 

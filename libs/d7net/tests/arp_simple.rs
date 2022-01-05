@@ -50,10 +50,10 @@ fn arp_simple() {
     let arpp = arp::Packet {
         ptype: EtherType::Ipv4,
         operation: arp::Operation::Request,
-        sender_hw: mac_addr,
-        sender_ip: Ipv4Addr::from_bytes(&[192, 168, 10, 15]),
-        target_hw: MacAddr::ZERO,
-        target_ip: Ipv4Addr::from_bytes(&[192, 168, 10, 1]),
+        src_hw: mac_addr,
+        src_ip: Ipv4Addr::from_bytes(&[192, 168, 10, 15]),
+        dst_hw: MacAddr::ZERO,
+        dst_ip: Ipv4Addr::from_bytes(&[192, 168, 10, 1]),
     };
 
     let ef = ethernet::Frame {

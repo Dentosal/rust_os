@@ -57,9 +57,7 @@ impl Payload {
             server_ip: Ipv4Addr::ZERO,
             gateway_ip: Ipv4Addr::ZERO,
             mac_addr,
-            options: vec![
-                DhcpOption::Op(Op::DISCOVER),
-            ],
+            options: vec![DhcpOption::Op(Op::DISCOVER)],
         }
     }
 
@@ -227,7 +225,6 @@ impl DhcpOption {
             },
             0x36 => {
                 assert!(length == 4);
-                let mut buf = [0u8; 4];
                 Self::ServerId(Ipv4Addr::from_bytes(&bytes[2..6]))
             },
             0x37 => {
@@ -237,7 +234,7 @@ impl DhcpOption {
                     .collect();
                 Self::ParamReqList(items)
             },
-            other => {
+            _other => {
                 // log::warn!("Unknown DHCP option {:#02x}", other);
                 Self::Unknown
             },

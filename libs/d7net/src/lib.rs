@@ -1,7 +1,7 @@
 //! Panics on invalid data
 
 #![cfg_attr(not(test), no_std)]
-
+#![feature(default_free_fn, duration_constants)]
 // Lints
 #![allow(incomplete_features)]
 
@@ -15,11 +15,11 @@ mod ip_protocol;
 mod mac;
 
 pub mod arp;
+pub mod dhcp;
 pub mod ethernet;
 pub mod ipv4;
 pub mod tcp;
 pub mod udp;
-pub mod dhcp;
 
 pub mod builder;
 

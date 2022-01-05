@@ -21,13 +21,6 @@ impl Packet {
             payload: input[20..20 + (header.payload_len as usize)].to_vec(),
         }
     }
-
-    /// https://en.wikipedia.org/wiki/Address_Resolution_Protocol#Packet_structure
-    pub fn to_bytes(self) -> Vec<u8> {
-        let mut result = Vec::new();
-        todo!();
-        result
-    }
 }
 
 /// Does not support Options field
@@ -73,10 +66,11 @@ impl Header {
         result.extend(&u16::to_be_bytes(self.flags_and_frament));
         result.push(self.ttl);
         result.push(self.protocol as u8);
-        let checksum = crate::checksum::inet_checksum(&result);
-        result.extend(&u16::to_be_bytes(checksum));
+        result.extend(&u16::to_be_bytes(0)); // Checksum
         result.extend(&self.src_ip.0);
         result.extend(&self.dst_ip.0);
+        let checksum = crate::checksum::inet_checksum(&result);
+        result[10..12].copy_from_slice(&u16::to_be_bytes(checksum));
         result
     }
 }

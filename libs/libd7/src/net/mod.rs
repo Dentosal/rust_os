@@ -1,25 +1,23 @@
 #![allow(unreachable_code)] // TODO remove this
 
+use serde::{Deserialize, Serialize};
+
 pub use d7net;
 
 pub mod tcp;
 // pub mod udp;
 
-use alloc::vec::Vec;
-
 pub use d7net::SocketAddr;
 
-use crate::syscall::SyscallResult;
+/// Used to acknowledge a reliable message
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
+pub struct SocketId(u64);
+impl SocketId {
+    pub fn from_u64(v: u64) -> Self {
+        Self(v)
+    }
 
-fn create_socket(addr: SocketAddr) -> SyscallResult<!> {
-    todo!()
-    // let f = File::open("/srv/net/newsocket")?;
-    // f.write_all(&pinecone::to_vec(&addr).unwrap())?;
-
-    // let mut buffer = [0u8; 10];
-    // let count = f.read(&mut buffer)?;
-    // assert!(0 < count && count < buffer.len());
-
-    // let socket_id: u64 = pinecone::from_bytes(&buffer[..count]).expect("Invalid socket id response");
-    // File::open(&format!("/srv/net/socket/{}", socket_id))
+    pub fn as_u64(self) -> u64 {
+        self.0
+    }
 }

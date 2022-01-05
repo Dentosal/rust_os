@@ -1,12 +1,11 @@
 use alloc::vec::Vec;
-use serde::{Deserialize, Serialize};
 
-const INITIAL_WINDOW_SIZE: u16 = 8760;
+pub use tcpstate::SegmentFlags;
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Segment {
-    header: SegmentHeader,
-    payload: Vec<u8>,
+    pub header: SegmentHeader,
+    pub payload: Vec<u8>,
 }
 impl Segment {
     pub fn from_bytes(input: &[u8]) -> Self {
@@ -16,28 +15,23 @@ impl Segment {
             header,
         }
     }
-
-    pub fn to_bytes(self) -> Vec<u8> {
-        let mut result = Vec::new();
-        todo!();
-        result
-    }
 }
 
 /// https://en.wikipedia.org/wiki/Transmission_Control_Protocol#TCP_segment_structure
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SegmentHeader {
-    src_port: u16,
-    dst_port: u16,
-    sequence: u32,
-    ack_number: u32,
-    flags: SegmentFlags,
-    window_size: u16,
-    options: SegmentOptions,
-    offset: usize,
+    pub src_port: u16,
+    pub dst_port: u16,
+    pub sequence: u32,
+    pub ack_number: u32,
+    pub flags: SegmentFlags,
+    pub window_size: u16,
+    pub options: SegmentOptions,
+    pub checksum: u16,
+    pub offset: usize,
 }
 impl SegmentHeader {
-    const OFFSET_NO_OPTIONS: usize = 20;
+    pub const OFFSET_NO_OPTIONS: usize = 20;
 
     pub fn from_bytes(input: &[u8]) -> Self {
         let offset_and_flags = u16::from_be_bytes([input[12], input[13]]);
@@ -53,13 +47,24 @@ impl SegmentHeader {
             flags,
             window_size: u16::from_be_bytes([input[14], input[15]]),
             options: SegmentOptions::from_bytes(option_bytes),
+            checksum: 0, // TODO
             offset,
         }
     }
 
-    pub fn to_bytes(self) -> Vec<u8> {
+    pub fn to_bytes(&self) -> Vec<u8> {
         let mut result = Vec::new();
-        todo!();
+        result.extend(&u16::to_be_bytes(self.src_port));
+        result.extend(&u16::to_be_bytes(self.dst_port));
+        result.extend(&u32::to_be_bytes(self.sequence));
+        result.extend(&u32::to_be_bytes(self.ack_number));
+        // TODO: data offset
+        let data_offset = ((self.offset / 4) as u16) << 12;
+        let b = data_offset | self.flags.bits();
+        result.extend(&u16::to_be_bytes(b));
+        result.extend(&u16::to_be_bytes(self.window_size));
+        result.extend(&u16::to_be_bytes(self.checksum));
+        result.extend(&u16::to_be_bytes(0));
         result
     }
 
@@ -73,36 +78,14 @@ impl SegmentHeader {
         self.flags.contains(SegmentFlags::SYN) && self.flags.contains(SegmentFlags::ACK)
     }
 
-    /// SYN-ACK reply to initialization (SYN)
-    pub fn reply_to_initialization(self, next_sequence: u32) -> Self {
-        Self {
-            src_port: self.dst_port,
-            dst_port: self.src_port,
-            sequence: next_sequence,
-            ack_number: self.sequence.wrapping_add(1),
-            flags: SegmentFlags::SYN | SegmentFlags::ACK,
-            window_size: INITIAL_WINDOW_SIZE,
-            options: SegmentOptions::empty(),
-            offset: Self::OFFSET_NO_OPTIONS,
-        }
-    }
-
-    /// ACK reply to initialization (SYN-ACK)
-    pub fn reply_to_synack(self, next_sequence: u32) -> Self {
-        Self {
-            src_port: self.dst_port,
-            dst_port: self.src_port,
-            sequence: next_sequence,
-            ack_number: self.sequence.wrapping_add(1),
-            flags: SegmentFlags::ACK,
-            window_size: INITIAL_WINDOW_SIZE,
-            options: SegmentOptions::empty(),
-            offset: Self::OFFSET_NO_OPTIONS,
-        }
+    /// ACK flag set, no other change flags
+    pub fn is_normal(&self) -> bool {
+        self.flags.contains(SegmentFlags::ACK)
+            && !(self.flags.contains(SegmentFlags::SYN) || self.flags.contains(SegmentFlags::FIN))
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct SegmentOptions {
     /// SYN-only option
     segemnt_max_size: Option<u16>,
@@ -133,25 +116,10 @@ impl SegmentOptions {
                 },
                 other => {
                     // Unsupported TCP option
-                    panic!("Unsupported TCP option {:?}", input)
+                    panic!("Unsupported TCP option {:?}", other)
                 },
             }
         }
         result
-    }
-}
-
-bitflags::bitflags! {
-    #[derive(Deserialize, Serialize)]
-    pub struct SegmentFlags: u16 {
-        const FIN     = 1 << 0;
-        const SYN     = 1 << 1;
-        const RST     = 1 << 2;
-        const PSH     = 1 << 3;
-        const ACK     = 1 << 4;
-        const URG     = 1 << 5;
-        const ECE     = 1 << 6;
-        const CWR     = 1 << 7;
-        const NS      = 1 << 8;
     }
 }

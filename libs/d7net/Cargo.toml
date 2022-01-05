@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 bitflags = "1.2"
+log = "0.4"
 
 [dependencies.hashbrown]        # HashMap for no_std contexts
 version = "0.7"
@@ -18,4 +19,7 @@ features = ["alloc", "derive"]
 
 [dependencies.num_enum]
 git = "https://github.com/Dentosal/num_enum_simplified"
+
+[dependencies.tcpstate]
+git = "https://github.com/Dentosal/tcpstate"
 

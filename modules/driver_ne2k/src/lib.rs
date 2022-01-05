@@ -1,7 +1,6 @@
 #![no_std]
 #![feature(allocator_api)]
 #![feature(no_more_cas)]
-#![feature(asm)]
 #![deny(unused_must_use)]
 
 #[macro_use]
@@ -47,7 +46,7 @@ fn main() -> ! {
 
     // Subscribe to client requests
     let get_mac: ipc::Server<(), MacAddr> = ipc::Server::exact("nic/ne2k/mac").unwrap();
-    let send = ipc::ReliableSubscription::<Vec<u8>>::exact("nic/send").unwrap();
+    let send = ipc::UnreliableSubscription::<Vec<u8>>::exact("nic/send").unwrap();
 
     // Inform serviced that we are running.
     libd7::service::register("driver_ne2k", false);
@@ -58,7 +57,7 @@ fn main() -> ! {
         select! {
             one(irq1) => {
                 let _: () = irq1.receive().unwrap();
-                println!("IRQ NOTIFY");
+                println!("ne2k: IRQ NOTIFY 1");
                 let received_packets = device.notify_irq();
                 for packet in received_packets {
                     ipc::deliver("netd/received", &packet).unwrap();
@@ -66,7 +65,7 @@ fn main() -> ! {
             },
             one(irq2) => {
                 let _: () = irq2.receive().unwrap();
-                println!("IRQ NOTIFY");
+                println!("ne2k: IRQ NOTIFY 2");
                 let received_packets = device.notify_irq();
                 for packet in received_packets {
                     ipc::deliver("netd/received", &packet).unwrap();
@@ -74,9 +73,10 @@ fn main() -> ! {
             },
             one(get_mac) => get_mac.handle(|()| Ok(device.mac_addr())).unwrap(),
             one(send) => {
-                let (ack_ctx, packet): (_, Vec<u8>) = send.receive().unwrap();
+                println!("ne2k: SEND PKT");
+                let packet: Vec<u8> = send.receive().unwrap();
                 device.send(&packet);
-                ack_ctx.ack().unwrap();
+                println!("ne2k: PKT SENT");
             }
         }
     }

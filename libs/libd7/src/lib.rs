@@ -17,6 +17,7 @@
 #![feature(panic_info_message)]
 #![feature(trait_alias)]
 #![feature(never_type)]
+#![feature(let_else)]
 
 mod allocator;
 

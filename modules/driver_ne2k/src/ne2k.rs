@@ -305,7 +305,6 @@ impl Ne2k {
             }
             println!("Polling status done");
 
-            println!("Polling status done");
             // Page number
             port(reg::page0::W_TPSR).write(txbuffer);
 
@@ -402,8 +401,8 @@ impl Ne2k {
     }
 
     /// Called when new packet has been received
-    fn read_packet(&mut self) -> Option<Vec<u8>> {
-        let mut result = None;
+    fn read_packets(&mut self) -> Vec<Vec<u8>> {
+        let mut result = Vec::new();
 
         unsafe {
             // Read current page from register page 1
@@ -435,7 +434,7 @@ impl Ne2k {
                     println!("ne2k: Recv ok, reading {} bytes", len);
                     let mut packet = vec![0; len as usize];
                     self.read_dma(self.next_packet, 4, &mut packet);
-                    result = Some(packet);
+                    result.push(packet);
                 }
 
                 // Ring buffer wraparound
@@ -473,9 +472,7 @@ impl Ne2k {
             }
 
             if status.contains(IntStatus::RX_OK) {
-                if let Some(packet) = self.read_packet() {
-                    result.push(packet);
-                }
+                result.extend(self.read_packets());
                 self.clear_isr(IntStatus::RX_OK);
             }
 

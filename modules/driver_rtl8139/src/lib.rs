@@ -1,7 +1,6 @@
 #![no_std]
 #![feature(allocator_api)]
 #![feature(no_more_cas)]
-#![feature(asm)]
 #![deny(unused_must_use)]
 
 #[macro_use]
@@ -41,7 +40,7 @@ fn main() -> ! {
 
     // Subscribe to client requests
     let get_mac: ipc::Server<(), MacAddr> = ipc::Server::exact("nic/rtl8139/mac").unwrap();
-    let send = ipc::ReliableSubscription::<Vec<u8>>::exact("nic/send").unwrap();
+    let send = ipc::UnreliableSubscription::<Vec<u8>>::exact("nic/send").unwrap();
 
     // Inform serviced that we are running.
     libd7::service::register("driver_rtl8139", false);
@@ -52,17 +51,18 @@ fn main() -> ! {
         select! {
             one(irq) => {
                 let _: () = irq.receive().unwrap();
-                println!("IRQ NOTIFY");
+                println!("rtl: IRQ NOTIFY");
                 let received_packets = device.notify_irq();
                 for packet in received_packets {
+                    let s = alloc::string::String::from_utf8_lossy(&packet);
                     ipc::deliver("netd/received", &packet).unwrap();
                 }
             },
             one(get_mac) => get_mac.handle(|()| Ok(device.mac_addr())).unwrap(),
             one(send) => {
-                let (ack_ctx, packet): (_, Vec<u8>) = send.receive().unwrap();
+                let packet: Vec<u8> = send.receive().unwrap();
+                println!("rtl: SEND PKT");
                 device.send(&packet);
-                ack_ctx.ack().unwrap();
             }
         }
     }

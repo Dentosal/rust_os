@@ -4,8 +4,9 @@ use alloc::vec::Vec;
 
 use libd7::ipc;
 use libd7::net::d7net::*;
+use libd7::random;
 
-use super::{Interface, InterfaceSettings};
+use super::InterfaceSettings;
 
 /// A DHCP client
 #[derive(Debug)]
@@ -18,7 +19,7 @@ pub struct Client {
 impl Client {
     pub fn new(mac_addr: MacAddr) -> Self {
         Self {
-            id: 12345, // TODO: random
+            id: u32::from_le_bytes(random::fast_arr()),
             mac_addr,
             state: ClientState::Initial,
         }
@@ -48,7 +49,7 @@ impl Client {
             packet.push(0);
         }
 
-        ipc::deliver("nic/send", &packet).expect("Delivery failed");
+        ipc::publish("nic/send", &packet).expect("Delivery failed");
         self.state = ClientState::Discover;
     }
 
@@ -74,13 +75,13 @@ impl Client {
             packet.push(0);
         }
 
-        ipc::deliver("nic/send", &packet).expect("Delivery failed");
+        ipc::publish("nic/send", &packet).expect("Delivery failed");
         self.state = ClientState::Request;
     }
 
     pub fn on_packet(&mut self, packet: udp::Packet) -> Option<InterfaceSettings> {
         let payload = dhcp::Payload::from_bytes(&packet.payload);
-        println!("{:?}", payload);
+        println!("dhcp {:?}", payload);
 
         if payload.op != dhcp::MsgType::REPLY {
             println!("Ignoring non-reply packet");

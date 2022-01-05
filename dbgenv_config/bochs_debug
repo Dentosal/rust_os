@@ -3,7 +3,7 @@ log: -
 logprefix: %t%e%d
 # See https://bochs.sourceforge.io/doc/docbook/user/howto.html#LOGOPTS-BY-DEVICE
 #debug: action=ignore, harddrv=report, pci=report
-debug: action=report, harddrv=ignore, pci=ignore, xgui=ignore, siminterface=ignore, memory=ignore, pit=ignore, pic=ignore, pit82c54=ignore, ioapic=ignore, serial=ignore, cpu0=report, apic0=report, cpu1=ignore, apic1=ignore, cpu2=ignore, apic2=ignore, cpu3=ignore, apic3=ignore, dma=ignore
+debug: action=report, harddrv=ignore, pci=ignore, xgui=ignore, siminterface=ignore, memory=ignore, pit=ignore, pic=ignore, pit82c54=ignore, ioapic=ignore, cpu0=report, apic0=report, cpu1=ignore, apic1=ignore, cpu2=ignore, apic2=ignore, cpu3=ignore, apic3=ignore, dma=ignore
 info: action=report
 error: action=report
 panic: action=ask

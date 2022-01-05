@@ -31,7 +31,10 @@ impl Output {
 
     pub fn write_byte(&mut self, byte: u8) {
         assert!(byte != 0);
-        assert!(byte != b'\r');
+
+        if byte == b'\r' {
+            return;
+        }
 
         if byte == b'\n' {
             self.new_line();

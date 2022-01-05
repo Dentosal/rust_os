@@ -351,6 +351,7 @@ def step_kernel_asm_routines(root_dir) -> Set[Step]:
 def kernel_module(root_dir: Path, path: Path) -> Tuple[Step]:
     return (
         Step(
+            requires={step_codegen},
             note=f"Module: {path.name}",
             cmd=cmd_cargo_xbuild(
                 pdir=path, target_json=root_dir / "libs/d7abi/d7abi.json"

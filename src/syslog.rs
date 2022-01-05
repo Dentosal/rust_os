@@ -128,6 +128,10 @@ impl log::Log for SystemLogger {
     }
 
     fn log(&self, record: &Record) {
+        if record.module_path() == Some("aml::parser") && record.level() == log::Level::Trace {
+            return;
+        }
+
         let level = record.metadata().level();
         if level <= LEVEL_PORTE9 {
             e9_print!(

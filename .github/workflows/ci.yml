@@ -20,7 +20,7 @@ jobs:
       - name: Install APT packages
         run: |
           sudo apt-get update \
-          && sudo apt-get install -y nasm binutils ninja-build
+          && sudo apt-get install -y nasm binutils ninja-build qemu-system
 
       - name: Install latest nightly
         uses: actions-rs/toolchain@v1
@@ -78,3 +78,12 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
+
+      - name: Run OS self-test
+        run: |
+          qemu-system-x86_64 -cpu max -smp 4 -m 4G -no-reboot -display none \
+            -drive file=build/disk.img,format=raw,if=ide \
+            -nic none \
+            -serial file:qemu.log
+          grep "Self-test successful" qemu.log || exit 1
+        timeout-minutes: 5

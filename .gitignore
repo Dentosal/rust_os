@@ -1,4 +1,6 @@
 # Build
+build.ninja
+.ninja_*
 .vagrant/
 target/
 build/

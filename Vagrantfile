@@ -36,7 +36,7 @@ Vagrant.configure(2) do |config|
     sudo apt-get upgrade -y
     sudo apt-get autoremove -y
     sudo apt-get install python3.7 python3.7-dev python3-pip -y
-    sudo apt-get install vim git nasm -y
+    sudo apt-get install vim git nasm ninja-build -y
     #sudo apt-get install xorriso -y
     sudo apt-get install texinfo flex bison python-dev ncurses-dev -y
     sudo apt-get install cmake libssl-dev -y
@@ -51,15 +51,10 @@ Vagrant.configure(2) do |config|
     else
     curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain nightly -y
     fi
+    rustup component add rust-src
     rustup component add rustfmt
 
     export PATH="$HOME/.cargo/bin:$HOME/.bin:$PATH"
-
-    git clone https://github.com/Dentosal/factory.git /tmp/factory || true
-    cd /tmp/factory
-    git pull
-    PYTHON_SYS_EXECUTABLE=python3.7 cargo install --path . --force
-    cd -
 
     git clone https://github.com/Dentosal/constcodegen.git /tmp/constcodegen || true
     cd /tmp/constcodegen

@@ -16,6 +16,7 @@ flag_vbox=0
 flag_bochs=0
 flag_qemu_s=0
 flag_debug=0
+flag_self_test=0
 flag_build_only=0
 flag_run_only=0
 
@@ -40,9 +41,10 @@ then
     fi
     if [ $flag_native -eq 1 ]
     then
-        factory
+        python3 build_config/configure.py
+        ninja
     else
-        vagrant ssh -c "cd /vagrant/ && factory"
+        vagrant ssh -c "cd /vagrant/ && ./autobuild -nc"
     fi
 fi
 

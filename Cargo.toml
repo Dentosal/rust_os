@@ -14,6 +14,9 @@ panic = "abort"
 [profile.release]
 panic = "abort"
 
+[features]
+self-test = [] # Run automatic tests and shutdown
+
 [dependencies]
 spin = "0.5"                    # Spinlocks
 bitflags = "1.3"                # Bitflags

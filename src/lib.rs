@@ -102,6 +102,12 @@ pub extern "C" fn rust_main() -> ! {
     }
     services::init();
 
+    #[cfg(feature = "self-test")]
+    {
+        log::info!("Self-test successful");
+        driver::acpi::power_off();
+    }
+
     rreset!();
     log::info!("Kernel initialized.");
 

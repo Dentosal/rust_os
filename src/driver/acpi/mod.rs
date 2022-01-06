@@ -266,8 +266,9 @@ pub fn init() {
 }
 
 /// Shuts down the computer
-pub fn power_off() {
+pub fn power_off() -> ! {
     let tables = ACPI_TABLES.r#try().expect("ACPI not initialized");
+    log::warn!("ACPI power off");
 
     unsafe {
         let fadt = tables
@@ -292,8 +293,6 @@ pub fn power_off() {
         let AmlValue::Integer(slp_typa) = &values[3] else {
             panic!("Invalid _S5: int");
         };
-
-        let ctx = AML_CTX.lock();
 
         let a = fadt.pm1a_control_block().expect("pm1a cnt blk error");
         let sleep_enable = 1 << 13;

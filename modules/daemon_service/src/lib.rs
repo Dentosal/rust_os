@@ -99,7 +99,7 @@ impl Services {
     /// Start a service if it's not already running
     /// The requirements MUST BE met before calling this
     fn start(&mut self, def: &ServiceDefinition) {
-        println!("Spawning process: {}", def.name);
+        log::info!("Spawning process: {}", def.name);
         assert!(
             def.from_initrd,
             "Non-initrd executables are not supported yet"
@@ -115,6 +115,9 @@ impl Services {
             let def = self.definition_by_name(&name).unwrap();
             if self.are_requirements_up(&def) {
                 start_indices.push(i);
+                log::debug!("All requirements are up for {}, starting", name);
+            } else {
+                log::debug!("Not all requirements are up for {}", name);
             }
         }
         while let Some(i) = start_indices.pop() {
@@ -210,7 +213,7 @@ fn main() -> ! {
         ipc::UnreliableSubscription::<ProcessTerminated>::exact("process/terminated").unwrap();
 
     loop {
-        println!("STEP");
+        println!("service step");
         services.step();
         select! {
             one(terminated) => services.on_process_completed(terminated.receive().unwrap()),

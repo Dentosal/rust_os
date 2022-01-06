@@ -14,6 +14,9 @@ panic = "abort"
 [profile.release]
 panic = "abort"
 
+[dependencies]
+log = "0.4"
+
 [dependencies.hashbrown]
 version = "0.11"
 features = ["nightly", "inline-more", "serde"]

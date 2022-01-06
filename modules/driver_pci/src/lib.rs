@@ -37,6 +37,10 @@ struct ConfigDeviceDriver {
 fn main() -> ! {
     syscall::debug_print("PCI driver starting");
 
+    // (DriverName|"vendor:id") -> d7pci::Device
+    let server: ipc::Server<String, Option<d7pci::Device>> =
+        ipc::Server::exact("pci/device").unwrap();
+
     libd7::service::register("driver_pci", false);
 
     let s: Vec<u8> = ipc::request("initrd/read", "pci_devices.json".to_owned()).unwrap();
@@ -70,10 +74,6 @@ fn main() -> ! {
             println!("Ignoring unknown PCI device {}", vendor_and_id);
         }
     }
-
-    // (DriverName|"vendor:id") -> d7pci::Device
-    let server: ipc::Server<String, Option<d7pci::Device>> =
-        ipc::Server::exact("pci/device").unwrap();
 
     loop {
         server

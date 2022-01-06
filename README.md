@@ -1,4 +1,4 @@
-# D7 - An operating system
+# D7 - An operating system ![build status](https://github.com/Dentosal/rust_os/actions/workflows/ci.yml/badge.svg?branch=master)
 
 D7 is an operating system written in Rust. It aims to be an event-driven quasi-microkernel. By design, it runs only on moder x86-64 processors. The system is in fairly early stage, and is developed by fearlessly breaking things, trying new stuff before older stubs are even working and most importantly experimenting with weird ideas.
 

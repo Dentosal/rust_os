@@ -25,7 +25,7 @@ const STARTUP_CODE: &[u8] = include_bytes!("../../../build/smp_ap_startup.bin");
 fn enable_local_apic() {
     // Enable APIC
     let local_apic_addr = ACPI_DATA
-        .r#try()
+        .poll()
         .expect("acpi::init not called")
         .local_apic_addr;
 
@@ -73,7 +73,7 @@ pub fn per_processor_init() {
 /// Wake up a CPU Core
 pub fn apic_wakeup_processor(acpi_id: u8) {
     let local_apic_addr = ACPI_DATA
-        .r#try()
+        .poll()
         .expect("acpi::init not called")
         .local_apic_addr;
 
@@ -102,7 +102,7 @@ pub fn apic_wakeup_processor(acpi_id: u8) {
 
 pub fn send_ipi(acpi_id: u8, int_vector: u8, synchronous: bool) {
     let local_apic_addr = ACPI_DATA
-        .r#try()
+        .poll()
         .expect("acpi::init not called")
         .local_apic_addr;
 
@@ -125,7 +125,7 @@ pub fn send_ipi(acpi_id: u8, int_vector: u8, synchronous: bool) {
 
 pub fn broadcast_ipi(include_self: bool, int_vector: u8) {
     let local_apic_addr = ACPI_DATA
-        .r#try()
+        .poll()
         .expect("acpi::init not called")
         .local_apic_addr;
 

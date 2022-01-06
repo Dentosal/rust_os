@@ -81,12 +81,12 @@ pub fn init_rsdt() {
 }
 
 pub fn is_legacy_acpi() -> bool {
-    *LEGAZY_ACPI.r#try().expect("RSDT unintialized")
+    *LEGAZY_ACPI.poll().expect("RSDT unintialized")
 }
 
 pub fn rsdt_get(key: &[u8; 4]) -> Option<PhysAddr> {
     RSDT_ENTRIES
-        .r#try()
+        .poll()
         .expect("RSDT unintialized")
         .get(key)
         .cloned()

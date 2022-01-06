@@ -61,7 +61,7 @@ const TIMER_DIVIDE_BY_128: u32 = 0x3;
 /// Address of the processor-local APIC
 pub fn addr() -> VirtAddr {
     let phys_addr = ACPI_DATA
-        .r#try()
+        .poll()
         .expect("acpi::init not called")
         .local_apic_addr;
 

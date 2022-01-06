@@ -209,7 +209,7 @@ pub fn init() {
             AcpiTables::from_validated_rsdp(HANDLER, rsdp_address).expect("acpi parse error")
         });
 
-        let tables = ACPI_TABLES.r#try().unwrap();
+        let tables = ACPI_TABLES.poll().unwrap();
 
         let plinfo = tables.platform_info().expect("platform_info");
         log::debug!("plinfo.power_profile {:?}", plinfo.power_profile);
@@ -267,7 +267,7 @@ pub fn init() {
 
 /// Shuts down the computer
 pub fn power_off() -> ! {
-    let tables = ACPI_TABLES.r#try().expect("ACPI not initialized");
+    let tables = ACPI_TABLES.poll().expect("ACPI not initialized");
     log::warn!("ACPI power off");
 
     unsafe {

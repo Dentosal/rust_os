@@ -104,7 +104,7 @@ pub fn ap_mark_ready() {
 }
 
 pub fn start_all() {
-    let acpi_data = acpi::ACPI_DATA.r#try().expect("acpi::init not called");
+    let acpi_data = acpi::ACPI_DATA.poll().expect("acpi::init not called");
 
     // TODO: actually check which CPU is BSP
     // TODO: check for disabled CPUs
@@ -145,7 +145,7 @@ fn init_processor_info() {
 
     let tsc_freq_hz = tsc_freq_hz();
 
-    let acpi_data = acpi::ACPI_DATA.r#try().expect("acpi::init not called");
+    let acpi_data = acpi::ACPI_DATA.poll().expect("acpi::init not called");
     for cpu in acpi_data.cpus.iter() {
         let info = ProcessorInfo {
             tsc_freq_hz,

@@ -79,7 +79,7 @@ pub fn init(elf_data: ELFData) {
 }
 
 pub fn read(name: &str) -> Option<&'static [u8]> {
-    let rd: &InitRD = INITRD.r#try().unwrap();
+    let rd: &InitRD = INITRD.poll().unwrap();
     log::trace!("Read {:?} (found={})", name, rd.files.contains_key(name));
     let entry = rd.files.get(name)?;
     let start = entry.offset as usize;

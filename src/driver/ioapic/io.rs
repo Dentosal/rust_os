@@ -142,7 +142,7 @@ fn set_irq_handler(io_apics: &[MadtEntry], irq: u8, redirect: RedirectEntry) {
 }
 
 pub fn init() {
-    let acpi_data = ACPI_DATA.r#try().expect("acpi::init not called");
+    let acpi_data = ACPI_DATA.poll().expect("acpi::init not called");
 
     let handling_cpu_id = acpi_data.cpus[0].acpi_id;
     let io_apics = &acpi_data.io_apics;

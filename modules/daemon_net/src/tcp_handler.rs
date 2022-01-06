@@ -5,7 +5,7 @@ use hashbrown::HashMap;
 use libd7::{
     ipc::{self, InternalSubscription, SubscriptionId},
     net::tcp::socket_ipc_protocol::{BindError, Error, Reply, Request},
-    net::{d7net::*, SocketId},
+    net::{d7net::*, NetworkError, SocketId},
     random, time,
 };
 
@@ -33,6 +33,7 @@ enum SuspendMode {
 struct SocketData {
     handler: SocketHandler,
     local_port: u16,
+    send_error: Option<NetworkError>,
     events_suspended:
         HashMap<tcp::state::Cookie, (SuspendMode, ipc::ReplyCtx<Result<Reply, Error>>)>,
     events_ready: Vec<(
@@ -42,38 +43,29 @@ struct SocketData {
     )>,
 }
 
-impl tcp::state::UserData for SocketData {
-    type Time = TcpTime;
-    type Addr = SocketAddr;
-
-    fn new_seqn(&mut self) -> u32 {
-        // TODO: use a clock instead of random
-        let arr = random::fast_arr();
-        u32::from_le_bytes(arr)
-    }
-
-    fn send(&mut self, to: SocketAddr, seg: tcp::state::SegmentMeta) {
-        println!("send {:?} to {:?}", seg, to);
-
+impl SocketData {
+    fn send_inner(
+        &mut self, to: SocketAddr, seg: tcp::state::SegmentMeta,
+    ) -> Result<(), NetworkError> {
         let (dst_mac, src_mac, src_ip) = {
-            let net_state = NET_STATE.read();
+            let net_state = NET_STATE.try_read().expect("NET_STATE locked");
+
             let intf = net_state
                 .default_send_interface()
-                .expect("No default send interface");
+                .ok_or(NetworkError::NoInterfaces)?;
+
             let router_ip = intf
                 .settings
                 .routers
                 .first()
-                .expect("Default interface has no routers available");
+                .ok_or(NetworkError::NoRouters)?;
+
             let router_mac = net_state
                 .arp_table
                 .get(router_ip)
-                .expect("Default router ARP entry missing");
+                .ok_or(NetworkError::NoArpEntry)?;
 
-            let ip_addr = intf
-                .settings
-                .ipv4
-                .expect("Default interface has no IPv4 addr");
+            let ip_addr = intf.settings.ipv4.ok_or(NetworkError::NoIpAddr)?;
 
             (*router_mac, intf.mac_addr, ip_addr)
         };
@@ -115,6 +107,26 @@ impl tcp::state::UserData for SocketData {
         }
 
         ipc::publish("nic/send", &packet).expect("Delivery failed");
+        Ok(())
+    }
+}
+
+impl tcp::state::UserData for SocketData {
+    type Time = TcpTime;
+    type Addr = SocketAddr;
+
+    fn new_seqn(&mut self) -> u32 {
+        // TODO: use a clock instead of random
+        let arr = random::fast_arr();
+        u32::from_le_bytes(arr)
+    }
+
+    fn send(&mut self, to: SocketAddr, seg: tcp::state::SegmentMeta) {
+        println!("send {:?} to {:?}", seg, to);
+        match self.send_inner(to, seg) {
+            Ok(()) => {},
+            Err(err) => self.send_error = Some(err),
+        }
     }
 
     fn event(&mut self, cookie: tcp::state::Cookie, result: Result<(), tcp::state::Error>) {
@@ -197,6 +209,7 @@ impl TcpHandler {
                         .expect("IPC server creation failed"),
                 },
                 local_port,
+                send_error: None,
                 events_suspended: HashMap::new(),
                 events_ready: Vec::new(),
             }),
@@ -270,12 +283,26 @@ impl TcpHandler {
 
             log::trace!("User request (socket={:?}): {:?}", socket_id, request);
 
+            if socket.user_data().send_error.is_some() {
+                match &request {
+                    Request::Remove => {},
+                    _ => {
+                        let err: NetworkError = socket.user_data_mut().send_error.take().unwrap();
+                        reply_ctx
+                            .reply(Err(err.into()))
+                            .expect("TODO: disconnected");
+                        return;
+                    },
+                }
+            }
+
             match request.clone() {
                 Request::Remove => todo!(),
                 Request::Accept => {
                     match socket.call_accept(|parent| SocketData {
                         handler: new_user_handler(),
                         local_port: parent.user_data().local_port,
+                        send_error: None,
                         events_suspended: HashMap::new(),
                         events_ready: Vec::new(),
                     }) {
@@ -330,20 +357,20 @@ impl TcpHandler {
             .expect("Socket has been removed incorrectly");
 
         match reply {
-            Err(Error::RetryAfter(cookie)) => {
+            Err(tcp::state::Error::RetryAfter(cookie)) => {
                 socket
                     .user_data_mut()
                     .events_suspended
                     .insert(cookie, (SuspendMode::Retry(request), reply_ctx));
             },
-            Err(Error::ContinueAfter(cookie)) => {
+            Err(tcp::state::Error::ContinueAfter(cookie)) => {
                 socket
                     .user_data_mut()
                     .events_suspended
                     .insert(cookie, (SuspendMode::Continue, reply_ctx));
             },
             other => {
-                let response: Result<Reply, Error> = other;
+                let response: Result<Reply, Error> = other.map_err(|e| e.into());
                 reply_ctx
                     .reply(response)
                     .expect("TODO: handle disconnection(?)");
@@ -434,14 +461,26 @@ impl TcpHandler {
         }
         let events = core::mem::replace(ev, Vec::new());
 
+        let send_error = socket.user_data_mut().send_error.take();
+
         for (suspend_mode, reply_ctx, result) in events {
             log::trace!("Processing event {:?} {:?}", suspend_mode, result);
+
+            if let Some(error) = send_error {
+                reply_ctx
+                    .reply(Err(error.clone().into()))
+                    .expect("TODO: disconnection");
+                continue;
+            }
 
             match suspend_mode {
                 SuspendMode::Retry(request) => {
                     if result.is_err() {
                         reply_ctx
-                            .reply(result.map(|()| Reply::NoData))
+                            .reply(match result {
+                                Ok(()) => Ok(Reply::NoData),
+                                Err(err) => Err(err.into()),
+                            })
                             .expect("TODO: disconnection");
                     } else {
                         self.user_socket_event_inner(socket_id, request, reply_ctx);
@@ -449,7 +488,10 @@ impl TcpHandler {
                 },
                 SuspendMode::Continue => {
                     reply_ctx
-                        .reply(result.map(|()| Reply::NoData))
+                        .reply(match result {
+                            Ok(()) => Ok(Reply::NoData),
+                            Err(err) => Err(err.into()),
+                        })
                         .expect("TODO: disconnection");
                 },
             }

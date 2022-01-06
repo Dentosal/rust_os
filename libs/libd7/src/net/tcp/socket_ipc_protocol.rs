@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
-use crate::net::SocketId;
+use crate::net::{NetworkError, SocketId};
 use d7net::{tcp, SocketAddr};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -60,7 +60,21 @@ impl From<()> for Reply {
     }
 }
 
-pub type Error = tcp::state::Error;
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Error {
+    Network(NetworkError),
+    Tcp(tcp::state::Error),
+}
+impl From<tcp::state::Error> for Error {
+    fn from(error: tcp::state::Error) -> Self {
+        Self::Tcp(error)
+    }
+}
+impl From<NetworkError> for Error {
+    fn from(error: NetworkError) -> Self {
+        Self::Network(error)
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OptionKey {

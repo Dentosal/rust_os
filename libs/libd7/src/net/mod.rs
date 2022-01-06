@@ -21,3 +21,16 @@ impl SocketId {
         self.0
     }
 }
+
+/// Possible errors when sending to or receiving from network
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
+pub enum NetworkError {
+    /// No suitable interfaces available
+    NoInterfaces,
+    /// No routers available
+    NoRouters,
+    /// A required ARP entry is misising
+    NoArpEntry,
+    /// No IP address configured for the interface
+    NoIpAddr,
+}

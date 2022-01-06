@@ -37,11 +37,12 @@ D7 is an operating system written in Rust. It aims to be an event-driven quasi-m
 This is a learning project. Currently code contributions are not accepted, as I'd like to learn to fix the problems myself. Forking the project is of course possible, if you'd like to develop something based on this.
 Feel free to submit issues on GitHub if you find any bugs.
 
-# Running
+# Compiling and Running
+
 The project is using Vagrant to virtualize the building environment. While being a little slower, this means that building the system on any supported platform should Just Work™. If you have a Unix-like system, install Qemu and
 
 ```bash
-git clone https://github.com/Dentosal/rust_os.git && cd rust_os && ./autobuild.sh -u
+git clone https://github.com/Dentosal/rust_os.git && cd rust_os && ./autobuild.sh -ug
 ```
 
 Sometimes shared folder feature will not work, and you get an error message about missing `/vagrant` etc. In that case installing vbguest plugin should help:
@@ -63,12 +64,12 @@ You will also need a virtual machine. Qemu is suggested, but Bochs should work a
 
 ## Actually running
 
-With Qemu and Vagrant installed, run `./autobuild.sh -u`. With Bochs: `./autobuild.sh -ub`. To use VirtualBox, run `./autobuild.sh -uv`.
+With Qemu and Vagrant installed, run `./autobuild.sh -ug`. With Bochs: `./autobuild.sh -ugb`. To use VirtualBox, run `./autobuild.sh -ugv`.
 
-## Local development
+## Local development without Vagrant
 
 ```bash
-cargo fmt && factory && ./autobuild.sh -n
+cargo fmt && ./autobuild.sh
 ```
 
 # License

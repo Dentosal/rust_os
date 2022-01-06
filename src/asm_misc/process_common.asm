@@ -1,5 +1,7 @@
 ; Process trampoline, available from both kernel and process page tables
 
+%include "src/asm_routines/constants.asm"
+
 [BITS 64]
 [ORG 0x200000]
 
@@ -62,7 +64,7 @@ switch_to:
     ; Save rax
     push rax
     ; Load GDT
-        push qword 16*0x100
+        push qword 0x1000
         push word 8*2-1
         mov rax, rsp
         lgdt [rax]
@@ -188,15 +190,15 @@ process_interrupt:
     mov rsp, kernel_syscall_stack_end
 
     ; Switch to kernel interrupt handlers
-    push qword 0x0
+    push qword IDT_ADDR
     push word 0x100 * 16 - 1
     mov rcx, rsp
     lidt [rcx]
     add rsp, 10
 
     ; Switch to kernel GDT
-    push qword 0x1000
-    push word 4 * 8 - 1
+    push qword GDT_ADDR
+    push word 4 * 8 - 1 ; TODO: named constant?
     mov rcx, rsp
     lgdt [rcx]
     add rsp, 10

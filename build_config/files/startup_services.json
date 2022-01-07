@@ -1,5 +1,12 @@
 [
     {
+        "name": "driver_rtc",
+        "description": "CMOS RTC driver",
+        "requires": [],
+        "from_initrd": true,
+        "executable": "driver_rtc"
+    },
+    {
         "name": "driver_ps2",
         "description": "PS/2 keyboard driver",
         "requires": [],

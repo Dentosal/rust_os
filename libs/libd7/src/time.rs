@@ -1,6 +1,8 @@
 use core::arch::asm;
 use core::ops::{Add, AddAssign, Sub, SubAssign};
 
+// Re-exports
+pub use chrono;
 pub use core::time::Duration;
 
 /// Monotonic and steady per-process instant.

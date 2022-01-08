@@ -72,6 +72,7 @@ mod memory;
 mod multitasking;
 mod random;
 mod services;
+mod signature;
 mod smp;
 mod syscall;
 mod syslog;

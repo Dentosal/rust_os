@@ -5,6 +5,9 @@ authors = ["Hannes Karppila <hannes.karppila@gmail.com>"]
 publish = false
 edition = "2018"
 
+# https://doc.rust-lang.org/nightly/cargo/reference/features.html#feature-resolver-version-2
+resolver = "2"
+
 [lib]
 crate-type = ["staticlib"]
 
@@ -46,6 +49,18 @@ version = "0.10"
 default-features = false
 features = ["force-soft"]
 
+[dependencies.ed25519-dalek]
+# Open PR https://github.com/dalek-cryptography/ed25519-dalek/pull/189
+git = "https://github.com/Dentosal/ed25519-dalek"
+branch = "update-deps"
+default-features = false
+features = ["u64_backend", "rand", "sha2-force-soft"]
+
+[dependencies.rand_core]
+version = "0.6"
+default-features = false
+features = ["alloc"]
+
 [dependencies.lazy_static]      # Non-const_fn static intialization
 version = "1.4"
 features = ["spin_no_std"]
@@ -65,3 +80,6 @@ path = "libs/d7alloc"
 [dependencies.d7initrd]
 version = "*"
 path = "libs/d7initrd"
+
+[dev-dependencies]
+rand = "0.8"

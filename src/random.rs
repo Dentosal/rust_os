@@ -104,8 +104,8 @@ fn read_one() -> u64 {
 }
 
 /// Read one item from the entropy pool and hash it.
-/// This is the only way to read randomness from this module,
-/// and it should be reasonably secure against entropy poisoning.
+/// All randomness that is read from this module goes through this function.
+/// It should be reasonably secure against entropy poisoning.
 pub fn read() -> u64 {
     use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
@@ -115,6 +115,33 @@ pub fn read() -> u64 {
     result.copy_from_slice(&hash.as_slice()[..8]);
     u64::from_le_bytes(result)
 }
+
+#[derive(Debug, Clone, Copy)]
+pub struct KernelRng;
+impl rand_core::RngCore for KernelRng {
+    fn next_u32(&mut self) -> u32 {
+        self.next_u64() as u32
+    }
+
+    fn next_u64(&mut self) -> u64 {
+        read()
+    }
+
+    fn fill_bytes(&mut self, buffer: &mut [u8]) {
+        for c in buffer.chunks_mut(8) {
+            let b = read().to_le_bytes();
+            c.copy_from_slice(&b[..c.len()]);
+        }
+    }
+
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand_core::Error> {
+        self.fill_bytes(dest);
+        Ok(())
+    }
+}
+impl rand_core::CryptoRng for KernelRng {}
+
+pub const KRNG: KernelRng = KernelRng;
 
 /// Initial pool seeding
 pub fn init() {

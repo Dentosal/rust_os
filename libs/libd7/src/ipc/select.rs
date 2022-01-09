@@ -26,6 +26,7 @@ macro_rules! select_inner {
                             let $var = index - i;
                             break 'select $abody;
                         }
+                        i += $any.len();
                     )*
                     ::core::unreachable!("Select returned unknown alternative");
                 },

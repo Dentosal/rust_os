@@ -1,5 +1,5 @@
 use spin::{Mutex, Once};
-use x86_64::instructions::segmentation::set_cs;
+use x86_64::instructions::segmentation::{Segment, CS};
 use x86_64::instructions::tables::{lidt, load_tss};
 use x86_64::structures::gdt::SegmentSelector;
 use x86_64::structures::idt::InterruptStackFrame;
@@ -303,7 +303,7 @@ fn init_gdt_and_tss() {
         // load GDT
         gdt_builder.load();
         // reload code segment register
-        set_cs(kernel_cs_sel);
+        CS::set_reg(kernel_cs_sel);
         // load TSS
         load_tss(tss_sel);
     }

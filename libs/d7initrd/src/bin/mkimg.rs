@@ -158,7 +158,7 @@ fn main() {
     println!(" File Name                      | Size (hex) | Host Path ");
     println!("--------------------------------|------------|-----------");
     for (host_path, file) in files {
-        println!(" {:<30} | {:>8x} | {}", file.name, file.size, host_path);
+        println!(" {:<30} |   {:>8x} | {}", file.name, file.size, host_path);
     }
     println!();
 }

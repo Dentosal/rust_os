@@ -22,7 +22,7 @@ mod PROCESS_OUTPUT {
     use d7abi::process::ProcessId;
 
     pub fn print(pid: ProcessId, string: &str) {
-        log::info!("[pid={:8}] {}", pid.as_u64(), string);
+        log::info!("[pid={:2}] {}", pid.as_u64(), string);
     }
 }
 
@@ -123,7 +123,7 @@ fn syscall(
                 if let Some((area, slice)) =
                     unsafe { m.process_slice(process, image_len, image_ptr) }
                 {
-                    log::debug!("[pid={:8}] exec len={:?}", pid, slice.len());
+                    log::debug!("[pid={:2}] exec len={:?}", pid, slice.len());
 
                     let elfimage = crate::multitasking::process::load_elf(m, slice);
                     let pid = sched.spawn(m, elfimage);
@@ -173,7 +173,7 @@ fn syscall(
                         !flags.contains(SubscriptionFlags::PREFIX)
                     ));
 
-                    log::trace!("[pid={:8}] ipc_subscribe {:?} {:?}", pid, filter, flags);
+                    log::trace!("[pid={:2}] ipc_subscribe {:?} {:?}", pid, filter, flags);
 
                     let mut ipc_manager = ipc::IPC.try_lock().expect("IPC LOCKED");
                     let sub_id = try_ipc!(ipc_manager.subscribe(
@@ -196,7 +196,7 @@ fn syscall(
                 let (sub_id, _, _, _) = rsc.args;
                 let sub_id = ipc::SubscriptionId::from_u64(sub_id);
 
-                log::trace!("[pid={:8}] ipc_unsubscribe {:?}", pid, sub_id);
+                log::trace!("[pid={:2}] ipc_unsubscribe {:?}", pid, sub_id);
 
                 let mut ipc_manager = ipc::IPC.try_lock().expect("IPC LOCKED");
                 try_ipc!(ipc_manager.unsubscribe(pid, sub_id).consume_events(sched));
@@ -217,7 +217,7 @@ fn syscall(
                         let topic = try_ipc!(ipc::Topic::try_new(topic_str));
 
                         log::trace!(
-                            "[pid={:8}] ipc_publish topic={:?} len={:?}",
+                            "[pid={:2}] ipc_publish topic={:?} len={:?}",
                             pid,
                             topic,
                             data_len
@@ -252,7 +252,7 @@ fn syscall(
 
                 // Delivery complete
                 if ipc_manager.delivery_complete(pid) {
-                    log::trace!("[pid={:8}] ipc_deliver complete", pid);
+                    log::trace!("[pid={:2}] ipc_deliver complete", pid);
 
                     try_ipc!(ipc_manager.after_delivery(pid).consume_events(sched));
                     return SyscallResult::Continue(Ok(0));
@@ -267,7 +267,7 @@ fn syscall(
                         let topic_str = try_str!(topic_slice);
                         let topic = try_ipc!(ipc::Topic::try_new(topic_str));
                         log::trace!(
-                            "[pid={:8}] ipc_deliver topic={:?} len={:?}",
+                            "[pid={:2}] ipc_deliver topic={:?} len={:?}",
                             pid,
                             topic,
                             data_len
@@ -318,7 +318,7 @@ fn syscall(
                         let topic_str = try_str!(topic_slice);
                         let topic = try_ipc!(ipc::Topic::try_new(topic_str));
                         log::trace!(
-                            "[pid={:8}] ipc_deliver_reply topic={:?} len={:?}",
+                            "[pid={:2}] ipc_deliver_reply topic={:?} len={:?}",
                             pid,
                             topic,
                             data_len
@@ -355,7 +355,7 @@ fn syscall(
                     unsafe { m.process_slice_mut(process, buf_len, buf_ptr) }
                 {
                     log::trace!(
-                        "[pid={:8}] ipc_receive sub={:?} len={:?}",
+                        "[pid={:2}] ipc_receive sub={:?} len={:?}",
                         pid,
                         sub_id,
                         buf_len
@@ -400,7 +400,7 @@ fn syscall(
                 let positive = positive != 0;
 
                 log::trace!(
-                    "[pid={:8}] ipc_acknowledge sub={:?} ack_id={:?} positive={:?}",
+                    "[pid={:2}] ipc_acknowledge sub={:?} ack_id={:?} positive={:?}",
                     pid,
                     sub_id,
                     ack_id,
@@ -485,7 +485,7 @@ fn syscall(
                 // if let Some((area, slice)) =
                 //     unsafe { m.process_slice(process, image_len, image_ptr) }
                 // {
-                //     log::debug!("[pid={:8}] exec len={:?}", pid, slice.len());
+                //     log::debug!("[pid={:2}] exec len={:?}", pid, slice.len());
 
                 //     let elfimage = crate::multitasking::process::load_elf(m, slice);
                 //     let pid = sched.spawn(m, elfimage);
@@ -526,7 +526,7 @@ fn syscall(
                 };
 
                 log::debug!(
-                    "[pid={:8}] mmap_physical {:?} -> {:?} len={:#x} writable={}",
+                    "[pid={:2}] mmap_physical {:?} -> {:?} len={:#x} writable={}",
                     pid,
                     phys_addr,
                     virt_addr,
@@ -576,7 +576,7 @@ fn syscall(
             SC::dma_allocate => {
                 let (len, _, _, _) = rsc.args;
                 assert!(len != 0); // TODO: client error
-                log::debug!("[pid={:8}] dma_allocate len={}", pid, len);
+                log::debug!("[pid={:2}] dma_allocate len={}", pid, len);
                 let region = m.dma_allocator.allocate(len as usize);
                 SyscallResult::Continue(Ok(region.start.as_u64()))
             },
@@ -651,12 +651,12 @@ pub fn handle_syscall(
             args: (reg_rdi, reg_rsi, reg_rdx, reg_rcx),
         };
         log::trace!(
-            "[pid={:8}] <= {:?} ",
+            "[pid={:2}] <= {:?} ",
             pid,
             d7abi::SyscallNumber::try_from(rsc.routine).ok()
         );
         let res = syscall(mm, &mut sched, pid, rsc);
-        log::trace!("[pid={:8}] => {:?} ", pid, res);
+        log::trace!("[pid={:2}] => {:?} ", pid, res);
 
         // Write result register values into the process stack
         if let SyscallResult::Continue(r) | SyscallResult::Switch(r, _) = res {

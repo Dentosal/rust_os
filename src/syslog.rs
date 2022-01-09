@@ -132,43 +132,39 @@ impl log::Log for SystemLogger {
             return;
         }
 
+        let target = if record.target() == "d7os::syscall::PROCESS_OUTPUT" {
+            "PROCESS_OUTPUT"
+        } else {
+            record.target()
+        };
+
         let level = record.metadata().level();
         if level <= LEVEL_PORTE9 {
             e9_print!(
-                "{:30} [{}] {:5} {}",
-                record.target(),
+                "[c{}] {:25} {:5} {}",
                 crate::smp::current_processor_id(),
+                target,
                 record.level(),
                 record.args()
             );
 
             uart_print!(
-                "{:30} [{}] {:5} {}",
-                record.target(),
+                "[c{}] {:25} {:5} {}",
                 crate::smp::current_processor_id(),
+                target,
                 record.level(),
                 record.args()
             );
         }
         if level <= LEVEL_SCREEN {
             if crate::memory::can_allocate() {
-                let message = format!(
-                    "{:5} {} - {}\n",
-                    record.level(),
-                    record.target(),
-                    record.args()
-                );
+                let message = format!("{:5} {} - {}\n", record.level(), target, record.args());
                 let mut wal = WRITE_AHEAD_LOG.lock();
                 wal.extend(message.bytes());
             }
 
             if !DISABLE_DIRECT_VGA.load(Ordering::Acquire) {
-                rprintln!(
-                    "{:5} {} - {}",
-                    record.level(),
-                    record.target(),
-                    record.args()
-                );
+                rprintln!("{:5} {} - {}", record.level(), target, record.args());
             }
         }
     }

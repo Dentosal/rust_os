@@ -55,6 +55,7 @@ impl Allocator {
 unsafe impl pg::FrameAllocator<PageSizeType> for Allocator {
     fn allocate_frame(&mut self) -> Option<PhysFrame> {
         if self.next_free == self.total_frames {
+            log::error!("No more physical memory available");
             None
         } else {
             let frame = PhysFrame::from_start_address(self.to_page_addr(self.next_free))

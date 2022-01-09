@@ -55,7 +55,14 @@ impl log::Log for SimpleLogger {
 
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
-            println!("{} - {}", record.level(), record.args());
+            let t = record.target();
+            let target_module = t.split_once("::").map(|(a, _)| a).unwrap_or(t);
+            println!(
+                "{:20} {} - {}",
+                target_module,
+                record.level(),
+                record.args()
+            );
         }
     }
 

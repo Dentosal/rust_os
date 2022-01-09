@@ -194,9 +194,8 @@ impl AtaPio {
         })
     }
 
+    /// https://wiki.osdev.org/ATA_read/write_sectors#Read_in_LBA_mode
     pub unsafe fn read_lba(&self, drive: usize, lba: u64, sectors: u8) -> Vec<u8> {
-        // https://wiki.osdev.org/ATA_read/write_sectors#Read_in_LBA_mode
-
         assert!(sectors > 0);
         assert!(drive <= 1);
         assert!(lba < (1 << 28), "LBA64 not supported by the driver yet");
@@ -245,13 +244,69 @@ impl AtaPio {
         result
     }
 
+    /// https://wiki.osdev.org/ATA_read/write_sectors#ATA_write_sectors
+    pub unsafe fn write_lba(&self, drive: usize, lba: u64, data: &[u8]) {
+        assert!(drive <= 1);
+        assert!(lba < (1 << 28), "LBA64 not supported by the driver yet");
+        assert!(
+            data.len() % SECTOR_SIZE == 0,
+            "Non-exact writes are not supported"
+        );
+        let sectors = data.len() / SECTOR_SIZE;
+        assert!(sectors > 0); // Sanity check
+
+        // Send bits 24-27 of LBA, drive number and LBA mode
+        let mut port = UnsafePort::<u8>::new(PORT_DRIVESELECT);
+        let mut bits24_27: u8 = (lba >> 24) as u8;
+        assert!(bits24_27 < 8);
+        bits24_27 |= 0b11100000; // LBA mode
+        bits24_27 |= (drive as u8) << 4; // drive number
+        port.write(bits24_27);
+
+        // Send number of sectors
+        let mut port = UnsafePort::<u8>::new(PORT_SECCOUNT);
+        port.write(sectors as u8);
+
+        // Send bits 0-7 of LBA
+        let mut port = UnsafePort::<u8>::new(PORT_LBA0);
+        port.write((lba & 0xFF) as u8);
+
+        // Send bits 8-15 of LBA
+        let mut port = UnsafePort::<u8>::new(PORT_LBA1);
+        port.write(((lba & 0xFF00) >> 0x8) as u8);
+
+        // Send bits 16-23 of LBA
+        let mut port = UnsafePort::<u8>::new(PORT_LBA2);
+        port.write(((lba & 0xFF0000) >> 0x10) as u8);
+
+        // Send command
+        log::trace!("Write command");
+        Self::send_command(0x30); // Write
+
+        Self::wait_ready();
+        log::trace!("Write command ready");
+
+        let mut data_port = UnsafePort::<u16>::new(PORT_DATA);
+
+        let mut index = 0;
+        for _ in 0..sectors {
+            for _ in 0..(SECTOR_SIZE / 2) {
+                let lo = data[index] as u16;
+                index += 1;
+                let hi = data[index] as u16;
+                index += 1;
+                data_port.write(lo | (hi << 8));
+            }
+        }
+    }
+
     /// Capacity in sectors
     pub fn drive_count(&self) -> usize {
         self.drives.len()
     }
 
     /// Capacity in sectors
-    pub fn capacity_sectors(&mut self, drive: usize) -> u64 {
+    pub fn capacity_sectors(&self, drive: usize) -> u64 {
         self.drives[drive].sector_count()
     }
 }

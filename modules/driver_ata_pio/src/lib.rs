@@ -10,51 +10,57 @@ extern crate libd7;
 
 use alloc::vec::Vec;
 use hashbrown::HashMap;
-use libd7::{select, syscall};
+use libd7::ipc::InternalSubscription;
+use libd7::{ipc, select, syscall};
 
 mod ata_pio;
 
 #[no_mangle]
 fn main() -> ! {
-    syscall::debug_print("ata pio driver starting");
+    log::info!("driver starting");
 
     let controller = ata_pio::AtaPio::new();
 
     let drive_count = controller.drive_count();
     assert!(drive_count > 0, "No drives found");
 
-    // let attachments: Vec<_> = (0..drive_count)
-    //     .map(|drive_index| Attachment::new_leaf(&format!("/dev/ata_pio_{}", drive_index)).unwrap())
-    //     .collect();
+    let drive_info: Vec<u64> = (0..drive_count)
+        .map(|i| controller.capacity_sectors(i))
+        .collect();
 
-    // let attachment_fds: Vec<_> = attachments.iter().map(|a| a.fd).collect();
+    log::info!("drives found {:?}", drive_info);
 
-    // let mut cursors: HashMap<Sender, u64> = HashMap::new();
+    let info: ipc::Server<(), Vec<u64>> = ipc::Server::exact("ata_pio/drives").unwrap();
+    let drive_read: Vec<ipc::Server<(u64, u8), Vec<u8>>> = (0..drive_count)
+        .map(|i| ipc::Server::exact(&format!("ata_pio/drive/{}/read", i)).unwrap())
+        .collect();
+    let drive_write: Vec<ipc::ReliableSubscription<(u64, Vec<u8>)>> = (0..drive_count)
+        .map(|i| ipc::ReliableSubscription::exact(&format!("ata_pio/drive/{}/write", i)).unwrap())
+        .collect();
+
+    let read_sub_ids: Vec<_> = drive_read.iter().map(|s| s.sub_id()).collect();
+    let write_sub_ids: Vec<_> = drive_write.iter().map(|s| s.sub_id()).collect();
+
+    // Inform serviced that we are running.
+    libd7::service::register("driver_ata_pio", false);
 
     loop {
-        // let index = select! {
-        //     any(attachment_fds) -> avail_fd => {
-        //         attachment_fds
-        //             .iter()
-        //             .position(|fd| *fd == avail_fd)
-        //             .unwrap()
-        //     }
-        // };
-
-        // let req = attachments[index].next_request().unwrap();
-
-        // let cur = *cursors.entry(req.sender).or_insert(0);
-
-        // match req.operation {
-        //     RequestFileOperation::Read(byte_count) => {
-        //         let sector_count = (byte_count / ata_pio::SECTOR_SIZE as u64) + 1;
-        //         assert!(sector_count <= (core::u8::MAX as u64));
-        //         let bytes = unsafe { controller.read_lba(index, cur, sector_count as u8) };
-        //         attachments[index]
-        //             .reply(req.response(ResponseFileOperation::Read(bytes)))
-        //             .unwrap();
-        //     }
-        //     other => unimplemented!("Unsupported request: {:?}", other),
-        // }
+        select! {
+            any(read_sub_ids) -> i => {
+                drive_read[i].handle(|(sector, count)| {
+                    // TODO: check that the sector index is valid
+                    Ok(unsafe {controller.read_lba(i, sector, count)})
+                }).unwrap();
+            },
+            any(write_sub_ids) -> i => {
+                let (ack_ctx, (sector, data)) = drive_write[i].receive().unwrap();
+                // TODO: check that the sector index is valid
+                unsafe {controller.write_lba(i, sector, &data)};
+                ack_ctx.ack().unwrap();
+            },
+            one(info) => {
+                info.handle(|()| Ok(drive_info.clone())).unwrap();
+            }
+        };
     }
 }

@@ -14,13 +14,15 @@ panic = "abort"
 [profile.release]
 panic = "abort"
 
+[dependencies]
+log = "0.4"
+
 [dependencies.cpuio]
 git = "https://github.com/Dentosal/cpuio-rs"
 
 [dependencies.hashbrown]
 version = "0.7"
 features = ["nightly", "inline-more", "serde"]
-
 
 [dependencies.libd7]
 version = "*"

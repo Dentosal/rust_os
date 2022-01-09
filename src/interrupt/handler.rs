@@ -305,7 +305,7 @@ unsafe extern "C" fn process_interrupt_inner(
         }};
     }
 
-    if interrupt != 0xd7 && interrupt != 0xd8 {
+    if interrupt != 0xd7 && interrupt != 0xd8 && interrupt != 0x3e {
         log::debug!("Handling interrupt {:#02x} while in process", interrupt);
     }
 

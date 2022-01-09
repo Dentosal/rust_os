@@ -9,6 +9,7 @@ Numbers| Description
 0x3_   | Process control
 0x4_   | Misc kernel-provided services
 0x5_   | Scheduler
+0x6_   | Capabilities
 0x7_   | IPC
 0x8_   | Misc driver-kernel interfaces
 0x9_   | Memory block control
@@ -26,7 +27,14 @@ Number | Name              | Arguments (logical)   | On success  | Short descrip
 0x40   | random            | seeddata              | random      | Read and seed rng
 0x50   | sched_yield       | -                     | -           | Yield control to schedule next process
 0x51   | sched_sleep_ns    | ns                    | -           | Sleep specified number of nanoseconds
-0x70   | ipc_subscribe     | **f**, flags          | SubId       | Subscribes to message by filter **f**
+0x60   | cap_verify        | **buf**               | -           | Verifies a capability token
+0x61   | cap_sign          | **buf**, CapId        | -           | Signs a new user-given capability token
+0x62   | cap_export        | **buf**               | -           | Signs the current kernel security ctx
+0x63   | cap_import        | **buf**               | -           | Adds token-permissions to kernel security ctx
+0x64   | cap_reduce        | KCapId, **args**      | -           | Gives up some kernel security capabilities
+0x65   | cap_exec_reduce   | KCapId, **args**      | -           | Same as above, but for `exec` capabilities
+0x66   | cap_exec_clone    | **buf**               | -           | Copies current caps to `exec` capabilities
+0x70   | ipc_subscribe     | **f**, flags          | -           | Subscribes to messages by filter **f**
 0x71   | ipc_unsubscribe   | SubId                 | -           | Unsubscribes from messages
 0x72   | ipc_publish       | **topic**, **data**   | -           | Publish unreliable message (nonblocking)
 0x73   | ipc_deliver       | **topic**, **data**   | -           | Deliver reliable message (blocking)

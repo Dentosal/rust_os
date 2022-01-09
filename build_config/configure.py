@@ -64,8 +64,8 @@ CCGEN_OUTDIR = ROOT_DIR / "build"
 
 TARGET = "d7os"
 
-# A disk of 0x2000 0x200-byte sectors, 4 * 2**20 bytes, four mebibytes
-DISK_SIZE_SECTORS = 0x2000
+# A disk of 0x5000 0x200-byte sectors, 10 * 2**20 bytes, ten mebibytes
+DISK_SIZE_SECTORS = 0x5000
 DISK_SIZE_BYTES = 0x200 * DISK_SIZE_SECTORS
 IMAGE_MAX_SIZE_SECTORS = 0x500
 IMAGE_MAX_SIZE_BYTES = 0x200 * DISK_SIZE_SECTORS

@@ -498,25 +498,3 @@ impl TcpHandler {
         }
     }
 }
-
-#[macro_export]
-macro_rules! expect_retry {
-    ($a:expr) => {{
-        use ::libd7::net::{d7net::tcp::state::Error, tcp::socket_ipc_protocol::Reply};
-        match $a {
-            Err(Error::RetryAfter(cookie)) => cookie,
-            other => panic!("Expected a retry cookie, got Err({:?})", other),
-        }
-    }};
-}
-
-#[macro_export]
-macro_rules! expect_continue {
-    ($a:expr) => {{
-        use ::libd7::net::{d7net::tcp::state::Error, tcp::socket_ipc_protocol::Reply};
-        match $a {
-            Err(Error::ContinueAfter(cookie)) => cookie,
-            other => panic!("Expected a continue cookie, got Err({:?})", other),
-        }
-    }};
-}

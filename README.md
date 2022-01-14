@@ -13,23 +13,29 @@ D7 is an operating system written in Rust. It aims to be an event-driven quasi-m
     * VirtIO-blk (Read only)
 * Networking:
     * Drivers for NE2000 and RTL8139
-    * IPv4 stack, supporting TCP, UDP, DHCP, ARP
+    * IPv4 stack, supporting TCP, UDP, DNS, DHCP, ARP
 * Services
     * Serviced - startup and service status queries
     * Netd - Manages network interfaces and sockets
 
-## Planned in the near future:
+## Roadmap items:
 * Shell
-* Writing to disk, and a real filesystem
-
-## Not-in-so-near future features:
-* Networking
-    * Intel E1000 driver
-    * VirtIO-net driver
-* Automated tests
-* Proper filesystem drivers, maybe FAT32, or ext2/3
-* Shell and utilities
-* Device drivers for USB and Audio devices
+* Virtual filesystem
+* Automated test suite
+* Porting software
+    * Shell utilities
+    * Text editor
+    * Compilers
+    * Self-hosting
+* (Better) suport for...
+    * Filesystems:
+        * ramfs
+        * ext2
+        * some network filesystem, possbily a custom one
+    * NICs:
+        * Intel E1000 driver
+        * VirtIO-net driver
+    * USB and Audio devices
 
 
 # Development

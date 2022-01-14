@@ -14,7 +14,8 @@
 #![feature(nonnull_slice_from_raw_parts)]
 #![feature(integer_atomics)]
 #![feature(panic_info_message)]
-#![feature(trait_alias)]
+#![feature(trait_alias, type_alias_impl_trait)]
+#![feature(stmt_expr_attributes)]
 #![feature(never_type)]
 #![feature(let_else)]
 

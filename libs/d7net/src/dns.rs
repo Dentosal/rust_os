@@ -3,6 +3,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 use num_enum::TryFromPrimitive;
+use serde::{Deserialize, Serialize};
 
 use crate::{Ipv4Addr, Ipv6Addr};
 
@@ -35,7 +36,19 @@ pub enum RCode {
     Refused = 5,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, TryFromPrimitive)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    TryFromPrimitive,
+    Serialize,
+    Deserialize,
+)]
 #[repr(u16)]
 pub enum QueryType {
     A = 0x0001,
@@ -45,13 +58,24 @@ pub enum QueryType {
     AAAA = 0x001c,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum QueryResult {
     A(Ipv4Addr),
     AAAA(Ipv6Addr),
     NS(String),
     CNAME(String),
     MX { priority: u16, domain: String },
+}
+impl QueryResult {
+    pub fn query(&self) -> QueryType {
+        match self {
+            Self::A(_) => QueryType::A,
+            Self::AAAA(_) => QueryType::AAAA,
+            Self::NS(_) => QueryType::NS,
+            Self::CNAME(_) => QueryType::CNAME,
+            Self::MX { .. } => QueryType::MX,
+        }
+    }
 }
 
 pub fn make_question(reg_id: u16, domain: &str, qtype: QueryType) -> Vec<u8> {
@@ -120,18 +144,23 @@ fn read_name(mut index: usize, data: &[u8]) -> (String, usize) {
     (name, non_compressed_len)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct TTL {
-    seconds: u32,
+    pub seconds: u32,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Reply {
     pub req_id: u16,
-    pub records: Vec<(String, TTL, QueryResult)>,
+    pub query: (String, QueryType),
+    pub records: Result<Vec<(String, TTL, QueryResult)>, NxDomain>,
 }
 
-pub fn parse_reply(data: &[u8]) -> Result<Option<Reply>, &str> {
+/// Marker type for "no such domain" error
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NxDomain;
+
+pub fn parse_reply(data: &[u8]) -> Result<Reply, &str> {
     let mut buf = [0u8; 2];
 
     buf.copy_from_slice(&data[0..2]);
@@ -170,11 +199,15 @@ pub fn parse_reply(data: &[u8]) -> Result<Option<Reply>, &str> {
             let mut i = 12;
 
             // Parse and skip query section
-            for _ in 0..count_qd {
-                let (_name, size) = read_name(i, data);
-                i += size;
-                i += 4; // Rest of the fields
-            }
+            assert_eq!(count_qd, 1);
+            let (query_name, size) = read_name(i, data);
+            i += size;
+            buf.copy_from_slice(&data[i..i + 2]);
+            let qtype = u16::from_be_bytes(buf);
+            let Ok(query_type) = QueryType::try_from_primitive(qtype) else {
+                panic!("Unknown query type reply {:?}", qtype);
+            };
+            i += 4; // Includes rest of the fields
 
             // Parse answer section
             let mut records = Vec::new();
@@ -241,11 +274,36 @@ pub fn parse_reply(data: &[u8]) -> Result<Option<Reply>, &str> {
 
             // Ignore ns and ar
 
-            Ok(Some(Reply { req_id, records }))
+            Ok(Reply {
+                req_id,
+                query: (query_name, query_type),
+                records: Ok(records),
+            })
         },
         RCode::FormatError => Err("Format error"),
         RCode::ServerError => Err("Server error"),
-        RCode::NxDomain => Ok(None),
+        RCode::NxDomain => {
+            buf.copy_from_slice(&data[4..6]);
+            let count_qd = u16::from_be_bytes(buf);
+
+            let mut i = 12;
+
+            // Parse and skip query section
+            assert_eq!(count_qd, 1);
+            let (query_name, size) = read_name(i, data);
+            i += size;
+            buf.copy_from_slice(&data[i..i + 2]);
+            let qtype = u16::from_be_bytes(buf);
+            let Ok(query_type) = QueryType::try_from_primitive(qtype) else {
+                panic!("Unknown query type reply {:?}", qtype);
+            };
+
+            Ok(Reply {
+                req_id,
+                query: (query_name, query_type),
+                records: Err(NxDomain),
+            })
+        },
         RCode::NotSupported => Err("Server does not support this"),
         RCode::Refused => Err("Server refused"),
     }

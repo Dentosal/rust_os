@@ -19,11 +19,9 @@ fn test_udp_dns() -> std::io::Result<()> {
     let (n, _src) = socket.recv_from(&mut buf)?;
     let buf = &mut buf[..n];
 
-    let reply = dns::parse_reply(&buf)
-        .expect("Resolution error")
-        .expect("No such domain");
+    let reply = dns::parse_reply(&buf).expect("Resolution error");
     assert_eq!(reply.req_id, 1);
-    assert!(reply.records.len() >= 1);
+    assert!(reply.records.expect("No such domain").len() >= 1);
 
     // Nonexistent domain
 
@@ -36,7 +34,7 @@ fn test_udp_dns() -> std::io::Result<()> {
     let buf = &mut buf[..n];
 
     let reply = dns::parse_reply(&buf).expect("Resolution error");
-    assert!(reply.is_none());
+    assert!(reply.records.is_err());
 
     Ok(())
 }

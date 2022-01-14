@@ -111,6 +111,11 @@ impl<RS: Serialize + DeserializeOwned> ReplyCtx<RS> {
         deliver_reply(&self.reply_topic, &data)?;
         self.ack_ctx.ack()
     }
+
+    /// Consumes this context to send a nack
+    pub fn nack(self) -> SyscallResult<()> {
+        self.ack_ctx.nack()
+    }
 }
 
 static NEXT_TOPIC: AtomicU64 = AtomicU64::new(0);

@@ -16,3 +16,6 @@ pub fn random_dynamic_port() -> u16 {
     let i = v % (RANGE_DYNAMIC.len() as u16);
     RANGE_DYNAMIC.start() + i
 }
+
+// Some fixed ports that are used by builtin clients
+pub const FIXED_DNS_CLIENT: u16 = 54;

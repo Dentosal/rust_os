@@ -1,16 +1,11 @@
 //! Networking daemon
 //!
 //! TODO: route broadcast packets to correct interfaces
-//!
-//! TODO: allow multiple NICs, including virtual ones, by separating
-//!     NetState to multiple interfaces and providing APIs for those
-//!
 //! TOOD: react to ARP overlap
-//!
 //! TOOD: offer APIs to query interfaces
 
 #![no_std]
-#![feature(let_else)]
+#![feature(let_else, drain_filter)]
 #![deny(unused_must_use)]
 
 #[macro_use]
@@ -40,12 +35,12 @@ use libd7::{
 
 mod arp_handler;
 mod dhcp_client;
+mod dns_resolver;
 mod interface;
 mod ports;
-
-#[macro_use]
 mod tcp_handler;
 
+use self::dns_resolver::DnsResolver;
 use self::interface::{Interface, InterfaceSettings};
 use self::tcp_handler::TcpHandler;
 
@@ -162,6 +157,7 @@ pub fn on_packet(packet: &[u8]) {
 
 lazy_static::lazy_static! {
     static ref NET_STATE: RwLock<NetState> = RwLock::new(NetState::new());
+    static ref DNS_RESOLVER: RwLock<DnsResolver> = RwLock::new(DnsResolver::new());
     static ref TCP_HANDLER: RwLock<TcpHandler> = RwLock::new(TcpHandler::new());
 }
 
@@ -169,7 +165,8 @@ lazy_static::lazy_static! {
 fn main() -> ! {
     println!("Network daemon starting");
 
-    // TODO: Multi NIC-handling
+    // TODO: Instead of enumerating NICs here, provide an
+    // endpoint that NICs register when they are ready
     let nics = ["ne2k", "rtl8139"];
 
     // Wait until a driver is available
@@ -207,11 +204,29 @@ fn main() -> ! {
             },
             handle_udp_dhcp,
         );
+
+        fn handle_udp_dns(
+            _: &mut NetState, _: ethernet::FrameHeader, _: ipv4::Header, p: udp::Packet,
+        ) {
+            let mut resolver = DNS_RESOLVER.write();
+            resolver.on_packet(p)
+        }
+
+        net_state.udp_handlers.insert(
+            SocketAddr {
+                host: IpAddr::V4(Ipv4Addr::ZERO),
+                port: ports::FIXED_DNS_CLIENT,
+            },
+            handle_udp_dns,
+        );
     }
 
     // Subscribe to messages
     let get_mac: ipc::Server<(), MacAddr> = ipc::Server::exact("netd/mac").unwrap();
     let received = ipc::ReliableSubscription::<Vec<u8>>::exact("netd/received").unwrap();
+    let dns_resolve =
+        ipc::Server::<dns_resolver::Query, dns_resolver::Answer>::exact("netd/dns/resolve")
+            .unwrap();
     // let new_socket_udp = ipc::ReliableSubscription::<()>::exact("netd/newsocket/udp").unwrap();
     let new_socket_tcp =
         ipc::Server::<Bind, Result<String, BindError>>::exact("netd/newsocket/tcp").unwrap();
@@ -254,6 +269,11 @@ fn main() -> ! {
                 let packet = received.ack_receive().unwrap();
                 println!("RECV {}", packet.len());
                 on_packet(&packet);
+            },
+            one(dns_resolve) => {
+                let (rctx, query) = dns_resolve.receive().unwrap();
+                let mut dns_resolver = DNS_RESOLVER.write();
+                dns_resolver.user_resolve(rctx, query);
             },
             one(new_socket_tcp) => {
                 new_socket_tcp.handle(|bind| {

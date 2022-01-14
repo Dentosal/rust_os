@@ -4,6 +4,7 @@ use d7net::SocketAddr;
 
 use crate::{
     ipc,
+    net::{NetworkError, ToSocketAddrs},
     syscall::{SyscallErrorCode, SyscallResult},
 };
 
@@ -25,6 +26,11 @@ impl From<proto::BindError> for Error {
 impl From<proto::Error> for Error {
     fn from(e: proto::Error) -> Error {
         Self::Protocol(e)
+    }
+}
+impl From<NetworkError> for Error {
+    fn from(e: NetworkError) -> Error {
+        Self::Protocol(e.into())
     }
 }
 impl From<SyscallErrorCode> for Error {
@@ -67,9 +73,14 @@ pub struct Stream {
 impl Stream {
     /// Connect to a given host and port.
     /// Use `port = 0` to auto-assign a free port.
-    pub fn connect(addr: SocketAddr) -> Result<Self, Error> {
+    pub fn connect<A: ToSocketAddrs>(addr: A) -> Result<Self, Error> {
         let inner = SocketInner::new(SocketAddr::ZERO)?;
-        let r = inner.request(proto::Request::Connect { to: addr })?;
+        let r = inner.request(proto::Request::Connect {
+            to: addr
+                .to_socket_addrs()?
+                .next()
+                .ok_or(NetworkError::InvalidSocketAddr)?,
+        })?;
         assert!(r == proto::Reply::NoData, "Invalid reply variant");
         Ok(Self { inner })
     }

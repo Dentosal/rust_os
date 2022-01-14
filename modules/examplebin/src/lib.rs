@@ -40,7 +40,7 @@ fn main() -> u64 {
 
 fn main_inner() -> Result<(), tcp::Error> {
     println!("Connect");
-    let socket = tcp::Stream::connect(("93.184.216.34", 80).try_into().unwrap())?;
+    let socket = tcp::Stream::connect("example.org:80")?;
     println!("Send request");
     socket.send(b"GET / HTTP/1.1\r\nHost: example.org\r\nConnection: close\r\n\r\n")?;
     println!("Shutdown");

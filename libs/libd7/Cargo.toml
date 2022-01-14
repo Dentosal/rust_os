@@ -16,6 +16,11 @@ spin = "0.9"
 pinecone = "0.2"
 log = "0.4"
 
+
+[dependencies.auto_enums]
+version = "0.7"
+features = ["transpose_methods"]
+
 [dependencies.hashbrown]
 version = "0.11"
 features = ["nightly", "inline-more", "serde"]

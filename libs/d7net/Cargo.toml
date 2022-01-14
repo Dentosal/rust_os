@@ -23,3 +23,5 @@ git = "https://github.com/Dentosal/num_enum_simplified"
 [dependencies.tcpstate]
 git = "https://github.com/Dentosal/tcpstate"
 
+[dev-dependencies]
+env_logger = "0.9.0"

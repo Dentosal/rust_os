@@ -87,6 +87,7 @@ pub extern "C" fn rust_main() -> ! {
     rreset!();
     rprintln!("Initializing the system...\n");
 
+    driver::uart::init();
     syslog::enable();
     driver::pic::init();
     interrupt::init();
@@ -94,7 +95,6 @@ pub extern "C" fn rust_main() -> ! {
     interrupt::init_after_memory();
     cpuid::init();
     random::init();
-    driver::uart::init();
     unsafe {
         driver::acpi::init();
         smp::init();

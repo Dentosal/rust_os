@@ -1,26 +1,24 @@
 # Backlog
 
-* spin::Once seems to have some strange bug in v 0.7
-* Never map anything to virtual address zero
+* Reduce allow() lints in the kernel
+* Never map anything to virtual address zero, for processes at least (nullptr)
 * SMP support (multiple cores):
-    * Move kernel to use new static mappings for physical memory access
+    * Move kernel to use new static mappings for physical memory access as much as possible
     * Scheduler rewrite
     * TLB Shootdown support
+* Userland for applications
+    * Drivers as well, as much as possible, setup IO bitmaps in TSS to do this
 * Convert system calls from (len, ptr) to (ptr, len).
+* `exec` arguments
+* `fork` and friends
 * System call and IPC topic access control
-* Move/copy disk drivers to own modules
-    * All must be moved in one step
-* Implement proper logging in `libd7`
-* Provide process-accessable event system
-    * Gives new scheduler event ids when reading
-    * Activates events when writing
-    * I.e. is is general-purpose event trigger system
+    * See `capabilities.md`
 * Version check `d7abi` and `libd7` on process startup (include check in `libd7`)
     * As the programs are statically linked, they must be version-checked against the kernel
 * Proper, graphics-mode GUI
 * Support small pages for better memory control (requires lots of rewriting)
 * Filesystems
-    * https://github.com/rafalh/rust-fatfs
+    * Virtual filesystem
     * https://github.com/pi-pi3/ext2-rs
     * https://github.com/omerbenamram/mft
 * Porting rustc

@@ -17,6 +17,7 @@ Check that PIC is not masking it
 ## Bochs
 * Run in bochs with `trace on`
 * Stacktrace with `print-stack 100`
+* Page tables: `info tab` and `page 0x1234`
 
 ##
 * Stacktrace with `x /100gx $esp`

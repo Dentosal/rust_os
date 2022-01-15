@@ -1,3 +1,5 @@
+use alloc::borrow::ToOwned;
+use alloc::string::String;
 use alloc::vec::Vec;
 use core::convert::{TryFrom, TryInto};
 use core::mem;
@@ -118,15 +120,47 @@ fn syscall(
                 }
             },
             SC::exec => {
-                let (image_len, image_ptr, _, _) = rsc.args;
+                let (image_len, image_ptr, args_size, args_ptr) = rsc.args;
+
+                // TODO: maybe the system call should take args in some other format?
+                let mut args: Vec<String> = Vec::new();
+                let args_ptr = VirtAddr::new(args_ptr);
+                if let Some((area, slice)) =
+                    unsafe { m.process_slice(process, args_size, args_ptr) }
+                {
+                    let mut buf = [0u8; 8];
+                    buf.copy_from_slice(&slice[..8]);
+                    let argc = u64::from_le_bytes(buf) as usize;
+
+                    let arg_len = |i: usize| -> usize {
+                        let mut buf = [0u8; 8];
+                        buf.copy_from_slice(&slice[(1 + i) * 8..][..8]);
+                        u64::from_le_bytes(buf) as usize
+                    };
+
+                    let mut cursor = (1 + argc) * 8;
+                    for i in 0..argc {
+                        let len = arg_len(i);
+                        args.push(try_str!(&slice[cursor..][..len]).to_owned());
+                        cursor += len;
+                    }
+
+                    unsafe { m.unmap_area(area) };
+                    m.free_virtual_area(area);
+                } else {
+                    return SyscallResult::Terminate(process::ProcessResult::Failed(
+                        process::Error::Pointer(args_ptr),
+                    ));
+                }
+
                 let image_ptr = VirtAddr::new(image_ptr);
                 if let Some((area, slice)) =
                     unsafe { m.process_slice(process, image_len, image_ptr) }
                 {
-                    log::debug!("[pid={:2}] exec len={:?}", pid, slice.len());
+                    log::debug!("[pid={:2}] exec len={:?} args={:?}", pid, slice.len(), args);
 
                     let elfimage = crate::multitasking::process::load_elf(m, slice);
-                    let pid = sched.spawn(m, elfimage);
+                    let pid = sched.spawn(m, args.as_slice(), elfimage);
 
                     unsafe { m.unmap_area(area) };
                     m.free_virtual_area(area);

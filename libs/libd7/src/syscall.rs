@@ -79,13 +79,23 @@ pub unsafe fn mem_set_size(new_size_bytes: u64) -> SyscallResult<u64> {
 }
 
 /// Start a new process from an ELF image
-pub fn exec(image: &[u8]) -> SyscallResult<ProcessId> {
+pub fn exec(image: &[u8], args: &[&str]) -> SyscallResult<ProcessId> {
     let len = image.len() as u64;
     let slice = image.as_ptr() as u64;
 
+    // TODO: maybe figure out how to do this without allocation?
+    let mut args_raw: alloc::vec::Vec<u8> = alloc::vec::Vec::new();
+    args_raw.extend(&(args.len() as u64).to_le_bytes());
+    for arg in args {
+        args_raw.extend(&(arg.len() as u64).to_le_bytes());
+    }
+    for arg in args {
+        args_raw.extend(arg.as_bytes().iter());
+    }
+
     unsafe {
         Ok(ProcessId::from_u64(
-            syscall!(SyscallNumber::exec; len, slice)?,
+            syscall!(SyscallNumber::exec; len, slice, args_raw.len() as u64, args_raw.as_ptr() as u64)?,
         ))
     }
 }

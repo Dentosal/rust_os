@@ -104,7 +104,7 @@ impl Services {
             def.from_initrd,
             "Non-initrd executables are not supported yet"
         );
-        let process = Process::spawn(&def.executable).unwrap();
+        let process = Process::spawn(&def.executable, &[]).unwrap();
         self.managed
             .insert(process.pid(), (process, def.name.clone()));
     }

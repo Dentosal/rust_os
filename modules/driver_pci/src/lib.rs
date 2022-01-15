@@ -68,7 +68,7 @@ fn main() -> ! {
                     driver.from_initrd,
                     "Non-initrd executables are not supported yet"
                 );
-                Process::spawn(&driver.executable).unwrap();
+                Process::spawn(&driver.executable, &[]).unwrap();
             }
         } else {
             println!("Ignoring unknown PCI device {}", vendor_and_id);

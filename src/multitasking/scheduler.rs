@@ -86,10 +86,10 @@ impl Scheduler {
     }
 
     /// Creates a new process, and returns its pid
-    pub fn spawn(&mut self, m: &mut MemoryController, elf: ElfImage) -> ProcessId {
+    pub fn spawn(&mut self, m: &mut MemoryController, args: &[String], elf: ElfImage) -> ProcessId {
         let pid = self.next_pid;
         self.next_pid = self.next_pid.next();
-        let process = unsafe { Process::create(m, pid, elf) };
+        let process = unsafe { Process::create(m, pid, args, elf) };
         self.processes.insert(pid, process);
         self.queues.give(pid, WaitFor::None);
         pid

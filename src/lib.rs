@@ -120,7 +120,7 @@ pub extern "C" fn rust_main() -> ! {
 
         let bytes = crate::initrd::read("serviced").expect("serviced missing from initrd");
         let elfimage = multitasking::process::load_elf(mem_ctrl, bytes);
-        sched.spawn(mem_ctrl, elfimage);
+        sched.spawn(mem_ctrl, &[], elfimage);
     });
 
     // Hand over to the process scheduler

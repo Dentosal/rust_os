@@ -10,9 +10,9 @@ pub struct Process {
     pid: ProcessId,
 }
 impl Process {
-    pub fn spawn(path: &str) -> SyscallResult<Self> {
+    pub fn spawn(path: &str, args: &[&str]) -> SyscallResult<Self> {
         let image: Vec<u8> = ipc::request("initrd/read", path)?;
-        let pid = syscall::exec(&image)?;
+        let pid = syscall::exec(&image, args)?;
         Ok(Process { pid })
     }
 

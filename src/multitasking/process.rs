@@ -1,3 +1,4 @@
+use alloc::string::String;
 use alloc::vec::Vec;
 use core::intrinsics::copy_nonoverlapping;
 use core::ptr;
@@ -8,9 +9,9 @@ use x86_64::{PhysAddr, VirtAddr};
 pub use d7abi::process::{Error, ProcessId, ProcessResult};
 
 use crate::memory::paging::PageMap;
-use crate::memory::prelude::*;
 use crate::memory::process_common_code as pcc;
 use crate::memory::MemoryController;
+use crate::memory::{phys_to_virt, prelude::*};
 use crate::memory::{PROCESS_COMMON_CODE, PROCESS_STACK};
 use crate::util::elf_parser;
 
@@ -66,8 +67,10 @@ impl Process {
     }
 
     /// Creates a new process
-    pub unsafe fn create(mm: &mut MemoryController, pid: ProcessId, elf: ElfImage) -> Self {
-        create_process(mm, pid, elf)
+    pub unsafe fn create(
+        mm: &mut MemoryController, pid: ProcessId, args: &[String], elf: ElfImage,
+    ) -> Self {
+        create_process(mm, pid, args, elf)
     }
 
     pub fn metadata(&self) -> ProcessMetadata {
@@ -111,77 +114,86 @@ impl Process {
 /// * Loads executable from an ELF image
 /// Requires that the kernel page table is active.
 /// Returns ProcessId and PageMap for the process.
-unsafe fn create_process(mm: &mut MemoryController, pid: ProcessId, elf: ElfImage) -> Process {
+unsafe fn create_process(
+    mm: &mut MemoryController, pid: ProcessId, args: &[String], elf: ElfImage,
+) -> Process {
     // Load image
     let (elf_header, elf_frames) = unsafe { mm.load_elf(elf) };
 
     // Allocate a stack for the process
     let stack_frames = mm.alloc_frames(PROCESS_STACK_SIZE_PAGES as usize);
-    let stack_area = mm.alloc_virtual_area(PROCESS_STACK_SIZE_PAGES);
+    let stack_start_phys = stack_frames.first().unwrap().start_address();
+    let stack_start = phys_to_virt(stack_start_phys);
+    let stack_size_bytes = (PROCESS_STACK_SIZE_PAGES * PAGE_SIZE_BYTES) as usize;
 
-    // Set rsp
+    // Zero the stack
+    ptr::write_bytes(stack_start.as_mut_ptr::<u8>(), 0, stack_size_bytes);
+
+    // Calculate offsets
     // Offset to leave registers zero when they are popped,
     // plus space for the return address and other iretq data
-    let registers_popped = 15; // process_common.asm : push_all
+    let args_size_in_memory: usize =
+        8 + 8 * args.len() + args.iter().map(|a| a.len()).sum::<usize>();
+    let registers_popped: usize = 15; // process_common.asm : push_all
     let inthandler_tmpvar = 1;
     let iretq_structure = 5;
-    let stack_items = registers_popped + inthandler_tmpvar + iretq_structure;
-    let stack_size_bytes = PROCESS_STACK_SIZE_PAGES * PAGE_SIZE_BYTES;
-    let stack_offset = stack_size_bytes - 8 * stack_items;
-    let stack_end = PROCESS_STACK + stack_size_bytes;
-    let rsp: VirtAddr = PROCESS_STACK + stack_offset;
+    let stack_items_fixed = registers_popped + inthandler_tmpvar + iretq_structure;
+    let process_stack_end = PROCESS_STACK + stack_size_bytes - args_size_in_memory;
+    let process_init_rsp = process_stack_end - (stack_items_fixed * 8);
+
+    assert!(
+        args_size_in_memory + stack_items_fixed <= stack_size_bytes,
+        "Attempting to have too large argv"
+    );
 
     // Populate the process stack
-    for (page_index, frame) in stack_frames.iter().enumerate() {
-        let vaddr = stack_area.start + (page_index as u64) * PAGE_SIZE_BYTES;
-        unsafe {
-            // Map the actual stack frames to the kernel page tables
-            mm.page_map
-                .map_to(
-                    PT_VADDR,
-                    Page::from_start_address(vaddr).unwrap(),
-                    frame.clone(),
-                    Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE,
-                )
-                .flush();
+    unsafe {
+        // Push interrupt stack frame for
+        // https://os.phil-opp.com/returning-from-exceptions/#returning-from-exceptions
 
-            // Zero the stack
-            ptr::write_bytes(vaddr.as_mut_ptr::<u8>(), 0, frame.size() as usize);
+        let mut ptr_stack_top: *mut u8 = (stack_start + stack_size_bytes).as_mut_ptr();
 
-            // Set start address to the right position, on the last page
-            if page_index == (PROCESS_STACK_SIZE_PAGES as usize) - 1 {
-                // Push interrupt stack frame for
-                // https://os.phil-opp.com/returning-from-exceptions/#returning-from-exceptions
-
-                macro_rules! qwords_from_end {
-                    ($n:literal) => {
-                        vaddr
-                            .as_mut_ptr::<u64>()
-                            .add((PAGE_SIZE_BYTES as usize) / 8 - $n)
-                    };
-                }
-
-                // SS
-                ptr::write(qwords_from_end!(1), 0);
-                // RSP
-                ptr::write(qwords_from_end!(2), stack_end.as_u64());
-                // RFLAGFS: Interrupt flag on (https://en.wikipedia.org/wiki/FLAGS_register#FLAGS)
-                ptr::write(qwords_from_end!(3), 1 << 9);
-                // CS
-                ptr::write(qwords_from_end!(4), 0x8u64);
-                // RIP
-                ptr::write(qwords_from_end!(5), elf_header.program_entry_pos);
-            }
-
-            // Unmap from kernel table
-            mm.page_map
-                .unmap(PT_VADDR, Page::from_start_address(vaddr).unwrap())
-                .flush();
+        macro_rules! push_u64 {
+            ($val:expr) => {
+                ptr_stack_top = ptr_stack_top.sub(8);
+                *(ptr_stack_top as *mut u64) = $val;
+            };
         }
+
+        macro_rules! push_u8 {
+            ($val:expr) => {
+                ptr_stack_top = ptr_stack_top.sub(1);
+                *ptr_stack_top = $val;
+            };
+        }
+
+        // Write process arguments into it's stack
+        push_u64!(args.len() as u64);
+        for arg in args {
+            push_u64!(arg.len() as u64);
+        }
+
+        for arg in args.iter().rev() {
+            for byte in arg.as_bytes().iter().rev() {
+                push_u8!(*byte);
+            }
+        }
+
+        // Write fixed iretq structure
+
+        // SS
+        push_u64!(0);
+        // RSP
+        push_u64!(process_stack_end.as_u64());
+        // RFLAGFS: Interrupt flag on (https://en.wikipedia.org/wiki/FLAGS_register#FLAGS)
+        push_u64!(1 << 9);
+        // CS
+        push_u64!(0x8u64);
+        // RIP
+        push_u64!(elf_header.program_entry_pos);
     }
 
     // TODO: do processes need larger-than-one-page page tables?
-
     // Allocate own page table for the process
     let pt_frame = mm.alloc_frames(1)[0];
 
@@ -272,7 +284,7 @@ unsafe fn create_process(mm: &mut MemoryController, pid: ProcessId, elf: ElfImag
 
     // TODO: Unmap process structures from kernel page map (if any?)
 
-    Process::new(pid, pm, rsp, stack_frames)
+    Process::new(pid, pm, process_init_rsp, stack_frames)
 }
 
 /// Loads elf image to ram and returns it

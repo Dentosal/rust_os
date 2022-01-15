@@ -22,6 +22,7 @@
 mod allocator;
 
 // pub mod console;
+pub mod env;
 pub mod ipc;
 pub mod net;
 pub mod process;

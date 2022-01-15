@@ -27,11 +27,11 @@ Operating system for modern x86-64 computers, written in Rust.
     * Text editor
     * Compilers
     * Self-hosting
-* (Better) suport for...
+* (Better) support for...
     * Filesystems:
         * ramfs
         * ext2
-        * some network filesystem, possbily a custom one
+        * some network filesystem, possibly a custom one
     * NICs:
         * Intel E1000 driver
         * VirtIO-net driver

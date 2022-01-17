@@ -96,7 +96,8 @@ pub enum ELFParsingError {
     EmptyHeader,
 }
 
-pub unsafe fn parse_elf(ptr: usize) -> Result<ELFData, ELFParsingError> {
+/// TODO: take a slice instead of pointer for memory safety
+pub unsafe fn parse_elf(ptr: *const u8) -> Result<ELFData, ELFParsingError> {
     let elf_header: ELFHeader = *(ptr as *const _);
 
     if elf_header.magic != ELF_MAGIC {
@@ -123,8 +124,8 @@ pub unsafe fn parse_elf(ptr: usize) -> Result<ELFData, ELFParsingError> {
         let mut ph_table = 0;
         for index in 0..elf_data.header.ph_table_entry_count {
             let ph_ptr = ptr
-                + (elf_data.header.ph_table_position as usize)
-                + (elf_data.header.ph_table_entry_size as usize) * (index as usize);
+                .add(elf_data.header.ph_table_position as usize)
+                .add((elf_data.header.ph_table_entry_size as usize) * (index as usize));
             let ph: ELFProgramHeader = *(ph_ptr as *const _);
 
             match ph.header_type as usize {
@@ -143,7 +144,7 @@ pub unsafe fn parse_elf(ptr: usize) -> Result<ELFData, ELFParsingError> {
 }
 
 pub unsafe fn parse_kernel_elf() -> ELFData {
-    match parse_elf(KERNEL_ELF_IMAGE_POSITION) {
+    match parse_elf(KERNEL_ELF_IMAGE_POSITION as *const u8) {
         Ok(header) => header,
         Err(error) => panic!("Could not receive kernel image data: {:?}", error),
     }

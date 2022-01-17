@@ -169,7 +169,7 @@ fn syscall(sched: &mut Scheduler, process: &mut Process, rsc: RawSyscall) -> Sys
                 if let Some((area, slice)) = unsafe { process.memory_slice(image_ptr, image_len) } {
                     log::debug!("[pid={:2}] exec len={:?} args={:?}", pid, slice.len(), args);
 
-                    let Ok(elfimage) = crate::multitasking::process::load_elf(slice) else {
+                    let Ok(elfimage) = crate::multitasking::load_elf(slice) else {
                         return SyscallResult::Continue(Err(ErrorCode::out_of_memory.into()));
                     };
 

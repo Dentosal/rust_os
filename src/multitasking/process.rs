@@ -17,7 +17,7 @@ use crate::memory::{phys_to_virt, prelude::*};
 use crate::memory::{PROCESS_COMMON_CODE, PROCESS_STACK};
 use crate::util::elf_parser::{self, ELFHeader, ELFProgramHeader};
 
-use super::loader::ElfImage;
+use super::ElfImage;
 
 #[derive(Debug, Clone)]
 pub struct ProcessMetadata {
@@ -171,14 +171,9 @@ impl Process {
 unsafe fn create_process(
     pid: ProcessId, args: &[String], elf: ElfImage,
 ) -> Result<Process, OutOfMemory> {
-    // Load image
-    let elf_header: ELFHeader;
-    let elf_frames: Vec<(ELFProgramHeader, Vec<phys::Allocation>)>;
-    (elf_header, elf_frames) = unsafe { todo!("mm.load_elf(elf) (see bottom of this file)") };
-
     // Allocate a stack for the process
     let stack_size_bytes = (PROCESS_STACK_SIZE_PAGES * PAGE_SIZE_BYTES) as usize;
-    let stack = phys::allocate_zeroed(
+    let mut stack = phys::allocate_zeroed(
         Layout::from_size_align(stack_size_bytes, PAGE_SIZE_BYTES as usize).unwrap(),
     )?; // TODO: propagate error
 
@@ -246,7 +241,7 @@ unsafe fn create_process(
     // CS
     push_u64!(0x8u64);
     // RIP
-    push_u64!(elf_header.program_entry_pos);
+    push_u64!(elf.header.program_entry_pos);
 
     // TODO: do processes need larger-than-one-page page tables?
     // Allocate own page table for the process
@@ -299,7 +294,7 @@ unsafe fn create_process(
     }
 
     // Map the executable image to its own page table
-    for (ph, frames) in elf_frames {
+    for (ph, frames) in elf.sections {
         assert!(ph.virtual_address >= 0x400_000);
         let start = VirtAddr::new(ph.virtual_address);
 
@@ -327,107 +322,3 @@ unsafe fn create_process(
 
     Ok(Process::new(pid, pm, process_init_rsp, stack))
 }
-
-/// Loads elf image to ram and returns it
-pub fn load_elf(bytes: &[u8]) -> Result<ElfImage, OutOfMemory> {
-    use core::ptr;
-    use x86_64::structures::paging::PageTableFlags as Flags;
-
-    use crate::memory::prelude::*;
-    use crate::memory::{self, Page};
-
-    let size_pages =
-        memory::page_align(PhysAddr::new(bytes.len() as u64), true).as_u64() / Page::SIZE;
-
-    // Allocate load buffer
-    let mut loadbuffer = phys::allocate(
-        Layout::from_size_align(
-            (size_pages * PAGE_SIZE_BYTES) as usize,
-            PAGE_SIZE_BYTES as usize,
-        )
-        .unwrap(),
-    )?;
-
-    loadbuffer.write()[..bytes.len()].copy_from_slice(bytes);
-
-    todo!();
-    // let elf = unsafe { ElfImage::new(area) };
-    // elf.verify();
-    // elf
-}
-
-//     /// Loads a program from ELF ímage to physical memory.
-//     /// This function does not load the ELF to its p_vaddr, but
-//     /// rather returns a list of unmapped physical frames.
-//     ///
-//     /// This function internally uses TLB flushes.
-//     ///
-//     /// Requires that the kernel page tables are active.
-//     pub fn load_elf(
-//         &mut self, elf_image: ElfImage,
-//     ) -> (ELFHeader, Vec<(ELFProgramHeader, Vec<heap::Allocation>)>) {
-//         let elf = unsafe { elf_image.parse_elf() };
-
-//         let mut frames = Vec::new();
-//         for ph in elf.ph_table.iter().filter_map(|x| *x) {
-//             if ph.loadable() && ph.size_in_memory != 0 {
-//                 // Reserve p_memsz memory and map them for writing
-//                 let size_in_pages = page_align_u64(ph.size_in_memory, true) / PAGE_SIZE_BYTES;
-//                 let page_frames = self.alloc_frames(size_in_pages as usize);
-//                 let area = self.alloc_virtual_area(size_in_pages);
-
-//                 // Map the page frames to the kernel page tables
-//                 for (page_index, frame) in page_frames.iter().enumerate() {
-//                     unsafe {
-//                         self.page_map
-//                             .map_to(
-//                                 PT_VADDR,
-//                                 Page::from_start_address(
-//                                     area.start + (page_index as u64) * PAGE_SIZE_BYTES,
-//                                 )
-//                                 .unwrap(),
-//                                 *frame,
-//                                 Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE,
-//                             )
-//                             .flush();
-//                     }
-//                 }
-
-//                 unsafe {
-//                     // Clear the new frames bytes
-//                     // Full frames area cleared to prevent data leaks
-//                     ptr::write_bytes(area.start.as_mut_ptr::<u8>(), 0, area.size_bytes() as usize);
-
-//                     // Copy p_filesz bytes from p_offset to target
-//                     ptr::copy_nonoverlapping(
-//                         elf_image.as_ptr().add(ph.offset as usize),
-//                         area.start.as_mut_ptr(),
-//                         ph.size_in_file as usize,
-//                     );
-//                 }
-
-//                 // Unmap
-//                 for page_index in 0..size_in_pages {
-//                     unsafe {
-//                         self.page_map
-//                             .unmap(
-//                                 PT_VADDR,
-//                                 Page::from_start_address(
-//                                     area.start + (page_index as u64) * PAGE_SIZE_BYTES,
-//                                 )
-//                                 .unwrap(),
-//                             )
-//                             .flush();
-//                     }
-//                 }
-
-//                 // Free virtual memory area
-//                 self.virtual_allocator.free(area.start, size_in_pages);
-
-//                 // Append frames to the result
-//                 frames.push((ph, page_frames));
-//             }
-//         }
-
-//         (elf.header, frames)
-//     }

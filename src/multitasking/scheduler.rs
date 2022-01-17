@@ -7,13 +7,13 @@ use x86_64::{PhysAddr, VirtAddr};
 
 use crate::memory;
 use crate::memory::phys::OutOfMemory;
-use crate::multitasking::{loader::ElfImage, ExplicitEventId};
+use crate::multitasking::ExplicitEventId;
 use crate::smp::sleep::ns_to_ticks;
 use crate::time::BSPInstant;
 
 use super::process::{Process, ProcessResult, ProcessSwitchInfo};
 use super::queues::Queues;
-use super::{ProcessId, WaitFor};
+use super::{ElfImage, ProcessId, WaitFor};
 
 /// Time slice given to each process
 const TIME_SLICE_NS: u64 = 100_000_000;

@@ -116,7 +116,7 @@ pub extern "C" fn rust_main() -> ! {
     // Start service daemon
     {
         let bytes = crate::initrd::read("serviced").expect("serviced missing from initrd");
-        let elfimage = multitasking::process::load_elf(bytes).expect("Could not load image");
+        let elfimage = multitasking::load_elf(bytes).expect("Could not load image");
 
         let mut sched = SCHEDULER.try_lock().unwrap();
         sched.spawn(&[], elfimage).unwrap();

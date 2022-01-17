@@ -180,8 +180,13 @@ unsafe fn create_process(
     // Calculate offsets
     // Offset to leave registers zero when they are popped,
     // plus space for the return address and other iretq data
-    let args_size_in_memory: usize =
-        8 + 8 * args.len() + args.iter().map(|a| a.len()).sum::<usize>();
+    let args_size_in_memory: usize = 8
+        + 8 * args.len()
+        + args
+            .iter()
+            .map(|a| a.len())
+            .sum::<usize>()
+            .next_multiple_of(8);
     let registers_popped: usize = 15; // process_common.asm : push_all
     let inthandler_tmpvar = 1;
     let iretq_structure = 5;
@@ -189,59 +194,70 @@ unsafe fn create_process(
     let process_stack_end = PROCESS_STACK + stack_size_bytes - args_size_in_memory;
     let process_init_rsp = process_stack_end - (stack_items_fixed * 8);
 
+    log::trace!("init rsp {:p}", process_init_rsp);
+
     assert!(
         args_size_in_memory + stack_items_fixed <= stack_size_bytes,
         "Attempting to have too large argv"
     );
 
-    let stack_mem = stack.write();
 
     // Populate the process stack
+    {
+        let mut top: usize = stack_size_bytes;
+        let stack_mem = stack.write();
 
-    // Push interrupt stack frame for
-    // https://os.phil-opp.com/returning-from-exceptions/#returning-from-exceptions
-
-    let mut top: usize = stack_size_bytes;
-
-    macro_rules! push_u64 {
-        ($val:expr) => {
-            top -= 8;
-            let v: u64 = $val;
-            stack_mem[top..top + 8].copy_from_slice(&v.to_ne_bytes());
-        };
-    }
-
-    macro_rules! push_u8 {
-        ($val:expr) => {
-            top -= 1;
-            stack_mem[top] = $val;
-        };
-    }
-
-    // Write process arguments into it's stack
-    push_u64!(args.len() as u64);
-    for arg in args {
-        push_u64!(arg.len() as u64);
-    }
-
-    for arg in args.iter().rev() {
-        for byte in arg.as_bytes().iter().rev() {
-            push_u8!(*byte);
+        macro_rules! push_u64 {
+            ($val:expr) => {
+                top -= 8;
+                let v: u64 = $val;
+                stack_mem[top..top + 8].copy_from_slice(&v.to_ne_bytes());
+            };
         }
+
+        macro_rules! align_u64 {
+            () => {
+                while top % 8 != 0 {
+                    push_u8!(0);
+                }
+            };
+        }
+
+        macro_rules! push_u8 {
+            ($val:expr) => {
+                top -= 1;
+                stack_mem[top] = $val;
+            };
+        }
+
+        // Write process arguments into it's stack
+        push_u64!(args.len() as u64);
+        for arg in args {
+            push_u64!(arg.len() as u64);
+        }
+
+        for arg in args.iter().rev() {
+            for byte in arg.as_bytes().iter().rev() {
+                push_u8!(*byte);
+            }
+        }
+
+        align_u64!();
+
+        // Write fixed iretq structure
+        // https://os.phil-opp.com/returning-from-exceptions/#returning-from-exceptions
+
+        // SS
+        push_u64!(0);
+        // RSP
+        push_u64!(process_stack_end.as_u64());
+        // RFLAGFS: Interrupt flag on (https://en.wikipedia.org/wiki/FLAGS_register#FLAGS)
+        push_u64!(0x0202);
+        // CS
+        push_u64!(0x8u64);
+        // RIP
+        push_u64!(elf.header.program_entry_pos);
     }
-
-    // Write fixed iretq structure
-
-    // SS
-    push_u64!(0);
-    // RSP
-    push_u64!(process_stack_end.as_u64());
-    // RFLAGFS: Interrupt flag on (https://en.wikipedia.org/wiki/FLAGS_register#FLAGS)
-    push_u64!(1 << 9);
-    // CS
-    push_u64!(0x8u64);
-    // RIP
-    push_u64!(elf.header.program_entry_pos);
 
     // TODO: do processes need larger-than-one-page page tables?
     // Allocate own page table for the process
@@ -252,7 +268,7 @@ unsafe fn create_process(
         PageMap::init(
             pt_frame.mapped_start(),
             pt_frame.phys_start(),
-            todo!(), // ?? pt_area.start
+            pt_frame.mapped_start(), // TODO: is this correct?
         )
     };
 
@@ -263,9 +279,8 @@ unsafe fn create_process(
             pt_frame.mapped_start(),
             Page::from_start_address(VirtAddr::new_unsafe(0x0)).unwrap(),
             PhysFrame::from_start_address(PhysAddr::new(pcc::PROCESS_IDT_PHYS_ADDR)).unwrap(),
-            // Flags::PRESENT | Flags::NO_EXECUTE,
-            // CPU likes to write to GDT(?) for some reason?
-            Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE,
+            // FIXME: ACCESSED flag should mean that CPU will not attempt to write to this?
+            Flags::PRESENT | Flags::NO_EXECUTE | Flags::ACCESSED | Flags::WRITABLE,
         )
         .ignore();
 
@@ -283,14 +298,16 @@ unsafe fn create_process(
 
     // Map process stack its own page table
     // No guard page is needed, as the page below the stack is read-only
-    unsafe {
-        pm.map_to(
-            pt_frame.mapped_start(),
-            Page::from_start_address(PROCESS_STACK).unwrap(),
-            PhysFrame::from_start_address(stack.phys_start()).unwrap(),
-            Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE,
-        )
-        .ignore();
+    for i in 0..PROCESS_STACK_SIZE_PAGES {
+        unsafe {
+            pm.map_to(
+                pt_frame.mapped_start(),
+                Page::from_start_address(PROCESS_STACK + i * PAGE_SIZE_BYTES).unwrap(),
+                PhysFrame::from_start_address(stack.phys_start()  + i * PAGE_SIZE_BYTES).unwrap(),
+                Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE,
+            )
+            .ignore();
+        }
     }
 
     // Map the executable image to its own page table
@@ -309,16 +326,20 @@ unsafe fn create_process(
             flags |= Flags::WRITABLE;
         }
 
-        todo!();
-        // for (i, frame) in frames.into_iter().enumerate() {
-        //     let page = Page::from_start_address(start + PAGE_SIZE_BYTES * (i as u64)).unwrap();
-        //     unsafe {
-        //         pm.map_to(pt_area.start, page, frame, flags).ignore();
-        //     }
-        // }
+        for (i, frame) in frames.into_iter().enumerate() {
+            // TODO: assumes that frames are page-sized
+            let page = Page::from_start_address(start + PAGE_SIZE_BYTES * (i as u64)).unwrap();
+            unsafe {
+                pm.map_to(
+                    pt_frame.mapped_start(),
+                    page,
+                    PhysFrame::from_start_address(frame.phys_start()).unwrap(),
+                    flags,
+                )
+                .ignore();
+            }
+        }
     }
-
-    // TODO: Unmap process structures from kernel page map (if any?)
 
     Ok(Process::new(pid, pm, process_init_rsp, stack))
 }

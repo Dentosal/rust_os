@@ -35,7 +35,6 @@
 #![feature(core_intrinsics)]
 #![feature(integer_atomics)]
 #![feature(lang_items)]
-#![feature(maybe_uninit_extra)]
 #![feature(naked_functions)]
 #![feature(panic_info_message)]
 #![feature(ptr_internals, ptr_metadata)]
@@ -44,6 +43,7 @@
 #![feature(let_else)]
 #![feature(inline_const)]
 #![feature(drain_filter)]
+#![feature(int_roundings)]
 
 use core::alloc::Layout;
 use core::arch::asm;

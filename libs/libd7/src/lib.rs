@@ -18,6 +18,7 @@
 #![feature(stmt_expr_attributes)]
 #![feature(never_type)]
 #![feature(let_else)]
+#![feature(int_roundings)]
 
 mod allocator;
 

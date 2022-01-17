@@ -3,9 +3,10 @@ use alloc::vec::Vec;
 use core::alloc::Layout;
 use core::intrinsics::copy_nonoverlapping;
 use core::ptr;
+use d7abi::{MemoryProtectionFlags, SyscallErrorCode};
 use x86_64::structures::idt::{InterruptStackFrameValue, PageFaultErrorCode};
 use x86_64::structures::paging::PageTableFlags as Flags;
-use x86_64::{PhysAddr, VirtAddr};
+use x86_64::{align_down, align_up, PhysAddr, VirtAddr};
 
 pub use d7abi::process::{Error, ProcessId, ProcessResult};
 
@@ -106,18 +107,23 @@ impl Process {
         self.metadata.id
     }
 
-    /// Read u64 values from top of the stack
-    pub unsafe fn read_stack_u64(&self, depth: usize) -> u64 {
-        let buf = [0; 8];
+    /// Read u64 values from top of the stack.
+    /// Panics if `depth` would go beyond the stack area.
+    pub fn read_stack_u64(&self, depth: usize) -> u64 {
         let smem = self.stack_memory.read();
-        todo!();
-        buf.copy_from_slice(smem);
+        let top = (self.stack_pointer - PROCESS_STACK) as usize;
+        let item = top + depth * 8;
+        let mut buf = [0; 8];
+        buf.copy_from_slice(&smem[item..item + 8]);
         u64::from_ne_bytes(buf)
     }
 
-    pub unsafe fn write_stack_u64(&self, depth: usize, value: u64) {
-        let smem = self.stack_memory.read();
-        todo!();
+    /// Panics if `depth` would go beyond the stack area.
+    pub fn write_stack_u64(&mut self, depth: usize, value: u64) {
+        let smem = self.stack_memory.write();
+        let top = (self.stack_pointer - PROCESS_STACK) as usize;
+        let item = top + depth * 8;
+        smem[item..item + 8].copy_from_slice(&value.to_ne_bytes());
     }
 
     /// Map process-owned memory to a contiguous virtual address space
@@ -127,25 +133,41 @@ impl Process {
     /// # Safety
     /// Caller must ensure that no overlapping slices are created.
     pub unsafe fn memory_slice(
-        &self, ptr: VirtAddr, len: usize,
+        &mut self, ptr: VirtAddr, len: usize,
     ) -> Option<(virt::Allocation, &[u8])> {
-        todo!();
-        // let page_map = PAGE_MAP.lock();
-        // unsafe {
-        //     let proc_pt = phys_to_virt(self.page_table.phys_addr);
+        let mut page_map = PAGE_MAP.lock();
 
-        //     // for (i, frame) in frames.enumerate() {
-        //     //     process
-        //     //         .page_table
-        //     //         .map_to(
-        //     //             proc_pt,
-        //     //             Page::from_start_address(virt_addr + (i as u64) * PAGE_SIZE_BYTES).unwrap(),
-        //     //             frame,
-        //     //             flags,
-        //     //         )
-        //     //         .ignore();
-        //     // }
-        // }
+        let flags = Flags::PRESENT;
+        unsafe {
+            let proc_pt_vaddr = phys_to_virt(self.page_table.phys_addr);
+
+            let r_start = align_down(ptr.as_u64(), PAGE_SIZE_BYTES);
+            let r_end = align_up(ptr.as_u64() + (len as u64), PAGE_SIZE_BYTES);
+            let r_size_pages = (r_end - r_start) / PAGE_SIZE_BYTES;
+
+            let offset = ptr.as_u64() - r_start;
+            let virtarea = virt::allocate(r_size_pages as usize);
+
+            for i in 0..r_size_pages {
+                let r_offset = i * PAGE_SIZE_BYTES;
+                let proc_frame_start = VirtAddr::new_unchecked_raw(r_start + r_offset);
+                let page = Page::from_start_address(virtarea.start + r_offset).unwrap();
+
+                let phys_addr = self.page_table.translate(proc_pt_vaddr, proc_frame_start)?;
+
+                page_map
+                    .map_to(
+                        PT_VADDR,
+                        page,
+                        PhysFrame::from_start_address_unchecked(phys_addr),
+                        flags,
+                    )
+                    .ignore();
+            }
+
+            let slice: &[u8] = core::slice::from_raw_parts((virtarea.start + offset).as_ptr(), len);
+            Some((virtarea, slice))
+        }
     }
 
     /// Map process-owned memory to a contiguous virtual address space
@@ -155,9 +177,196 @@ impl Process {
     /// # Safety
     /// Caller must ensure that no overlapping slices are created.
     pub unsafe fn memory_slice_mut(
-        &self, ptr: VirtAddr, len: usize,
+        &mut self, ptr: VirtAddr, len: usize,
     ) -> Option<(virt::Allocation, &mut [u8])> {
-        todo!();
+        let mut page_map = PAGE_MAP.lock();
+
+        let flags = Flags::PRESENT | Flags::WRITABLE;
+        unsafe {
+            let proc_pt_vaddr = phys_to_virt(self.page_table.phys_addr);
+
+            let r_start = align_down(ptr.as_u64(), PAGE_SIZE_BYTES);
+            let r_end = align_up(ptr.as_u64() + (len as u64), PAGE_SIZE_BYTES);
+            let r_size_pages = (r_end - r_start) / PAGE_SIZE_BYTES;
+
+            let offset = ptr.as_u64() - r_start;
+            let virtarea = virt::allocate(r_size_pages as usize);
+
+            for i in 0..r_size_pages {
+                let r_offset = i * PAGE_SIZE_BYTES;
+                let proc_frame_start = VirtAddr::new_unchecked_raw(r_start + r_offset);
+                let page = Page::from_start_address(virtarea.start + r_offset).unwrap();
+
+                let phys_addr = self.page_table.translate(proc_pt_vaddr, proc_frame_start)?;
+
+                page_map
+                    .map_to(
+                        PT_VADDR,
+                        page,
+                        PhysFrame::from_start_address_unchecked(phys_addr),
+                        flags,
+                    )
+                    .ignore();
+            }
+
+            let slice: &mut [u8] =
+                core::slice::from_raw_parts_mut((virtarea.start + offset).as_mut_ptr(), len);
+            Some((virtarea, slice))
+        }
+    }
+
+    /// Allocate some memory for the process,
+    /// or change flags of an already allocated block
+    pub fn memory_alloc(
+        &mut self, area_ptr: VirtAddr, size: usize, flags: MemoryProtectionFlags,
+    ) -> Result<(), SyscallErrorCode> {
+        if area_ptr.as_u64() % PAGE_SIZE_BYTES != 0 {
+            log::warn!(
+                "Memory allocation failed: incorrect area aligment {:x}",
+                area_ptr.as_u64()
+            );
+            return Err(SyscallErrorCode::mmap_incorrect_alignment);
+        }
+
+        if size as u64 % PAGE_SIZE_BYTES != 0 {
+            log::warn!(
+                "Memory allocation failed: incorrect size aligment {:x}",
+                size
+            );
+            return Err(SyscallErrorCode::mmap_incorrect_alignment);
+        }
+
+        let size_pages = size / (PAGE_SIZE_BYTES as usize);
+
+        let mut pt_flags = Flags::PRESENT;
+        if !flags.contains(MemoryProtectionFlags::READ) {
+            // TODO: unreadable mappings?
+            return Err(SyscallErrorCode::unsupported);
+        }
+        if flags.contains(MemoryProtectionFlags::WRITE) {
+            pt_flags |= Flags::WRITABLE;
+        }
+        if !flags.contains(MemoryProtectionFlags::EXECUTE) {
+            pt_flags |= Flags::NO_EXECUTE;
+        }
+
+        let proc_pt_vaddr = phys_to_virt(self.page_table.phys_addr);
+
+        for i in 0..size_pages {
+            let offset = i * (PAGE_SIZE_BYTES as usize);
+            let proc_frame_start = area_ptr + offset;
+
+            log::debug!("mem_alloc: checking {:p}", proc_frame_start);
+
+            if let Some(phys_start) =
+                unsafe { self.page_table.translate(proc_pt_vaddr, proc_frame_start) }
+            {
+                // Already mapped, check that it's a dynamically mapped region.
+                // Otherwise the process is not allowed to change it.
+                let is_dynamic = self
+                    .dynamic_memory
+                    .iter()
+                    .any(|b| phys_start == unsafe { b.phys_start() });
+
+                if !is_dynamic {
+                    log::warn!("Memory allocation failed: permission denied");
+                    return Err(SyscallErrorCode::mmap_permission_error);
+                }
+
+                log::debug!("mem_alloc: only set flags for {:p}", proc_frame_start);
+
+                // Permissions ok, change flags
+                unsafe {
+                    self.page_table
+                        .map_to(
+                            proc_pt_vaddr,
+                            Page::from_start_address(area_ptr + offset).unwrap(),
+                            PhysFrame::from_start_address_unchecked(phys_start),
+                            pt_flags,
+                        )
+                        .ignore();
+                }
+            } else {
+                // Not yet mapped, allocate and map
+                let allocation = phys::allocate_zeroed(PAGE_LAYOUT)
+                    .map_err(|OutOfMemory| SyscallErrorCode::out_of_memory)?;
+
+                log::debug!("mem_alloc: allocate page {:p}", proc_frame_start);
+
+                unsafe {
+                    self.page_table
+                        .map_to(
+                            proc_pt_vaddr,
+                            Page::from_start_address(area_ptr + offset).unwrap(),
+                            PhysFrame::from_start_address_unchecked(allocation.phys_start()),
+                            pt_flags,
+                        )
+                        .ignore();
+                }
+
+                self.dynamic_memory.push(allocation);
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn memory_dealloc(
+        &mut self, area_ptr: VirtAddr, size: usize,
+    ) -> Result<(), SyscallErrorCode> {
+        if area_ptr.as_u64() % PAGE_SIZE_BYTES != 0 {
+            log::warn!(
+                "Memory deallocation failed: incorrect area aligment {:x}",
+                area_ptr.as_u64()
+            );
+            return Err(SyscallErrorCode::mmap_incorrect_alignment);
+        }
+
+        if size as u64 % PAGE_SIZE_BYTES != 0 {
+            log::warn!(
+                "Memory deallocation failed: incorrect size aligment {:x}",
+                size
+            );
+            return Err(SyscallErrorCode::mmap_incorrect_alignment);
+        }
+
+        let size_pages = size / (PAGE_SIZE_BYTES as usize);
+
+        let proc_pt_vaddr = phys_to_virt(self.page_table.phys_addr);
+
+        for i in 0..size_pages {
+            let offset = i * (PAGE_SIZE_BYTES as usize);
+            let proc_frame_start = area_ptr + offset;
+            if let Some(phys_start) =
+                unsafe { self.page_table.translate(proc_pt_vaddr, proc_frame_start) }
+            {
+                // Check that it's a dynamically mapped region.
+                // Otherwise the process is not allowed to change it.
+                // This also deallocates the region by dropping it.
+                let is_dynamic = self
+                    .dynamic_memory
+                    .drain_filter(|b| phys_start == unsafe { b.phys_start() })
+                    .next()
+                    .is_some();
+
+                if !is_dynamic {
+                    log::warn!("Memory deallocation failed: permission denied");
+                    return Err(SyscallErrorCode::mmap_permission_error);
+                }
+
+                // Permissions ok, unmap
+                unsafe {
+                    self.page_table
+                        .unmap(
+                            proc_pt_vaddr,
+                            Page::from_start_address(area_ptr + offset).unwrap(),
+                        )
+                        .ignore();
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -200,7 +409,6 @@ unsafe fn create_process(
         args_size_in_memory + stack_items_fixed <= stack_size_bytes,
         "Attempting to have too large argv"
     );
-
 
     // Populate the process stack
     {
@@ -279,8 +487,8 @@ unsafe fn create_process(
             pt_frame.mapped_start(),
             Page::from_start_address(VirtAddr::new_unsafe(0x0)).unwrap(),
             PhysFrame::from_start_address(PhysAddr::new(pcc::PROCESS_IDT_PHYS_ADDR)).unwrap(),
-            // FIXME: ACCESSED flag should mean that CPU will not attempt to write to this?
-            Flags::PRESENT | Flags::NO_EXECUTE | Flags::ACCESSED | Flags::WRITABLE,
+            // FIXME: GDT.ACCESSED flag should mean that CPU will not attempt to write to this?
+            Flags::PRESENT | Flags::NO_EXECUTE | Flags::WRITABLE,
         )
         .ignore();
 
@@ -303,7 +511,7 @@ unsafe fn create_process(
             pm.map_to(
                 pt_frame.mapped_start(),
                 Page::from_start_address(PROCESS_STACK + i * PAGE_SIZE_BYTES).unwrap(),
-                PhysFrame::from_start_address(stack.phys_start()  + i * PAGE_SIZE_BYTES).unwrap(),
+                PhysFrame::from_start_address(stack.phys_start() + i * PAGE_SIZE_BYTES).unwrap(),
                 Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE,
             )
             .ignore();

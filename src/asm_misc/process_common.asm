@@ -81,14 +81,10 @@ switch_to:
     mov cr3, rax
     ; Set stack pointer
     mov rsp, rdx
-    ; Reload CS
-    push qword 0x8
-    lea rax, [rel .new_cs]
-    push rax
-    o64 retf
-.new_cs:
+    ; Prepare stack
     pop_all
     add rsp, 8 ; Discard tmpvar
+    ; Return to process
     iretq
 
 ; Kernel addresses

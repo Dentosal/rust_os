@@ -12,7 +12,6 @@ pub enum SyscallNumber {
     exit = 0x00,
     get_pid = 0x01,
     debug_print = 0x02,
-    mem_set_size = 0x03,
     exec = 0x30,
     random = 0x40,
     sched_yield = 0x50,
@@ -30,6 +29,8 @@ pub enum SyscallNumber {
     mmap_physical = 0x90,
     dma_allocate = 0x92,
     dma_free = 0x93,
+    mem_alloc = 0x94,
+    mem_dealloc = 0x95,
 }
 
 #[derive(Debug, Copy, Clone, TryFromPrimitive, IntoPrimitive, Deserialize, Serialize)]
@@ -37,8 +38,14 @@ pub enum SyscallNumber {
 #[repr(u64)]
 pub enum SyscallErrorCode {
     unknown = 0,
+    /// Requested operation is not supported yet
+    unsupported,
+    /// Not enough memory available for requested action
+    out_of_memory,
     /// Empty list given, but now allowed
     empty_list_argument,
+    /// Argument is too large to process
+    too_large,
     /// System call done in nonblocking mode would block
     would_block,
     /// Invalid topic or topic filter
@@ -67,4 +74,8 @@ pub enum SyscallErrorCode {
     ptr_unaligned,
     /// Invalid or unsupported memory protection flags given to mmap
     mmap_invalid_protection_flags,
+    /// A specific aligment or size is required, but not respected
+    mmap_incorrect_alignment,
+    /// Operation is not allowed
+    mmap_permission_error,
 }

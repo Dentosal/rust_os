@@ -2,28 +2,23 @@
 
 use x86_64::structures::paging::PageTableFlags as Flags;
 
-use crate::memory::{self, prelude::*};
-
-use super::super::MemoryController;
+use crate::memory::{paging::PAGE_MAP, phys, prelude::*, SYSCALL_STACK};
 
 /// Creates and maps the system call stack.
 /// There is no need to zero the memory, as it will not be read,
 /// and it is inaccessible for user processes.
-pub fn init() {
-    memory::configure(|mem_ctrl: &mut MemoryController| unsafe {
-        let frame = mem_ctrl
-            .frame_allocator
-            .allocate_frame()
-            .expect("Could not allocate frame");
+pub unsafe fn init() {
+    let frame = phys::allocate(PAGE_LAYOUT)
+        .expect("Could not allocate frame")
+        .leak();
 
-        mem_ctrl
-            .page_map
-            .map_to(
-                PT_VADDR,
-                Page::from_start_address(memory::SYSCALL_STACK).unwrap(),
-                frame,
-                Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE,
-            )
-            .flush();
-    });
+    let mut page_map = PAGE_MAP.try_lock().unwrap();
+    page_map
+        .map_to(
+            PT_VADDR,
+            Page::from_start_address(SYSCALL_STACK).unwrap(),
+            PhysFrame::from_start_address_unchecked(frame.start()),
+            Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE,
+        )
+        .flush();
 }

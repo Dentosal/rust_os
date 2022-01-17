@@ -1,16 +1,16 @@
 use crate::memory::prelude::*;
-use crate::memory::Area;
+use crate::memory::virt::Allocation;
 use crate::util::elf_parser::*;
 
 /// Contains a "pointer" to loaded elf image
 /// Validity of the elf image must be verified when creating this structure
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub struct ElfImage {
     /// Virtual memory area where the elf image is loaded
-    area: Area,
+    area: Allocation,
 }
 impl ElfImage {
-    pub unsafe fn new(area: Area) -> Self {
+    pub unsafe fn new(area: Allocation) -> Self {
         Self { area }
     }
 

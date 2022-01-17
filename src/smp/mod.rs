@@ -67,11 +67,7 @@ unsafe fn start_one(acpi_id: ProcessorId) {
     assert!(AP_FREE_STACK.load(Ordering::SeqCst) == 0);
 
     // Set up stack
-    let stack = memory::configure(|mem_ctrl| {
-        mem_ctrl
-            .alloc_stack(5)
-            .expect("could not allocate stack for smp core")
-    });
+    let stack = memory::stack_allocator::alloc_stack(5);
 
     log::debug!("STACKSETUP {:x}", stack.top.as_u64());
 

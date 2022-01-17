@@ -1,3 +1,8 @@
+pub use core::alloc::Layout;
+
+// Trait re-export
+pub use core::alloc::Allocator;
+
 use x86_64::structures::paging as pg;
 pub use x86_64::structures::paging::PageSize;
 
@@ -10,6 +15,15 @@ pub use x86_64::{PhysAddr, VirtAddr};
 // Page size
 pub type PageSizeType = pg::Size2MiB;
 pub const PAGE_SIZE_BYTES: u64 = 0x200_000;
+
+pub const MIN_PAGE_SIZE_BYTES: u64 = 0x1000;
+
+pub const MIN_PAGE_LAYOUT: Layout = unsafe {
+    Layout::from_size_align_unchecked(MIN_PAGE_SIZE_BYTES as usize, MIN_PAGE_SIZE_BYTES as usize)
+};
+pub const PAGE_LAYOUT: Layout = unsafe {
+    Layout::from_size_align_unchecked(PAGE_SIZE_BYTES as usize, PAGE_SIZE_BYTES as usize)
+};
 
 /// Convert bytes to pages, rounding up
 pub const fn to_pages_round_up(bytes: u64) -> u64 {

@@ -1,8 +1,8 @@
+use core::alloc::Layout;
 use x86_64::structures::paging as pg;
 use x86_64::structures::paging::page_table::PageTableFlags as Flags;
 
-use super::super::paging::PageMap;
-use super::super::prelude::*;
+use crate::memory::{paging::PAGE_MAP, phys, prelude::*, virt};
 
 #[derive(Debug)]
 pub struct Stack {
@@ -17,67 +17,40 @@ impl Stack {
     }
 }
 
-/// Doesn't (need to) support deallocation
-pub struct StackAllocator {
-    range: pg::page::PageRangeInclusive<pg::Size2MiB>,
-}
+/// Allocates a new stack, including a guard page, and maps it.
+/// Requires that the kernel page table is active.
+/// The stacks allocated by this can never be deallocated.
+pub fn alloc_stack(size_in_pages: usize) -> Stack {
+    assert!(size_in_pages > 0);
+    // Allocate virtual addresses
+    let v = virt::allocate(size_in_pages + 1);
 
-impl StackAllocator {
-    pub fn new(range: pg::page::PageRangeInclusive<pg::Size2MiB>) -> Self {
-        Self { range }
-    }
+    // Allocate and map the physical frames (not the guard page)
+    let start_page = Page::from_start_address(v.start + PAGE_SIZE_BYTES).unwrap();
+    let end_page =
+        Page::from_start_address(v.start + size_in_pages * PAGE_SIZE_BYTES as usize).unwrap();
 
-    /// Allocates a new stack, including a guard page, and maps it.
-    /// Requires that the kernel page table is active.
-    pub fn alloc_stack<A: pg::FrameAllocator<pg::Size2MiB>>(
-        &mut self, page_map: &mut PageMap, frame_allocator: &mut A, size_in_pages: usize,
-    ) -> Option<Stack> {
-        assert!(size_in_pages > 0);
+    let mut page_map = PAGE_MAP.lock();
+    for page in Page::range_inclusive(start_page, end_page) {
+        let frame = phys::allocate(PAGE_LAYOUT)
+            .expect("Could not allocate stack frame")
+            .leak();
 
-        // Copy the range, since we only want to change it on success
-        let mut range = self.range;
-
-        // try to allocate the stack pages and a guard page
-        let guard_page = range.next();
-
-        let stack_start = range.next();
-        let stack_end = if size_in_pages == 1 {
-            stack_start
-        } else {
-            // index starts at 0 and we have already allocated the start page
-            range.nth(size_in_pages - 2)
-        };
-
-        if let (Some(_), Some(start), Some(end)) = (guard_page, stack_start, stack_end) {
-            // Success
-
-            // Write back updated range
-            self.range = range;
-
-            // Map stack pages to physical frames
-            for page in Page::range_inclusive(start, end) {
-                let frame = frame_allocator
-                    .allocate_frame()
-                    .expect("Could not allocate stack frame");
-
-                unsafe {
-                    page_map
-                        .map_to(
-                            PT_VADDR,
-                            page,
-                            frame,
-                            Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE,
-                        )
-                        .flush();
-                }
-            }
-
-            // Create a new stack
-            let new_top = end.start_address() + Page::SIZE;
-            Some(Stack::new(new_top, start.start_address()))
-        } else {
-            // Not enough pages
-            None
+        unsafe {
+            page_map
+                .map_to(
+                    PT_VADDR,
+                    page,
+                    PhysFrame::from_start_address_unchecked(frame.start()),
+                    Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE,
+                )
+                .flush();
         }
     }
+
+    // Create a new stack
+    Stack::new(
+        end_page.start_address() + Page::SIZE,
+        start_page.start_address(),
+    )
 }

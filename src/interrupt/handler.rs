@@ -4,6 +4,7 @@ use x86_64::structures::idt::{InterruptStackFrame, InterruptStackFrameValue, Pag
 use x86_64::{PhysAddr, VirtAddr};
 
 use crate::driver::pic;
+use crate::multitasking::process::ProcessSwitchInfo;
 use crate::multitasking::{
     process, Process, ProcessId, ProcessSwitch, SCHEDULER, SCHEDULER_ENABLED,
 };
@@ -245,7 +246,7 @@ pub(super) unsafe extern "C" fn process_interrupt() {
 
         // Call inner function
         mov rdi, rax // interrupt
-        mov rsi, rbx // process_stack
+        mov rsi, rbx // process_rsp
         mov rdx, rbp // page_table
         mov rcx, rsp // stack_frame_ptr
         mov r8 , r15 // error_code
@@ -267,19 +268,19 @@ pub(super) unsafe extern "C" fn process_interrupt() {
 
 #[no_mangle]
 unsafe extern "C" fn process_interrupt_inner(
-    interrupt: u8, process_stack: u64, page_table: u64,
+    interrupt: u8, process_rsp: u64, page_table: u64,
     stack_frame_ptr: *const InterruptStackFrameValue, error_code: u32,
 ) -> u128 {
     use x86_64::registers::control::Cr2;
 
     let stack_frame: InterruptStackFrameValue = (*stack_frame_ptr).clone();
     let page_table = PhysAddr::new_unchecked(page_table);
-    let process_stack = VirtAddr::new_unsafe(process_stack);
+    let process_rsp = VirtAddr::new_unsafe(process_rsp);
 
     let pid = {
         let mut sched = SCHEDULER.try_lock().unwrap();
         let pid = sched.get_running_pid().expect("No process running?");
-        sched.store_state(pid, page_table, process_stack);
+        sched.store_state(pid, page_table, process_rsp);
         pid
     };
 
@@ -312,7 +313,7 @@ unsafe extern "C" fn process_interrupt_inner(
     match interrupt {
         0xd7 => {
             use crate::syscall::{handle_syscall, SyscallResultAction};
-            match handle_syscall(pid, page_table, process_stack) {
+            match handle_syscall(pid) {
                 SyscallResultAction::Terminate(status) => terminate(pid, status),
                 SyscallResultAction::Continue => {},
                 SyscallResultAction::Switch(schedule) => {
@@ -398,7 +399,7 @@ unsafe extern "C" fn process_interrupt_inner(
     }
 
     // Continue current process
-    process_pair_to_u128(process_stack, page_table)
+    process_pair_to_u128(process_rsp, page_table)
 }
 
 fn fail(pid: ProcessId, error: process::Error) -> ! {
@@ -446,7 +447,7 @@ fn idle() -> ! {
 }
 
 /// Jump to next process immediately
-fn immediate_switch_to(process: Process) -> ! {
+fn immediate_switch_to(process: ProcessSwitchInfo) -> ! {
     use crate::memory::process_common_code::COMMON_ADDRESS_VIRT;
 
     unsafe {
@@ -456,7 +457,7 @@ fn immediate_switch_to(process: Process) -> ! {
             ",
             in("rcx") COMMON_ADDRESS_VIRT, // switch_to
             in("rdx") process.stack_pointer.as_u64(),
-            in("rax") process.page_table.p4_addr().as_u64(),
+            in("rax") process.p4addr.as_u64(),
             options(nostack, noreturn)
         );
         ::core::hint::unreachable_unchecked();
@@ -466,10 +467,10 @@ fn immediate_switch_to(process: Process) -> ! {
 /// Returns process to switch to, if any.
 /// On `None` the system should switch to idle state.
 #[must_use]
-unsafe fn handle_repeat_syscall(p: Process) -> Option<Process> {
+unsafe fn handle_repeat_syscall(p: ProcessSwitchInfo) -> Option<ProcessSwitchInfo> {
     use crate::syscall::{handle_syscall, SyscallResult, SyscallResultAction};
-    match handle_syscall(p.id(), p.page_table.p4_addr(), p.stack_pointer) {
-        SyscallResultAction::Terminate(status) => terminate(p.id(), status),
+    match handle_syscall(p.pid) {
+        SyscallResultAction::Terminate(status) => terminate(p.pid, status),
         SyscallResultAction::Continue => Some(p),
         SyscallResultAction::Switch(schedule) => {
             let next_process = {
@@ -483,7 +484,7 @@ unsafe fn handle_repeat_syscall(p: Process) -> Option<Process> {
                 ProcessSwitch::Idle => None,
                 ProcessSwitch::Switch(inner_p) => Some(inner_p),
                 ProcessSwitch::RepeatSyscall(inner_p) => {
-                    assert!(p.id() != inner_p.id(), "handle_repeat_syscall loops");
+                    assert!(p.pid != inner_p.pid, "handle_repeat_syscall loops");
                     handle_repeat_syscall(inner_p)
                 },
             }
@@ -501,8 +502,8 @@ unsafe fn handle_repeat_syscall(p: Process) -> Option<Process> {
 /// (p4_physical_address, stack_pointer)
 /// If no switch should be done then function must return `(0, 0)`.
 #[inline]
-fn return_process(p: Process) -> u128 {
-    process_pair_to_u128(p.stack_pointer, p.page_table.p4_addr())
+fn return_process(p: ProcessSwitchInfo) -> u128 {
+    process_pair_to_u128(p.stack_pointer, p.p4addr)
 }
 
 fn process_pair_to_u128(stack_pointer: VirtAddr, page_table: PhysAddr) -> u128 {

@@ -69,6 +69,12 @@ pub struct PageMap {
 }
 
 impl PageMap {
+    /// Used during initialization
+    pub const DUMMY: Self = Self {
+        phys_addr: PhysAddr::zero(),
+        table_count: 0,
+    };
+
     /// Initializes a new page table structure.
     ///
     /// Given addesses must be P2 aligned (2MiB huge page).

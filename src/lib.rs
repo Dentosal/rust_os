@@ -11,7 +11,6 @@
 #![allow(unused_macros)]
 #![allow(dead_code)]
 // Code style (temp)
-#![allow(unused_variables)]
 #![allow(unused_imports)]
 #![allow(unused_mut)]
 #![allow(unreachable_code)]

@@ -1,5 +1,6 @@
 //! DMA / VirtIO memory buffers (requiring "low" memory)
 
+use spin::Mutex;
 use x86_64::structures::paging as pg;
 use x86_64::{PhysAddr, VirtAddr};
 
@@ -24,7 +25,7 @@ pub struct Allocator {
 
 impl Allocator {
     /// Unsafe, as the caller is responsibe that this is not intialized multiple times
-    pub unsafe fn new() -> Self {
+    unsafe fn new() -> Self {
         Self {
             blocks: [BlockState::Free; DMA_BLOCKS],
         }
@@ -68,4 +69,8 @@ impl Allocator {
 pub struct DMARegion {
     pub start: PhysAddr,
     size_blocks: usize,
+}
+
+lazy_static::lazy_static! {
+    pub static ref DMA_ALLOCATOR: Mutex<Allocator> = Mutex::new(unsafe{Allocator::new()});
 }

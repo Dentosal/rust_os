@@ -89,6 +89,8 @@ pub extern "C" fn _start() {
 extern "C" fn panic(info: &PanicInfo) -> ! {
     use self::syscall::debug_print;
 
+    let _ = debug_print("Panic! (attempting allocation to show error the message)");
+
     let no_location = format!("(location unavailable)");
     let location = info
         .location()

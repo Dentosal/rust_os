@@ -52,7 +52,7 @@ fn main() {
     let size_sectors = meta.len() / SECTOR_SIZE;
 
     // Prepare header
-    let header_body_contents: Vec<_> = files.iter().map(|(_, e)| e.clone()).collect();
+    let header_body_contents: Vec<FileEntry> = files.iter().map(|(_, e)| e.clone()).collect();
     let header_body: Vec<u8> = pinecone::to_vec(&header_body_contents).unwrap();
     let header_size = HEADER_SIZE_BYTES + header_body.len();
     let files_size: usize = files.iter().map(|(_, e)| e.size as usize).sum();

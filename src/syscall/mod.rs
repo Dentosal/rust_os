@@ -123,16 +123,7 @@ fn syscall(sched: &mut Scheduler, process: &mut Process, rsc: RawSyscall) -> Sys
 
     if let Ok(sc) = SC::try_from(rsc.routine) {
         match sc {
-            SC::exit => {
-                // XXX: to make unsuccessful termination easier to debug, stop the whole kernel here
-                if rsc.args.0 != 0 {
-                    panic!(
-                        "XXX: process {} quit unsuccesfully, status={}",
-                        pid, rsc.args.0
-                    );
-                }
-                SyscallResult::Terminate(process::ProcessResult::Completed(rsc.args.0))
-            },
+            SC::exit => SyscallResult::Terminate(process::ProcessResult::Completed(rsc.args.0)),
             SC::get_pid => SyscallResult::Continue(Ok(pid.as_u64())),
             SC::debug_print => {
                 let (str_len, str_ptr, _, _) = rsc.args;
@@ -611,10 +602,7 @@ fn syscall(sched: &mut Scheduler, process: &mut Process, rsc: RawSyscall) -> Sys
                     end: PhysFrame::containing_address(phys_addr + len),
                 };
 
-                let process = sched.process_by_id_mut(pid).unwrap();
-
                 unsafe {
-                    let page_map = memory::paging::PAGE_MAP.lock();
                     let proc_pt = phys_to_virt(process.page_table.phys_addr);
 
                     for (i, frame) in frames.enumerate() {
@@ -637,9 +625,9 @@ fn syscall(sched: &mut Scheduler, process: &mut Process, rsc: RawSyscall) -> Sys
                 let (len, _, _, _) = rsc.args;
                 assert!(len != 0); // TODO: client error
                 log::debug!("[pid={:2}] dma_allocate len={}", pid, len);
-                todo!("dma alloc");
-                // let region = dma_allocator.allocate(len as usize);
-                // SyscallResult::Continue(Ok(region.start.as_u64()))
+                let mut dma_a = memory::dma_allocator::DMA_ALLOCATOR.lock();
+                let region = dma_a.allocate(len as usize);
+                SyscallResult::Continue(Ok(region.start.as_u64()))
             },
             SC::dma_free => {
                 log::warn!("Ignoring syscall dma_free");

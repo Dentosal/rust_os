@@ -64,26 +64,13 @@ pub struct Process {
     pub dynamic_memory: Vec<phys::Allocation>,
     /// Pending system call for repeating IO operations after waking up
     pub repeat_syscall: bool,
+    /// Elf image RAII guard
+    /// TODO: have a common pool for these, so they can be shared and reused
+    _elf_image: ElfImage,
     /// Metadata used for scheduling etc.
     metadata: ProcessMetadata,
 }
 impl Process {
-    fn new(
-        id: ProcessId, page_table: PageMap, stack_pointer: VirtAddr, stack_memory: phys::Allocation,
-    ) -> Self {
-        Self {
-            page_table,
-            stack_pointer,
-            stack_memory,
-            dynamic_memory: Vec::new(),
-            repeat_syscall: false,
-            metadata: ProcessMetadata {
-                id,
-                status: Status::Running,
-            },
-        }
-    }
-
     pub fn switch_info(&self) -> ProcessSwitchInfo {
         ProcessSwitchInfo {
             p4addr: self.page_table.p4_addr(),
@@ -384,7 +371,7 @@ unsafe fn create_process(
     let stack_size_bytes = (PROCESS_STACK_SIZE_PAGES * PAGE_SIZE_BYTES) as usize;
     let mut stack = phys::allocate_zeroed(
         Layout::from_size_align(stack_size_bytes, PAGE_SIZE_BYTES as usize).unwrap(),
-    )?; // TODO: propagate error
+    )?;
 
     // Calculate offsets
     // Offset to leave registers zero when they are popped,
@@ -472,19 +459,21 @@ unsafe fn create_process(
     let pt_frame = phys::allocate(PAGE_LAYOUT)?;
 
     // Populate the page table of the process
+    let pm_addr = pt_frame.mapped_start();
     let mut pm = unsafe {
         PageMap::init(
-            pt_frame.mapped_start(),
+            pm_addr,
             pt_frame.phys_start(),
-            pt_frame.mapped_start(), // TODO: is this correct?
+            pm_addr, // TODO: is this correct?
         )
     };
+    core::mem::forget(pt_frame); // Ownership moved to the page map
 
     // Map the required kernel structures into the process tables
     unsafe {
         // Descriptor tables
         pm.map_to(
-            pt_frame.mapped_start(),
+            pm_addr,
             Page::from_start_address(VirtAddr::new_unsafe(0x0)).unwrap(),
             PhysFrame::from_start_address(PhysAddr::new(pcc::PROCESS_IDT_PHYS_ADDR)).unwrap(),
             // FIXME: GDT.ACCESSED flag should mean that CPU will not attempt to write to this?
@@ -494,7 +483,7 @@ unsafe fn create_process(
 
         // Common section for process switches
         pm.map_to(
-            pt_frame.mapped_start(),
+            pm_addr,
             Page::from_start_address(PROCESS_COMMON_CODE).unwrap(),
             PhysFrame::from_start_address(PhysAddr::new(pcc::COMMON_ADDRESS_PHYS)).unwrap(),
             Flags::PRESENT,
@@ -509,7 +498,7 @@ unsafe fn create_process(
     for i in 0..PROCESS_STACK_SIZE_PAGES {
         unsafe {
             pm.map_to(
-                pt_frame.mapped_start(),
+                pm_addr,
                 Page::from_start_address(PROCESS_STACK + i * PAGE_SIZE_BYTES).unwrap(),
                 PhysFrame::from_start_address(stack.phys_start() + i * PAGE_SIZE_BYTES).unwrap(),
                 Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE,
@@ -519,7 +508,7 @@ unsafe fn create_process(
     }
 
     // Map the executable image to its own page table
-    for (ph, frames) in elf.sections {
+    for (ph, frames) in &elf.sections {
         assert!(ph.virtual_address >= 0x400_000);
         let start = VirtAddr::new(ph.virtual_address);
 
@@ -539,7 +528,7 @@ unsafe fn create_process(
             let page = Page::from_start_address(start + PAGE_SIZE_BYTES * (i as u64)).unwrap();
             unsafe {
                 pm.map_to(
-                    pt_frame.mapped_start(),
+                    pm_addr,
                     page,
                     PhysFrame::from_start_address(frame.phys_start()).unwrap(),
                     flags,
@@ -549,5 +538,16 @@ unsafe fn create_process(
         }
     }
 
-    Ok(Process::new(pid, pm, process_init_rsp, stack))
+    Ok(Process {
+        page_table: pm,
+        stack_pointer: process_init_rsp,
+        stack_memory: stack,
+        dynamic_memory: Vec::new(),
+        repeat_syscall: false,
+        _elf_image: elf,
+        metadata: ProcessMetadata {
+            id: pid,
+            status: Status::Running,
+        },
+    })
 }

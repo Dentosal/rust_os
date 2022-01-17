@@ -111,10 +111,8 @@ impl<T> AllocationSet<T> {
             let p: *mut Option<ptr::NonNull<u8>> = item.as_ptr().cast();
             cursor = unsafe { ptr::read(p) };
 
-            // Read allocation info
+            // Skip over allocation info
             let p: *mut Allocation = unsafe { p.add(1).cast() };
-            let block = unsafe { &*p };
-            let size = block.size();
 
             // Read item count info
             let p: *mut usize = unsafe { p.add(1).cast() };

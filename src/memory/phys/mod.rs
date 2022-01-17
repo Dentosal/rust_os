@@ -12,16 +12,35 @@ pub use self::allocator::*;
 pub use self::list::AllocationSet;
 
 /// A freeable allocation
-/// TODO: deallocate on drop?
 #[derive(Debug)]
 pub struct Allocation {
     pub(super) start: PhysAddr,
     pub(super) layout: Layout,
 }
+
+impl Drop for Allocation {
+    fn drop(&mut self) {
+        log::debug!("drop-deallocate {:?}", self);
+
+        // Safety: will only be called once
+        unsafe {
+            _deallocate(self);
+        }
+
+        let zero = PhysAddr::zero();
+        let old = core::mem::replace(&mut self.start, zero);
+        if old == zero {
+            panic!("Douple-drop!");
+        }
+    }
+}
+
 impl Allocation {
     /// Leaks this allocation, making it impossible to deallocate
     pub fn leak(self) -> PhysMemoryRange {
-        PhysMemoryRange::range(self.start..self.start + self.layout.size())
+        let result = PhysMemoryRange::range(self.start..self.start + self.layout.size());
+        core::mem::forget(self);
+        result
     }
 
     pub unsafe fn phys_start(&self) -> PhysAddr {

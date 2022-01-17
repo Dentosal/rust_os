@@ -23,8 +23,8 @@ pub mod phys;
 pub mod rust_heap;
 pub mod virt;
 
-use crate::multitasking::{ElfImage, Process};
-use crate::util::elf_parser::{self, ELFData, ELFHeader, ELFProgramHeader};
+use crate::multitasking::Process;
+use crate::util::elf_parser;
 
 pub use self::allocators::*;
 pub use self::prelude::*;

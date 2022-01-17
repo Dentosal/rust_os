@@ -6,6 +6,7 @@ use crate::memory::{self, phys, prelude::*, Page};
 use crate::util::elf_parser::*;
 
 /// A loaded and validated elf image
+#[derive(Debug)]
 pub struct ElfImage {
     pub(super) header: ELFHeader,
     pub(super) sections: Vec<(ELFProgramHeader, Vec<phys::Allocation>)>,
@@ -19,9 +20,6 @@ pub struct ElfImage {
 ///
 /// Requires that the kernel page tables are active.
 pub fn load_elf(image: &[u8]) -> Result<ElfImage, OutOfMemory> {
-    let size_pages =
-        memory::page_align(PhysAddr::new(image.len() as u64), true).as_u64() / Page::SIZE;
-
     let elf = unsafe {
         parse_elf(image.as_ptr()).expect("Invalid ELF image") // TODO: return error
     };
@@ -31,7 +29,7 @@ pub fn load_elf(image: &[u8]) -> Result<ElfImage, OutOfMemory> {
         if ph.loadable() && ph.size_in_memory != 0 {
             let size_in_pages = page_align_u64(ph.size_in_memory, true) / PAGE_SIZE_BYTES;
             let mut section_frames = Vec::new();
-            for page_index in 0..size_in_pages {
+            for _ in 0..size_in_pages {
                 let mut allocation = phys::allocate_zeroed(PAGE_LAYOUT)?;
                 let area = allocation.write();
 

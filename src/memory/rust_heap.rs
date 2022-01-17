@@ -44,6 +44,7 @@ impl SmallAlloc {
         let len = allocation.size();
 
         let backing = core::slice::from_raw_parts_mut(ptr, len);
+        mem::forget(allocation); // Don't run destructor, the above backing owns it
 
         // Allocate our object
         let block_ll = BlockLLAllocator::new(backing, size);
@@ -98,7 +99,7 @@ unsafe impl GlobalAlloc for GlobAlloc {
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         let req = layout.size().max(layout.align()).max(MIN_ALLOC);
         if req >= MIN_BUDDY {
-            phys::deallocate(phys::Allocation::from_mapped(ptr, layout))
+            drop(phys::Allocation::from_mapped(ptr, layout));
         } else {
             let mut inner = self.inner.lock();
             inner.deallocate(ptr, req)

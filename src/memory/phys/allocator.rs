@@ -57,14 +57,7 @@ pub unsafe fn init(areas: [Option<PhysMemoryRange>; MAX_OK_ENTRIES]) {
     // Safety: the data is initialized now
     let blocks: &mut [&mut [u8]] = unsafe { core::mem::transmute::<_, _>(blocks) };
 
-    for b in blocks.iter() {
-        log::debug!("* ptr={:p}", b.as_ptr());
-        log::debug!("* len={:x}", b.len());
-    }
-
-    log::trace!("BuddyGroupAllocator::new");
     let inner = BuddyGroupAllocator::new(blocks, MIN_PAGE_SIZE_BYTES as usize);
-    log::trace!("BuddyGroupAllocator::new ok");
 
     let mut a = PHYS_ALLOCATOR.try_lock().expect("Already locked");
     a.write(inner);
@@ -104,7 +97,11 @@ pub fn allocate_zeroed(layout: Layout) -> Result<Allocation, OutOfMemory> {
     ))
 }
 
-pub fn deallocate(p: Allocation) {
+/// # Safety
+/// Caller must make sure that the deallocation is only done once.
+/// This takes &mut and should usually be used only in the Allocation destructor
+pub(super) unsafe fn _deallocate(p: &mut Allocation) {
+    log::trace!("Deallocate {:?}", p);
     let guard = PHYS_ALLOCATOR.lock();
     let inner = unsafe { guard.assume_init_ref() };
     unsafe {

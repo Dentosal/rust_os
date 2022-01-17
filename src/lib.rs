@@ -1,7 +1,6 @@
 // Code style
 #![forbid(private_in_public)]
 #![forbid(tyvar_behind_raw_pointer)]
-#![deny(unused_assignments)]
 // Safety
 #![deny(overflowing_literals)]
 #![deny(unaligned_references)]
@@ -12,7 +11,6 @@
 #![allow(unused_macros)]
 #![allow(dead_code)]
 // Code style (temp)
-#![allow(unused_variables)]
 #![allow(unused_imports)]
 #![allow(unused_mut)]
 #![allow(unreachable_code)]
@@ -36,14 +34,15 @@
 #![feature(core_intrinsics)]
 #![feature(integer_atomics)]
 #![feature(lang_items)]
-#![feature(maybe_uninit_extra)]
 #![feature(naked_functions)]
 #![feature(panic_info_message)]
-#![feature(ptr_internals)]
+#![feature(ptr_internals, ptr_metadata)]
 #![feature(stmt_expr_attributes)]
 #![feature(trait_alias)]
 #![feature(let_else)]
 #![feature(inline_const)]
+#![feature(drain_filter)]
+#![feature(int_roundings)]
 
 use core::alloc::Layout;
 use core::arch::asm;
@@ -81,7 +80,6 @@ mod time;
 use self::multitasking::SCHEDULER;
 
 /// The kernel main function
-#[cfg(not(test))]
 #[no_mangle]
 pub extern "C" fn rust_main() -> ! {
     rreset!();
@@ -89,13 +87,13 @@ pub extern "C" fn rust_main() -> ! {
 
     driver::uart::init();
     syslog::enable();
-    driver::pic::init();
-    interrupt::init();
-    memory::init();
-    interrupt::init_after_memory();
-    cpuid::init();
-    random::init();
     unsafe {
+        driver::pic::init();
+        interrupt::init();
+        memory::init();
+        interrupt::init_after_memory();
+        cpuid::init();
+        random::init();
         driver::acpi::init();
         smp::init();
         driver::ioapic::init_bsp();
@@ -115,13 +113,13 @@ pub extern "C" fn rust_main() -> ! {
     syslog::disable_direct_vga();
 
     // Start service daemon
-    crate::memory::configure(|mut mem_ctrl| {
-        let mut sched = SCHEDULER.lock();
-
+    {
         let bytes = crate::initrd::read("serviced").expect("serviced missing from initrd");
-        let elfimage = multitasking::process::load_elf(mem_ctrl, bytes);
-        sched.spawn(mem_ctrl, &[], elfimage);
-    });
+        let elfimage = multitasking::load_elf(bytes).expect("Could not load image");
+
+        let mut sched = SCHEDULER.try_lock().unwrap();
+        sched.spawn(&[], elfimage).unwrap();
+    }
 
     // Hand over to the process scheduler
     multitasking::SCHEDULER_ENABLED.store(true, Ordering::SeqCst);
@@ -163,10 +161,7 @@ pub extern "C" fn rust_ap_main() -> ! {
 
 #[global_allocator]
 #[cfg(not(test))]
-static HEAP_ALLOCATOR: d7alloc::GlobAlloc = d7alloc::GlobAlloc::new(d7alloc::BumpAllocator::new(
-    d7alloc::HEAP_START,
-    d7alloc::HEAP_START + d7alloc::HEAP_SIZE,
-));
+static HEAP_ALLOCATOR: memory::rust_heap::GlobAlloc = memory::rust_heap::GlobAlloc::new();
 
 #[alloc_error_handler]
 #[cfg(not(test))]

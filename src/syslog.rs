@@ -156,6 +156,17 @@ impl log::Log for SystemLogger {
                 record.args()
             );
         }
+
+        // Filter out stuff that occur during allocation, as the code below allocates so
+        // these cannot be written into memory
+        if record
+            .module_path()
+            .map(|p| p.contains("::memory::") || p.starts_with("allogator::"))
+            .unwrap_or(true)
+        {
+            return;
+        }
+
         if level <= LEVEL_SCREEN {
             if crate::memory::can_allocate() {
                 let message = format!("{:5} {} - {}\n", record.level(), target, record.args());

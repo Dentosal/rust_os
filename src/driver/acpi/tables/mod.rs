@@ -2,7 +2,7 @@ use alloc::string::String;
 use core::mem::size_of;
 use hashbrown::HashMap;
 
-use crate::memory::{self, prelude::*, MemoryController};
+use crate::memory::{self, prelude::*};
 
 pub mod fadt;
 pub mod madt;

@@ -6,14 +6,14 @@ use spin::Mutex;
 use x86_64::{PhysAddr, VirtAddr};
 
 use crate::memory;
-use crate::memory::MemoryController;
-use crate::multitasking::{loader::ElfImage, ExplicitEventId};
+use crate::memory::phys::OutOfMemory;
+use crate::multitasking::ExplicitEventId;
 use crate::smp::sleep::ns_to_ticks;
 use crate::time::BSPInstant;
 
-use super::process::{Process, ProcessResult};
+use super::process::{Process, ProcessResult, ProcessSwitchInfo};
 use super::queues::Queues;
-use super::{ProcessId, WaitFor};
+use super::{ElfImage, ProcessId, WaitFor};
 
 /// Time slice given to each process
 const TIME_SLICE_NS: u64 = 100_000_000;
@@ -31,11 +31,11 @@ pub enum ProcessSwitch {
     /// Go to idle state
     Idle,
     /// Switch to a different process
-    Switch(Process),
+    Switch(ProcessSwitchInfo),
     /// Switch to a new process, by repeating
     /// a system call, and continuing after that.
     /// Syscall number and arguments must be stored in the process
-    RepeatSyscall(Process),
+    RepeatSyscall(ProcessSwitchInfo),
 }
 
 #[derive(Debug)]
@@ -67,6 +67,20 @@ impl Scheduler {
         self.running
     }
 
+    /// Used for swapping out the process
+    /// # Safety
+    /// Caller must ensure that the process is given back using `give_back_process`
+    pub unsafe fn take_process_by_id(&mut self, pid: ProcessId) -> Option<Process> {
+        self.processes.remove(&pid)
+    }
+
+    /// Used for swapping out the process
+    /// # Safety
+    /// Only processes take with `take_process_by_id` must be used
+    pub unsafe fn give_back_process(&mut self, process: Process) {
+        self.processes.insert(process.id(), process);
+    }
+
     pub fn process_by_id(&self, pid: ProcessId) -> Option<&Process> {
         self.processes.get(&pid)
     }
@@ -86,13 +100,13 @@ impl Scheduler {
     }
 
     /// Creates a new process, and returns its pid
-    pub fn spawn(&mut self, m: &mut MemoryController, args: &[String], elf: ElfImage) -> ProcessId {
+    pub fn spawn(&mut self, args: &[String], elf: ElfImage) -> Result<ProcessId, OutOfMemory> {
         let pid = self.next_pid;
         self.next_pid = self.next_pid.next();
-        let process = unsafe { Process::create(m, pid, args, elf) };
+        let process = unsafe { Process::create(pid, args, elf)? };
         self.processes.insert(pid, process);
         self.queues.give(pid, WaitFor::None);
-        pid
+        Ok(pid)
     }
 
     /// Terminates process if it's alive.
@@ -106,7 +120,7 @@ impl Scheduler {
                 log::info!(" [system call was pending]");
             }
 
-            // Do not scheduler this process again, and wake up all
+            // Do not schedule this process again, and wake up all
             // processes waiting for the termination of this one
             self.queues.on_process_over(process.id());
 
@@ -186,10 +200,10 @@ impl Scheduler {
                 .expect("Process from queue not running");
             if process.repeat_syscall {
                 log::trace!("Repeat syscall");
-                ProcessSwitch::RepeatSyscall(process.clone())
+                ProcessSwitch::RepeatSyscall(process.switch_info())
             } else {
                 log::trace!("Switch to {}", pid);
-                ProcessSwitch::Switch(process.clone())
+                ProcessSwitch::Switch(process.switch_info())
             }
         } else {
             log::trace!("Switch to idle");
@@ -209,9 +223,9 @@ impl Scheduler {
                 .get_mut(&pid)
                 .expect("self.running does not exist anymore");
             if process.repeat_syscall {
-                ProcessSwitch::RepeatSyscall(process.clone())
+                ProcessSwitch::RepeatSyscall(process.switch_info())
             } else {
-                ProcessSwitch::Switch(process.clone())
+                ProcessSwitch::Switch(process.switch_info())
             }
         } else {
             ProcessSwitch::Idle

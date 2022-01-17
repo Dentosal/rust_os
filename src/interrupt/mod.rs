@@ -12,7 +12,7 @@ use core::fmt;
 use core::mem::{self, MaybeUninit};
 use core::ptr;
 
-use crate::memory::{self, MemoryController};
+use crate::memory;
 
 #[macro_use]
 mod macros;
@@ -229,11 +229,6 @@ pub fn init() {
     handlers[0xff] = simple_exception_handler!("I/O APIC masked a hardware irq", None);
 
     for index in 0..idt::ENTRY_COUNT {
-        log::trace!(
-            "WRITE IDT {:x} @ {:04x}",
-            index,
-            idt::ADDRESS + index * mem::size_of::<idt::Descriptor>()
-        );
         unsafe {
             ptr::write_volatile(
                 (idt::ADDRESS + index * mem::size_of::<idt::Descriptor>()) as *mut _,
@@ -279,11 +274,7 @@ pub fn init_after_memory() {
 
 fn init_gdt_and_tss() {
     // Initialize TSS
-    let double_fault_stack = memory::configure(|mem_ctrl: &mut MemoryController| {
-        mem_ctrl
-            .alloc_stack(1)
-            .expect("could not allocate double fault stack")
-    });
+    let double_fault_stack = memory::stack_allocator::alloc_stack(1);
 
     let tss = tss::store({
         let mut tss = TaskStateSegment::new();

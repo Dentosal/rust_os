@@ -1,7 +1,5 @@
 use core::ptr;
 
-use d7alloc::{HEAP_SIZE, HEAP_START};
-
 use super::area::PhysMemoryRange;
 use super::constants::*;
 use super::page_align;

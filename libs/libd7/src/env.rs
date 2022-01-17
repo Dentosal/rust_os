@@ -1,7 +1,5 @@
 //! Command line arguments
 
-use alloc::vec::Vec;
-use core::arch::asm;
 use core::{slice, str};
 
 use crate::d7abi::PROCESS_STACK_END;
@@ -41,17 +39,15 @@ fn argc() -> usize {
 
 /// # Safety: index must be in bounds
 unsafe fn arg_len(index: usize) -> usize {
-    unsafe {
-        let cursor = PROCESS_STACK_END.as_ptr::<u8>().sub(16);
-        let len_per_arg_start = cursor as *const u64;
-        let arg_len: u64 = *len_per_arg_start.sub(index);
-        arg_len as usize
-    }
+    let cursor = PROCESS_STACK_END.as_ptr::<u8>().sub(16);
+    let len_per_arg_start = cursor as *const u64;
+    let arg_len: u64 = *len_per_arg_start.sub(index);
+    arg_len as usize
 }
 
 pub fn args() -> Args {
     unsafe {
-        let mut cursor = PROCESS_STACK_END.as_ptr::<u8>().sub(8);
+        let cursor = PROCESS_STACK_END.as_ptr::<u8>().sub(8);
         let argc: u64 = *(cursor as *const u64);
         let argc = argc as usize;
 

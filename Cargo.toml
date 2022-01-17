@@ -73,9 +73,8 @@ features = ["use-serde"]
 version = "*"
 path = "libs/d7abi"
 
-[dependencies.d7alloc]
-version = "*"
-path = "libs/d7alloc"
+[dependencies.allogator]
+git = "https://github.com/Dentosal/allogator"
 
 [dependencies.d7initrd]
 version = "*"

@@ -1,3 +1,4 @@
+use spin::Mutex;
 use x86_64::registers::control::{Cr0, Cr0Flags};
 use x86_64::registers::model_specific::{Efer, EferFlags};
 use x86_64::structures::paging as pg;
@@ -35,7 +36,7 @@ pub unsafe fn set_active_table(p4_addr: PhysAddr) {
 
 /// Remap kernel and other necessary memory areas
 #[must_use]
-pub unsafe fn init(elf_metadata: ELFData) -> PageMap {
+pub unsafe fn init(elf_metadata: ELFData) {
     log::debug!("Remapping kernel...");
 
     // Create new page table
@@ -66,6 +67,9 @@ pub unsafe fn init(elf_metadata: ELFData) -> PageMap {
     unsafe {
         new_table.activate();
     }
-    log::debug!("Remapping done.");
-    new_table
+    log::debug!("Switch done.");
+    let mut pm = PAGE_MAP.try_lock().expect("Already locked");
+    *pm = new_table;
 }
+
+pub static PAGE_MAP: Mutex<PageMap> = Mutex::new(PageMap::DUMMY);

@@ -18,6 +18,7 @@
 #![feature(stmt_expr_attributes)]
 #![feature(never_type)]
 #![feature(let_else)]
+#![feature(int_roundings)]
 
 mod allocator;
 
@@ -87,6 +88,8 @@ pub extern "C" fn _start() {
 #[no_mangle]
 extern "C" fn panic(info: &PanicInfo) -> ! {
     use self::syscall::debug_print;
+
+    let _ = debug_print("Panic! (attempting allocation to show error the message)");
 
     let no_location = format!("(location unavailable)");
     let location = info

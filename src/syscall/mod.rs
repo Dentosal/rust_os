@@ -2,9 +2,8 @@ use alloc::borrow::ToOwned;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::convert::{TryFrom, TryInto};
-use core::mem;
-use core::ptr;
 use core::time::Duration;
+use core::{fmt, mem, ptr};
 use hashbrown::HashSet;
 use x86_64::structures::paging::PageTableFlags as Flags;
 use x86_64::{PhysAddr, VirtAddr};
@@ -13,8 +12,8 @@ use d7abi::ipc::SubscriptionFlags;
 use d7abi::SyscallErrorCode as ErrorCode;
 
 use crate::ipc;
-use crate::memory::prelude::*;
-use crate::memory::{self, MemoryController};
+use crate::memory::phys::OutOfMemory;
+use crate::memory::{self, phys_to_virt, prelude::*};
 use crate::multitasking::{process, Process, ProcessId, Scheduler, WaitFor, SCHEDULER};
 use crate::time::BSPInstant;
 
@@ -28,7 +27,7 @@ mod PROCESS_OUTPUT {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 #[must_use]
 pub enum SyscallResult {
     /// Return a value to caller
@@ -47,13 +46,53 @@ pub enum SyscallResult {
     Terminate(process::ProcessResult),
 }
 
+fn _fmt_return_code(r: Result<u64, u64>, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match r {
+        Err(ec) => match ErrorCode::try_from(ec) {
+            Ok(ec) => write!(f, "Err({:?})", ec),
+            Err(()) => write!(f, "Err(invalid-error-code)"),
+        },
+        Ok(v) => write!(f, "Ok({:?})", v),
+    }
+}
+
+impl fmt::Debug for SyscallResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SyscallResult::Continue(r) => {
+                write!(f, "Continue(")?;
+                _fmt_return_code(*r, f)?;
+                write!(f, ")")
+            },
+            SyscallResult::Switch(r, w) => {
+                write!(f, "Switch(")?;
+                _fmt_return_code(*r, f)?;
+                write!(f, ", {:?})", w)
+            },
+            SyscallResult::RepeatAfter(w) => write!(f, "RepeatAfter({:?})", w),
+            SyscallResult::Terminate(t) => write!(f, "Terminate({:?})", t),
+        }
+    }
+}
+
+macro_rules! try_len {
+    ($len:expr) => {{
+        if $len > 0x400000000 {
+            // Arbitrary limit of 16 GiB
+            return SyscallResult::Continue(Err(ErrorCode::too_large.into()));
+        } else {
+            $len as usize
+        }
+    }};
+}
+
 macro_rules! try_str {
     ($slice:expr) => {{
         // Sanity check
         assert!($slice.len() < 10000, "String length sanity check"); // TODO: client error
         match ::core::str::from_utf8($slice) {
             Ok(value) => value,
-            Err(err) => {
+            Err(_) => {
                 return SyscallResult::Continue(Err(ErrorCode::invalid_utf8.into()));
             },
         }
@@ -77,14 +116,9 @@ pub struct RawSyscall {
     args: (u64, u64, u64, u64),
 }
 
-/// TODO: This leaks virtual memory areas at some places,
-///       those should have a destructor that frees them.
-fn syscall(
-    m: &mut MemoryController, sched: &mut Scheduler, pid: ProcessId, rsc: RawSyscall,
-) -> SyscallResult {
+fn syscall(sched: &mut Scheduler, process: &mut Process, rsc: RawSyscall) -> SyscallResult {
     use d7abi::SyscallNumber as SC;
 
-    let process = sched.process_by_id_mut(pid).expect("Process not found");
     let pid = process.id();
 
     if let Ok(sc) = SC::try_from(rsc.routine) {
@@ -92,10 +126,12 @@ fn syscall(
             SC::exit => SyscallResult::Terminate(process::ProcessResult::Completed(rsc.args.0)),
             SC::get_pid => SyscallResult::Continue(Ok(pid.as_u64())),
             SC::debug_print => {
-                let (str_len, str_ptr_u64, _, _) = rsc.args;
-                let str_ptr = VirtAddr::new(str_ptr_u64);
-                let (area, slice) = unsafe {
-                    match m.process_slice(process, str_len, str_ptr) {
+                let (str_len, str_ptr, _, _) = rsc.args;
+
+                let str_ptr = VirtAddr::new(str_ptr);
+                let str_len = try_len!(str_len);
+                let (_area, slice) = unsafe {
+                    match process.memory_slice(str_ptr, str_len) {
                         Some(v) => v,
                         None => {
                             return SyscallResult::Terminate(process::ProcessResult::Failed(
@@ -108,26 +144,17 @@ fn syscall(
 
                 PROCESS_OUTPUT::print(pid, string);
 
-                unsafe { m.unmap_area(area) };
-                m.free_virtual_area(area);
                 SyscallResult::Continue(Ok(0))
-            },
-            SC::mem_set_size => {
-                let (size_bytes, _, _, _) = rsc.args;
-                match m.process_set_dynamic_memory(process, size_bytes) {
-                    Some(total_bytes) => SyscallResult::Continue(Ok(total_bytes)),
-                    _ => unimplemented!("OutOfMemory case not implmented yet"),
-                }
             },
             SC::exec => {
                 let (image_len, image_ptr, args_size, args_ptr) = rsc.args;
+                let image_len = try_len!(image_len);
+                let args_size = try_len!(args_size);
 
                 // TODO: maybe the system call should take args in some other format?
                 let mut args: Vec<String> = Vec::new();
                 let args_ptr = VirtAddr::new(args_ptr);
-                if let Some((area, slice)) =
-                    unsafe { m.process_slice(process, args_size, args_ptr) }
-                {
+                if let Some((_area, slice)) = unsafe { process.memory_slice(args_ptr, args_size) } {
                     let mut buf = [0u8; 8];
                     buf.copy_from_slice(&slice[..8]);
                     let argc = u64::from_le_bytes(buf) as usize;
@@ -144,9 +171,6 @@ fn syscall(
                         args.push(try_str!(&slice[cursor..][..len]).to_owned());
                         cursor += len;
                     }
-
-                    unsafe { m.unmap_area(area) };
-                    m.free_virtual_area(area);
                 } else {
                     return SyscallResult::Terminate(process::ProcessResult::Failed(
                         process::Error::Pointer(args_ptr),
@@ -154,18 +178,22 @@ fn syscall(
                 }
 
                 let image_ptr = VirtAddr::new(image_ptr);
-                if let Some((area, slice)) =
-                    unsafe { m.process_slice(process, image_len, image_ptr) }
+                if let Some((_area, slice)) = unsafe { process.memory_slice(image_ptr, image_len) }
                 {
                     log::debug!("[pid={:2}] exec len={:?} args={:?}", pid, slice.len(), args);
 
-                    let elfimage = crate::multitasking::process::load_elf(m, slice);
-                    let pid = sched.spawn(m, args.as_slice(), elfimage);
+                    let Ok(elfimage) = crate::multitasking::load_elf(slice) else {
+                        return SyscallResult::Continue(Err(ErrorCode::out_of_memory.into()));
+                    };
 
-                    unsafe { m.unmap_area(area) };
-                    m.free_virtual_area(area);
+                    log::debug!("[pid={:2}] exec elf ok", pid);
 
-                    SyscallResult::Continue(Ok(unsafe { pid.as_u64() }))
+                    match sched.spawn(args.as_slice(), elfimage) {
+                        Ok(pid) => SyscallResult::Continue(Ok(unsafe { pid.as_u64() })),
+                        Err(OutOfMemory) => {
+                            SyscallResult::Continue(Err(ErrorCode::out_of_memory.into()))
+                        },
+                    }
                 } else {
                     SyscallResult::Terminate(process::ProcessResult::Failed(
                         process::Error::Pointer(image_ptr),
@@ -183,6 +211,12 @@ fn syscall(
             },
             SC::sched_sleep_ns => {
                 let (time_ns, _, _, _) = rsc.args;
+                log::trace!(
+                    "[pid={:2}] sleep_ns {} ({} millis)",
+                    pid,
+                    time_ns,
+                    time_ns / 1_000_000
+                );
                 if crate::smp::is_bsp() {
                     SyscallResult::Switch(Ok(0), WaitFor::Time(BSPInstant::now().add_ns(time_ns)))
                 } else {
@@ -197,9 +231,10 @@ fn syscall(
                     ));
                 };
 
+                let filter_len = try_len!(filter_len);
                 let filter_ptr = VirtAddr::new(filter_ptr);
-                if let Some((area, slice)) =
-                    unsafe { m.process_slice(process, filter_len, filter_ptr) }
+                if let Some((_area, slice)) =
+                    unsafe { process.memory_slice(filter_ptr, filter_len) }
                 {
                     let filter_str = try_str!(slice);
                     let filter = try_ipc!(ipc::TopicFilter::try_new(
@@ -207,7 +242,7 @@ fn syscall(
                         !flags.contains(SubscriptionFlags::PREFIX)
                     ));
 
-                    log::trace!("[pid={:2}] ipc_subscribe {:?} {:?}", pid, filter, flags);
+                    log::debug!("[pid={:2}] ipc_subscribe {:?} {:?}", pid, filter, flags);
 
                     let mut ipc_manager = ipc::IPC.try_lock().expect("IPC LOCKED");
                     let sub_id = try_ipc!(ipc_manager.subscribe(
@@ -217,8 +252,6 @@ fn syscall(
                         flags.contains(SubscriptionFlags::PIPE),
                     ));
 
-                    unsafe { m.unmap_area(area) };
-                    m.free_virtual_area(area);
                     SyscallResult::Continue(Ok(sub_id.as_u64()))
                 } else {
                     SyscallResult::Terminate(process::ProcessResult::Failed(
@@ -230,7 +263,7 @@ fn syscall(
                 let (sub_id, _, _, _) = rsc.args;
                 let sub_id = ipc::SubscriptionId::from_u64(sub_id);
 
-                log::trace!("[pid={:2}] ipc_unsubscribe {:?}", pid, sub_id);
+                log::debug!("[pid={:2}] ipc_unsubscribe {:?}", pid, sub_id);
 
                 let mut ipc_manager = ipc::IPC.try_lock().expect("IPC LOCKED");
                 try_ipc!(ipc_manager.unsubscribe(pid, sub_id).consume_events(sched));
@@ -239,47 +272,47 @@ fn syscall(
             },
             SC::ipc_publish => {
                 let (topic_len, topic_ptr, data_len, data_ptr) = rsc.args;
+                let topic_len = try_len!(topic_len);
                 let topic_ptr = VirtAddr::new(topic_ptr);
+                let data_len = try_len!(data_len);
                 let data_ptr = VirtAddr::new(data_ptr);
-                if let Some((topic_area, topic_slice)) =
-                    unsafe { m.process_slice(process, topic_len, topic_ptr) }
+
+                let topic = if let Some((_area, topic_slice)) =
+                    unsafe { process.memory_slice(topic_ptr, topic_len) }
                 {
-                    let result = if let Some((data_area, data_slice)) =
-                        unsafe { m.process_slice(process, data_len, data_ptr) }
-                    {
-                        let topic_str = try_str!(topic_slice);
-                        let topic = try_ipc!(ipc::Topic::try_new(topic_str));
+                    let topic_str = try_str!(topic_slice);
+                    try_ipc!(ipc::Topic::try_new(topic_str))
+                } else {
+                    return SyscallResult::Terminate(process::ProcessResult::Failed(
+                        process::Error::Pointer(topic_ptr),
+                    ));
+                };
 
-                        log::trace!(
-                            "[pid={:2}] ipc_publish topic={:?} len={:?}",
-                            pid,
-                            topic,
-                            data_len
-                        );
+                log::trace!(
+                    "[pid={:2}] ipc_publish topic={:?} len={:?}",
+                    pid,
+                    topic,
+                    data_len
+                );
 
-                        let mut ipc_manager = ipc::IPC.try_lock().expect("IPC LOCKED");
-                        try_ipc!(ipc_manager.publish(topic, data_slice).consume_events(sched));
+                if let Some((_area, data_slice)) =
+                    unsafe { process.memory_slice(data_ptr, data_len) }
+                {
+                    let mut ipc_manager = ipc::IPC.try_lock().expect("IPC LOCKED");
+                    try_ipc!(ipc_manager.publish(topic, data_slice).consume_events(sched));
 
-                        unsafe { m.unmap_area(data_area) };
-                        m.free_virtual_area(data_area);
-                        SyscallResult::Continue(Ok(0))
-                    } else {
-                        SyscallResult::Terminate(process::ProcessResult::Failed(
-                            process::Error::Pointer(data_ptr),
-                        ))
-                    };
-                    unsafe { m.unmap_area(topic_area) };
-                    m.free_virtual_area(topic_area);
-                    result
+                    SyscallResult::Continue(Ok(0))
                 } else {
                     SyscallResult::Terminate(process::ProcessResult::Failed(
-                        process::Error::Pointer(topic_ptr),
+                        process::Error::Pointer(data_ptr),
                     ))
                 }
             },
             SC::ipc_deliver => {
                 let (topic_len, topic_ptr, data_len, data_ptr) = rsc.args;
+                let topic_len = try_len!(topic_len);
                 let topic_ptr = VirtAddr::new(topic_ptr);
+                let data_len = try_len!(data_len);
                 let data_ptr = VirtAddr::new(data_ptr);
 
                 let mut ipc_manager = ipc::IPC.try_lock().expect("IPC LOCKED");
@@ -292,101 +325,93 @@ fn syscall(
                     return SyscallResult::Continue(Ok(0));
                 }
 
-                if let Some((topic_area, topic_slice)) =
-                    unsafe { m.process_slice(process, topic_len, topic_ptr) }
+                let topic = if let Some((_area, topic_slice)) =
+                    unsafe { process.memory_slice(topic_ptr, topic_len) }
                 {
-                    let result = if let Some((data_area, data_slice)) =
-                        unsafe { m.process_slice(process, data_len, data_ptr) }
-                    {
-                        let topic_str = try_str!(topic_slice);
-                        let topic = try_ipc!(ipc::Topic::try_new(topic_str));
-                        log::trace!(
-                            "[pid={:2}] ipc_deliver topic={:?} len={:?}",
-                            pid,
-                            topic,
-                            data_len
-                        );
+                    let topic_str = try_str!(topic_slice);
+                    try_ipc!(ipc::Topic::try_new(topic_str))
+                } else {
+                    return SyscallResult::Terminate(process::ProcessResult::Failed(
+                        process::Error::Pointer(topic_ptr),
+                    ));
+                };
 
-                        let deliver = try_ipc!(
-                            ipc_manager
-                                .deliver(pid, topic, data_slice)
-                                .consume_events(sched)
-                        );
+                log::trace!(
+                    "[pid={:2}] ipc_deliver topic={:?} len={:?}",
+                    pid,
+                    topic,
+                    data_len
+                );
 
-                        unsafe { m.unmap_area(data_area) };
-                        m.free_virtual_area(data_area);
+                if let Some((_area, data_slice)) =
+                    unsafe { process.memory_slice(data_ptr, data_len) }
+                {
+                    let deliver = try_ipc!(
+                        ipc_manager
+                            .deliver(pid, topic, data_slice)
+                            .consume_events(sched)
+                    );
 
-                        match deliver {
-                            ipc::Deliver::Process(event) => {
-                                SyscallResult::RepeatAfter(WaitFor::Event(event))
-                            },
-                            ipc::Deliver::Kernel => SyscallResult::Continue(Ok(0)),
-                        }
-                    } else {
-                        SyscallResult::Terminate(process::ProcessResult::Failed(
-                            process::Error::Pointer(data_ptr),
-                        ))
-                    };
-                    unsafe { m.unmap_area(topic_area) };
-                    m.free_virtual_area(topic_area);
-                    result
+                    match deliver {
+                        ipc::Deliver::Process(event) => {
+                            SyscallResult::RepeatAfter(WaitFor::Event(event))
+                        },
+                        ipc::Deliver::Kernel => SyscallResult::Continue(Ok(0)),
+                    }
                 } else {
                     SyscallResult::Terminate(process::ProcessResult::Failed(
-                        process::Error::Pointer(topic_ptr),
+                        process::Error::Pointer(data_ptr),
                     ))
                 }
             },
             SC::ipc_deliver_reply => {
                 let (topic_len, topic_ptr, data_len, data_ptr) = rsc.args;
+                let topic_len = try_len!(topic_len);
                 let topic_ptr = VirtAddr::new(topic_ptr);
+                let data_len = try_len!(data_len);
                 let data_ptr = VirtAddr::new(data_ptr);
 
                 let mut ipc_manager = ipc::IPC.try_lock().expect("IPC LOCKED");
 
-                if let Some((topic_area, topic_slice)) =
-                    unsafe { m.process_slice(process, topic_len, topic_ptr) }
+                let topic = if let Some((_area, topic_slice)) =
+                    unsafe { process.memory_slice(topic_ptr, topic_len) }
                 {
-                    let result = if let Some((data_area, data_slice)) =
-                        unsafe { m.process_slice(process, data_len, data_ptr) }
-                    {
-                        let topic_str = try_str!(topic_slice);
-                        let topic = try_ipc!(ipc::Topic::try_new(topic_str));
-                        log::trace!(
-                            "[pid={:2}] ipc_deliver_reply topic={:?} len={:?}",
-                            pid,
-                            topic,
-                            data_len
-                        );
+                    let topic_str = try_str!(topic_slice);
+                    try_ipc!(ipc::Topic::try_new(topic_str))
+                } else {
+                    return SyscallResult::Terminate(process::ProcessResult::Failed(
+                        process::Error::Pointer(topic_ptr),
+                    ));
+                };
 
-                        let result = ipc_manager
-                            .deliver_reply(pid, topic, data_slice)
-                            .consume_events(sched);
+                log::trace!(
+                    "[pid={:2}] ipc_deliver_reply topic={:?} len={:?}",
+                    pid,
+                    topic,
+                    data_len
+                );
 
-                        unsafe { m.unmap_area(data_area) };
-                        m.free_virtual_area(data_area);
+                if let Some((_area, data_slice)) =
+                    unsafe { process.memory_slice(data_ptr, data_len) }
+                {
+                    let result = ipc_manager
+                        .deliver_reply(pid, topic, data_slice)
+                        .consume_events(sched);
 
-                        try_ipc!(result);
-                        SyscallResult::Continue(Ok(0))
-                    } else {
-                        SyscallResult::Terminate(process::ProcessResult::Failed(
-                            process::Error::Pointer(data_ptr),
-                        ))
-                    };
-                    unsafe { m.unmap_area(topic_area) };
-                    m.free_virtual_area(topic_area);
-                    result
+                    try_ipc!(result);
+                    SyscallResult::Continue(Ok(0))
                 } else {
                     SyscallResult::Terminate(process::ProcessResult::Failed(
-                        process::Error::Pointer(topic_ptr),
+                        process::Error::Pointer(data_ptr),
                     ))
                 }
             },
             SC::ipc_receive => {
                 let (sub_id, buf_len, buf_ptr, _) = rsc.args;
                 let sub_id = ipc::SubscriptionId::from_u64(sub_id);
+                let buf_len = try_len!(buf_len);
                 let buf_ptr = VirtAddr::new(buf_ptr);
-                if let Some((area, slice)) =
-                    unsafe { m.process_slice_mut(process, buf_len, buf_ptr) }
+                if let Some((_area, slice)) = unsafe { process.memory_slice_mut(buf_ptr, buf_len) }
                 {
                     log::trace!(
                         "[pid={:2}] ipc_receive sub={:?} len={:?}",
@@ -418,8 +443,6 @@ fn syscall(
 
                     slice[..ser_msg.len()].copy_from_slice(&ser_msg);
 
-                    unsafe { m.unmap_area(area) };
-                    m.free_virtual_area(area);
                     SyscallResult::Continue(Ok(ser_msg.len() as u64))
                 } else {
                     SyscallResult::Terminate(process::ProcessResult::Failed(
@@ -457,14 +480,15 @@ fn syscall(
                 }
 
                 let subs = VirtAddr::new(subs);
+
                 let mut ipc_manager = ipc::IPC.try_lock().expect("IPC LOCKED");
                 let size = mem::size_of::<ipc::SubscriptionId>() as u64;
                 let blocking = nonblocking == 0;
 
                 log::trace!("ipc_select n={} blocking={}", subs_len, blocking);
 
-                if let Some((area, subs_slice)) =
-                    unsafe { m.process_slice(process, subs_len * size, subs) }
+                if let Some((_area, subs_slice)) =
+                    unsafe { process.memory_slice(subs, try_len!(subs_len * size)) }
                 {
                     let mut conditions = Vec::new();
                     for (index, sub_bytes) in subs_slice.chunks_exact(8).enumerate() {
@@ -475,15 +499,11 @@ fn syscall(
                         log::trace!("* {:?} condition = {:?}", sub_id, condition);
 
                         if condition == WaitFor::None {
-                            unsafe { m.unmap_area(area) };
                             return SyscallResult::Continue(Ok(index as u64));
                         }
 
                         conditions.push(condition);
                     }
-
-                    unsafe { m.unmap_area(area) };
-                    m.free_virtual_area(area);
 
                     if !blocking {
                         return SyscallResult::Continue(Err(ErrorCode::would_block.into()));
@@ -498,13 +518,11 @@ fn syscall(
             },
             SC::kernel_log_read => {
                 let (buf_len, buf_ptr, _, _) = rsc.args;
+                let buf_len = try_len!(buf_len);
                 let buf_ptr = VirtAddr::new(buf_ptr);
-                if let Some((area, slice)) =
-                    unsafe { m.process_slice_mut(process, buf_len, buf_ptr) }
+                if let Some((_area, slice)) = unsafe { process.memory_slice_mut(buf_ptr, buf_len) }
                 {
                     let count = crate::syslog::syscall_read(slice);
-                    unsafe { m.unmap_area(area) };
-                    m.free_virtual_area(area);
                     SyscallResult::Continue(Ok(count as u64))
                 } else {
                     SyscallResult::Terminate(process::ProcessResult::Failed(
@@ -513,11 +531,12 @@ fn syscall(
                 }
             },
             SC::irq_set_handler => {
-                let (ird, image_len, image_ptr, _) = rsc.args;
+                let (_ird, _image_len, _image_ptr, _) = rsc.args;
                 todo!();
+                // let image_len = try_len!(image_len);
                 // let image_ptr = VirtAddr::new(image_ptr);
-                // if let Some((area, slice)) =
-                //     unsafe { m.process_slice(process, image_len, image_ptr) }
+                // if let Some((_area, slice)) =
+                //     unsafe { process.memory_slice( image_len, image_ptr) }
                 // {
                 //     log::debug!("[pid={:2}] exec len={:?}", pid, slice.len());
 
@@ -589,20 +608,21 @@ fn syscall(
                     end: PhysFrame::containing_address(phys_addr + len),
                 };
 
-                let process = sched.process_by_id_mut(pid).unwrap();
                 unsafe {
-                    process.modify_tables(m, |pt, curr_addr| {
-                        for (i, frame) in frames.enumerate() {
-                            pt.map_to(
-                                curr_addr,
+                    let proc_pt = phys_to_virt(process.page_table.phys_addr);
+
+                    for (i, frame) in frames.enumerate() {
+                        process
+                            .page_table
+                            .map_to(
+                                proc_pt,
                                 Page::from_start_address(virt_addr + (i as u64) * PAGE_SIZE_BYTES)
                                     .unwrap(),
                                 frame,
                                 flags,
                             )
                             .ignore();
-                        }
-                    });
+                    }
                 }
 
                 SyscallResult::Continue(Ok(0))
@@ -611,13 +631,58 @@ fn syscall(
                 let (len, _, _, _) = rsc.args;
                 assert!(len != 0); // TODO: client error
                 log::debug!("[pid={:2}] dma_allocate len={}", pid, len);
-                let region = m.dma_allocator.allocate(len as usize);
+                let mut dma_a = memory::dma_allocator::DMA_ALLOCATOR.lock();
+                let region = dma_a.allocate(len as usize);
                 SyscallResult::Continue(Ok(region.start.as_u64()))
             },
             SC::dma_free => {
                 log::warn!("Ignoring syscall dma_free");
                 // TODO
                 SyscallResult::Continue(Ok(0))
+            },
+            SC::mem_alloc => {
+                use d7abi::MemoryProtectionFlags as PFlags;
+
+                let (area_len, area_ptr, flags, _) = rsc.args;
+                let area_len = area_len as usize;
+                let area_ptr = VirtAddr::new(area_ptr);
+
+                // Read flags
+                let Some(flags) = PFlags::from_bits(flags as u8) else {
+                    return SyscallResult::Continue(Err(
+                        ErrorCode::mmap_invalid_protection_flags.into()
+                    ));
+                };
+
+                log::debug!(
+                    "[pid={:2}] mem_alloc ptr={:p} len={:x} flags={:?}",
+                    pid,
+                    area_ptr,
+                    area_len,
+                    flags
+                );
+
+                match process.memory_alloc(area_ptr, area_len, flags) {
+                    Ok(()) => SyscallResult::Continue(Ok(0)),
+                    Err(code) => SyscallResult::Continue(Err(code.into())),
+                }
+            },
+            SC::mem_dealloc => {
+                let (area_len, area_ptr, _, _) = rsc.args;
+                let area_len = area_len as usize;
+                let area_ptr = VirtAddr::new(area_ptr);
+
+                log::debug!(
+                    "[pid={:2}] mem_dealloc ptr={:p} len={:x}",
+                    pid,
+                    area_ptr,
+                    area_len
+                );
+
+                match process.memory_dealloc(area_ptr, area_len) {
+                    Ok(()) => SyscallResult::Continue(Ok(0)),
+                    Err(code) => SyscallResult::Continue(Err(code.into())),
+                }
             },
         }
     } else {
@@ -639,100 +704,70 @@ pub enum SyscallResultAction {
 }
 
 #[must_use]
-pub fn handle_syscall(
-    pid: ProcessId, page_table: PhysAddr, process_stack: VirtAddr,
-) -> SyscallResultAction {
+pub fn handle_syscall(pid: ProcessId) -> SyscallResultAction {
     if !crate::smp::is_bsp() {
         todo!("Cannot do syscalls with non-BSP cores yet");
     };
 
-    // Map process stack
-    memory::configure(|mm| {
-        let mut sched = SCHEDULER
-            .try_lock()
-            .expect("SCHEDULER LOCKED at start of handle_syscall");
+    let mut sched = SCHEDULER
+        .try_lock()
+        .expect("SCHEDULER LOCKED at start of handle_syscall");
 
-        let stack_area = mm.alloc_virtual_area(PROCESS_STACK_SIZE_PAGES);
-        let process = sched.process_by_id(pid).expect("Process not found");
+    // Take process from the scheduler
+    // Safety: we must give this back before returning
+    let mut process = unsafe { sched.take_process_by_id(pid).expect("Process not found") };
 
-        // Map the process stack frames to the kernel page tables
-        for (page_index, frame) in process.stack_frames.iter().enumerate() {
-            let vaddr = stack_area.start + (page_index as u64) * PAGE_SIZE_BYTES;
-            unsafe {
-                mm.page_map
-                    .map_to(
-                        PT_VADDR,
-                        Page::from_start_address(vaddr).unwrap(),
-                        frame.clone(),
-                        Flags::PRESENT | Flags::WRITABLE | Flags::NO_EXECUTE,
-                    )
-                    .flush();
+    // Read process stack
+    let reg_rax: u64 = unsafe { process.read_stack_u64(0) };
+    let reg_rdi: u64 = unsafe { process.read_stack_u64(5) };
+    let reg_rsi: u64 = unsafe { process.read_stack_u64(4) };
+    let reg_rdx: u64 = unsafe { process.read_stack_u64(3) };
+    let reg_rcx: u64 = unsafe { process.read_stack_u64(2) };
+
+    let rsc = RawSyscall {
+        routine: reg_rax,
+        args: (reg_rdi, reg_rsi, reg_rdx, reg_rcx),
+    };
+    log::trace!(
+        "[pid={:2}] <= {:?} ",
+        pid,
+        d7abi::SyscallNumber::try_from(rsc.routine).ok()
+    );
+    let res = syscall(&mut sched, &mut process, rsc);
+    log::trace!("[pid={:2}] => {:?} ", pid, res);
+
+    // Write result register values into the process stack
+    if let SyscallResult::Continue(r) | SyscallResult::Switch(r, _) = res {
+        unsafe {
+            match r {
+                Ok(v) => {
+                    process.write_stack_u64(0, 1); // Success
+                    process.write_stack_u64(5, v); // Value
+                },
+                Err(v) => {
+                    process.write_stack_u64(0, 0); // Error
+                    process.write_stack_u64(5, v); // Value
+                },
             }
         }
+    }
 
-        // Retrieve required register values from the process stack
-        let process_offset_from_end = PROCESS_STACK_END - process_stack;
-        let stack_addr = stack_area.end - process_offset_from_end;
-        let stack_ptr: *mut u64 = stack_addr.as_mut_ptr();
-        let reg_rax: u64 = unsafe { ptr::read(stack_ptr.add(0)) };
-        let reg_rdi: u64 = unsafe { ptr::read(stack_ptr.add(5)) };
-        let reg_rsi: u64 = unsafe { ptr::read(stack_ptr.add(4)) };
-        let reg_rdx: u64 = unsafe { ptr::read(stack_ptr.add(3)) };
-        let reg_rcx: u64 = unsafe { ptr::read(stack_ptr.add(2)) };
+    process.repeat_syscall = false;
+    let action = match res {
+        SyscallResult::Continue(_) => SyscallResultAction::Continue,
+        SyscallResult::Switch(_, s) => SyscallResultAction::Switch(s),
+        SyscallResult::Terminate(r) => SyscallResultAction::Terminate(r),
+        SyscallResult::RepeatAfter(s) => {
+            process.repeat_syscall = true;
+            SyscallResultAction::Switch(s)
+        },
+    };
 
-        let rsc = RawSyscall {
-            routine: reg_rax,
-            args: (reg_rdi, reg_rsi, reg_rdx, reg_rcx),
-        };
-        log::trace!(
-            "[pid={:2}] <= {:?} ",
-            pid,
-            d7abi::SyscallNumber::try_from(rsc.routine).ok()
-        );
-        let res = syscall(mm, &mut sched, pid, rsc);
-        log::trace!("[pid={:2}] => {:?} ", pid, res);
+    // Give the process back to the scheduler
+    // Safety: we got this from the scheduler, as required
+    unsafe {
+        sched.give_back_process(process);
+    }
 
-        // Write result register values into the process stack
-        if let SyscallResult::Continue(r) | SyscallResult::Switch(r, _) = res {
-            unsafe {
-                match r {
-                    Ok(v) => {
-                        ptr::write(stack_ptr.add(0), 1); // Success
-                        ptr::write(stack_ptr.add(5), v); // Value
-                    },
-                    Err(v) => {
-                        ptr::write(stack_ptr.add(0), 0); // Error
-                        ptr::write(stack_ptr.add(5), v); // Value
-                    },
-                }
-            }
-        }
-
-        let process = sched.process_by_id_mut(pid).expect("Process not found");
-        process.repeat_syscall = false;
-        let action = match res {
-            SyscallResult::Continue(_) => SyscallResultAction::Continue,
-            SyscallResult::Switch(_, s) => SyscallResultAction::Switch(s),
-            SyscallResult::Terminate(r) => SyscallResultAction::Terminate(r),
-            SyscallResult::RepeatAfter(s) => {
-                process.repeat_syscall = true;
-                SyscallResultAction::Switch(s)
-            },
-        };
-
-        // Unmap from the kernel tables
-        for (page_index, frame) in process.stack_frames.iter().enumerate() {
-            let vaddr = stack_area.start + (page_index as u64) * PAGE_SIZE_BYTES;
-            unsafe {
-                mm.page_map
-                    .unmap(PT_VADDR, Page::from_start_address(vaddr).unwrap())
-                    .flush();
-            }
-        }
-
-        // Free virtual memory
-        mm.free_virtual_area(stack_area);
-
-        action
-    })
+    action
 }

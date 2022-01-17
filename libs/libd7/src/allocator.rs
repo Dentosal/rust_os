@@ -1,7 +1,9 @@
 use core::alloc::{AllocError, Allocator, GlobalAlloc, Layout};
 use core::ptr::NonNull;
 
-use super::syscall::mem_set_size;
+use crate::syscall::mem_alloc;
+
+use d7abi::MemoryProtectionFlags;
 use d7abi::PROCESS_DYNAMIC_MEMORY;
 
 /// Align downwards. Returns the greatest x with alignment `align`
@@ -30,6 +32,8 @@ pub struct BlockAllocator {
     used_bytes: u64,
     /// Alllocated capacity
     capacity_bytes: u64,
+    /// Virtual memory "waterline" for brk simulation
+    waterline: x86_64::VirtAddr,
 }
 
 impl BlockAllocator {
@@ -37,6 +41,7 @@ impl BlockAllocator {
         Self {
             used_bytes: 0,
             capacity_bytes: 0,
+            waterline: PROCESS_DYNAMIC_MEMORY,
         }
     }
 
@@ -58,7 +63,7 @@ impl<A> Locked<A> {
     }
 
     pub fn lock(&self) -> spin::MutexGuard<A> {
-        self.inner.lock()
+        self.inner.try_lock().unwrap()
     }
 }
 
@@ -78,7 +83,21 @@ unsafe impl<'a> Allocator for Locked<BlockAllocator> {
         if ba.available_capacity_bytes() < required_size_u64 {
             let more = required_size_u64 - ba.available_capacity_bytes();
             let required_bytes = ba.capacity_bytes + more;
-            ba.capacity_bytes = unsafe { mem_set_size(required_bytes).map_err(|_| AllocError)? };
+
+            // TODO: do not hardcode page size here, but instead improve
+            // the memory management syscalls
+            let alloc_size = required_bytes.next_multiple_of(0x20_0000);
+            unsafe {
+                mem_alloc(
+                    ba.waterline,
+                    alloc_size as usize,
+                    MemoryProtectionFlags::READ | MemoryProtectionFlags::WRITE,
+                )
+                .map_err(|_| AllocError)?
+            }
+            ba.waterline += alloc_size;
+            ba.capacity_bytes += alloc_size;
+
             debug_assert!(required_size_u64 <= ba.available_capacity_bytes());
         }
 

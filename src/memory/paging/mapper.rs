@@ -7,8 +7,7 @@ use x86_64::structures::paging as pg;
 use x86_64::structures::paging::page_table::{PageTable, PageTableFlags as Flags};
 use x86_64::PhysAddr;
 
-use crate::multitasking::ElfImage;
-use crate::util::elf_parser::{self, ELFData};
+use crate::util::elf_parser::{ELFData, ELFPermissionFlags};
 
 use super::super::prelude::*;
 use super::set_active_table;
@@ -69,6 +68,12 @@ pub struct PageMap {
 }
 
 impl PageMap {
+    /// Used during initialization
+    pub const DUMMY: Self = Self {
+        phys_addr: PhysAddr::zero(),
+        table_count: 0,
+    };
+
     /// Initializes a new page table structure.
     ///
     /// Given addesses must be P2 aligned (2MiB huge page).
@@ -269,13 +274,13 @@ impl PageMap {
                 assert!(start.as_u64() % Page::SIZE == 0);
                 assert!(size > 0);
 
-                if !ph.has_flag(elf_parser::ELFPermissionFlags::EXECUTABLE) {
+                if !ph.has_flag(ELFPermissionFlags::EXECUTABLE) {
                     flags |= Flags::NO_EXECUTE;
                 }
-                if !ph.has_flag(elf_parser::ELFPermissionFlags::READABLE) {
+                if !ph.has_flag(ELFPermissionFlags::READABLE) {
                     panic!("Non-readable pages are not supported (yet)");
                 }
-                if ph.has_flag(elf_parser::ELFPermissionFlags::WRITABLE) {
+                if ph.has_flag(ELFPermissionFlags::WRITABLE) {
                     flags |= Flags::WRITABLE;
                 }
 

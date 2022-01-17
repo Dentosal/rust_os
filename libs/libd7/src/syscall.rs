@@ -71,13 +71,6 @@ pub fn debug_print(s: &str) {
     }
 }
 
-/// # Safety
-/// Can be used to confuse thé memory manager, and generally
-/// should not be used outside of this library.
-pub unsafe fn mem_set_size(new_size_bytes: u64) -> SyscallResult<u64> {
-    syscall!(SyscallNumber::mem_set_size; new_size_bytes)
-}
-
 /// Start a new process from an ELF image
 pub fn exec(image: &[u8], args: &[&str]) -> SyscallResult<ProcessId> {
     let len = image.len() as u64;
@@ -303,6 +296,48 @@ pub unsafe fn dma_free(phys_addr: PhysAddr, len: u64) -> SyscallResult<()> {
         SyscallNumber::dma_free;
         len,
         phys_addr.as_u64()
+    )?;
+    Ok(())
+}
+
+/// Request a virtual memory area to be backed with some physical memory
+///
+/// # Safety
+///
+/// Can be used to confuse thé memory manager, and usually
+/// should not be used outside of this library.
+pub unsafe fn mem_alloc(
+    virt_addr: VirtAddr, len: usize, flags: MemoryProtectionFlags,
+) -> SyscallResult<()> {
+    if len == 0 {
+        panic!("Cannot mem_alloc an empty region");
+    }
+
+    syscall!(
+        SyscallNumber::mem_alloc;
+        len as u64,
+        virt_addr.as_u64(),
+        flags.bits() as u64
+    )?;
+    Ok(())
+}
+
+/// Request a virtual memory area to be unmapped, and the
+/// physical memory backing that region to be freed
+///
+/// # Safety
+///
+/// Can be used to confuse thé memory manager, and usually
+/// should not be used outside of this library.
+pub unsafe fn mem_dealloc(virt_addr: VirtAddr, len: usize) -> SyscallResult<()> {
+    if len == 0 {
+        panic!("Cannot mem_alloc an empty region");
+    }
+
+    syscall!(
+        SyscallNumber::mem_dealloc;
+        len as u64,
+        virt_addr.as_u64()
     )?;
     Ok(())
 }

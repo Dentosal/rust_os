@@ -86,26 +86,18 @@ pub unsafe fn init() {
     // Initialize frame allocator
     self::phys::init(memory_info.allocatable);
 
-    log::trace!("A");
+    // Set allocations available
+    ALLOCATOR_READY.store(true, Ordering::Release);
+    log::debug!("Allocation is now available");
 
     // InitRD
     crate::initrd::init(elf_metadata);
 
-    log::trace!("B");
-
     // Prepare a kernel stack for syscalls
     syscall_stack::init();
 
-    log::trace!("C");
-
     // Load process switching code
     process_common_code::init();
-
-    log::trace!("D");
-
-    // Set allocations available
-    ALLOCATOR_READY.store(true, Ordering::Release);
-    log::debug!("Allocation is now available");
 }
 
 /// Convert PhysAddr to VirtAddr, only accessible in by the kernel,

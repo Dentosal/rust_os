@@ -1,5 +1,7 @@
 // Represents useful attributes from 64-bit elf file
 
+use core::{mem, ptr};
+
 const KERNEL_ELF_IMAGE_POSITION: usize = 0x10_0000; // must match with plan.md
 const MAX_PH_ENTRY_COUNT: usize = 20;
 
@@ -96,9 +98,9 @@ pub enum ELFParsingError {
     EmptyHeader,
 }
 
-/// TODO: take a slice instead of pointer for memory safety
-pub unsafe fn parse_elf(ptr: *const u8) -> Result<ELFData, ELFParsingError> {
-    let elf_header: ELFHeader = *(ptr as *const _);
+pub unsafe fn parse_elf(data: &[u8]) -> Result<ELFData, ELFParsingError> {
+    let elf_header: ELFHeader =
+        ptr::read_unaligned(data[..mem::size_of::<ELFHeader>()].as_ptr().cast());
 
     if elf_header.magic != ELF_MAGIC {
         Err(ELFParsingError::NotElf)
@@ -123,10 +125,14 @@ pub unsafe fn parse_elf(ptr: *const u8) -> Result<ELFData, ELFParsingError> {
         // get program headers
         let mut ph_table = 0;
         for index in 0..elf_data.header.ph_table_entry_count {
-            let ph_ptr = ptr
-                .add(elf_data.header.ph_table_position as usize)
-                .add((elf_data.header.ph_table_entry_size as usize) * (index as usize));
-            let ph: ELFProgramHeader = *(ph_ptr as *const _);
+            let offset = (elf_data.header.ph_table_position as usize)
+                + (elf_data.header.ph_table_entry_size as usize) * (index as usize);
+
+            let ph: ELFProgramHeader = ptr::read_unaligned(
+                data[offset..offset + mem::size_of::<ELFProgramHeader>()]
+                    .as_ptr()
+                    .cast(),
+            );
 
             match ph.header_type as usize {
                 1 => {
@@ -144,7 +150,12 @@ pub unsafe fn parse_elf(ptr: *const u8) -> Result<ELFData, ELFParsingError> {
 }
 
 pub unsafe fn parse_kernel_elf() -> ELFData {
-    match parse_elf(KERNEL_ELF_IMAGE_POSITION as *const u8) {
+    let slice = core::slice::from_raw_parts(
+        KERNEL_ELF_IMAGE_POSITION as *const u8,
+        0x1_0000_0000, // Just some high-enough number
+    );
+
+    match parse_elf(slice) {
         Ok(header) => header,
         Err(error) => panic!("Could not receive kernel image data: {:?}", error),
     }

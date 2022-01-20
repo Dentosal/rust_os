@@ -122,6 +122,13 @@ impl Process {
     pub unsafe fn memory_slice(
         &mut self, ptr: VirtAddr, len: usize,
     ) -> Option<(virt::Allocation, &[u8])> {
+        log::trace!(
+            "Reading process memory at {:x}..{:x} (len={:x})",
+            ptr,
+            ptr + len,
+            len
+        );
+
         let mut page_map = PAGE_MAP.lock();
 
         let flags = Flags::PRESENT;
@@ -137,7 +144,7 @@ impl Process {
 
             for i in 0..r_size_pages {
                 let r_offset = i * PAGE_SIZE_BYTES;
-                let proc_frame_start = VirtAddr::new_unchecked_raw(r_start + r_offset);
+                let proc_frame_start = VirtAddr::new(r_start + r_offset);
                 let page = Page::from_start_address(virtarea.start + r_offset).unwrap();
 
                 let phys_addr = self.page_table.translate(proc_pt_vaddr, proc_frame_start)?;
@@ -166,6 +173,13 @@ impl Process {
     pub unsafe fn memory_slice_mut(
         &mut self, ptr: VirtAddr, len: usize,
     ) -> Option<(virt::Allocation, &mut [u8])> {
+        log::trace!(
+            "Writing process memory at {:x}..{:x} (len={:x})",
+            ptr,
+            ptr + len,
+            len
+        );
+
         let mut page_map = PAGE_MAP.lock();
 
         let flags = Flags::PRESENT | Flags::WRITABLE;
@@ -181,7 +195,7 @@ impl Process {
 
             for i in 0..r_size_pages {
                 let r_offset = i * PAGE_SIZE_BYTES;
-                let proc_frame_start = VirtAddr::new_unchecked_raw(r_start + r_offset);
+                let proc_frame_start = VirtAddr::new(r_start + r_offset);
                 let page = Page::from_start_address(virtarea.start + r_offset).unwrap();
 
                 let phys_addr = self.page_table.translate(proc_pt_vaddr, proc_frame_start)?;

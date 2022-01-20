@@ -40,11 +40,11 @@ impl SmallAlloc {
         // Otherwise, add a new BlockLL for this size
         let allocation = phys::allocate(PAGE_LAYOUT).expect("Failed to allocate");
 
-        let ptr: *mut u8 = allocation.mapped_start().as_mut_ptr();
-        let len = allocation.size();
-
-        let backing = core::slice::from_raw_parts_mut(ptr, len);
-        mem::forget(allocation); // Don't run destructor, the above backing owns it
+        let backing = allogator::MemoryBlock {
+            ptr: ptr::NonNull::new(allocation.mapped_start().as_mut_ptr()).unwrap(),
+            len: allocation.size(),
+        };
+        mem::forget(allocation); // Don't run destructor, ownership transferred to `backing`
 
         // Allocate our object
         let block_ll = BlockLLAllocator::new(backing, size);
@@ -85,11 +85,12 @@ impl GlobAlloc {
 unsafe impl GlobalAlloc for GlobAlloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let req = layout.size().max(layout.align()).max(MIN_ALLOC);
+        debug_assert_ne!(req, 0);
         if req >= MIN_BUDDY {
-            phys::allocate(layout)
-                .expect("Rust heap alloc failed")
-                .mapped_start()
-                .as_mut_ptr()
+            let allocation = phys::allocate(layout).expect("Rust heap alloc failed");
+            let rptr = allocation.mapped_start().as_mut_ptr();
+            mem::forget(allocation); // Don't run destructor, ownership transferred to `rptr`
+            rptr
         } else {
             let mut inner = self.inner.lock();
             inner.allocate(req)
@@ -98,6 +99,7 @@ unsafe impl GlobalAlloc for GlobAlloc {
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         let req = layout.size().max(layout.align()).max(MIN_ALLOC);
+        debug_assert_ne!(req, 0);
         if req >= MIN_BUDDY {
             drop(phys::Allocation::from_mapped(ptr, layout));
         } else {

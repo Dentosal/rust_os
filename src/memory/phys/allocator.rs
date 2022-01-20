@@ -18,6 +18,7 @@ use super::Allocation;
 
 fn _to_allocation(physptr: NonNull<[u8]>, layout: Layout) -> Allocation {
     let start_raw = physptr.cast::<u8>().as_ptr() as u64;
+    log::debug!("allocate {:x} {:?}", start_raw, layout);
     Allocation {
         start: PhysAddr::new(start_raw),
         layout,
@@ -38,24 +39,25 @@ pub unsafe fn init(areas: [Option<PhysMemoryRange>; MAX_OK_ENTRIES]) {
 
     let mut block_count = 0;
     // Safety: we are creating `MaybeUninit`s, they do not require initalization
-    let mut blocks: [MaybeUninit<&mut [u8]>; MAX_OK_ENTRIES] =
+    let mut blocks: [MaybeUninit<allogator::MemoryBlock>; MAX_OK_ENTRIES] =
         unsafe { MaybeUninit::uninit().assume_init() };
 
     for area in areas {
         if let Some(area) = area {
-            blocks[block_count].write(core::slice::from_raw_parts_mut(
+            blocks[block_count].write(allogator::MemoryBlock {
                 // Here we use the static higher-half phys access, that
                 // has to be take into account when returning allocated memory
-                phys_to_virt(area.start()).as_mut_ptr(),
-                area.size_bytes() as usize,
-            ));
+                ptr: NonNull::new(phys_to_virt(area.start()).as_mut_ptr()).unwrap(),
+                len: (area.size_bytes() as usize).next_power_of_two() >> 1,
+            });
             block_count += 1;
         }
     }
 
-    let blocks = &mut blocks[..block_count];
+    // let blocks = &mut blocks[..block_count];
+    let blocks = &mut blocks[..1];
     // Safety: the data is initialized now
-    let blocks: &mut [&mut [u8]] = unsafe { core::mem::transmute::<_, _>(blocks) };
+    let blocks: &mut [allogator::MemoryBlock] = unsafe { core::mem::transmute::<_, _>(blocks) };
 
     let inner = BuddyGroupAllocator::new(blocks, MIN_PAGE_SIZE_BYTES as usize);
 
@@ -91,10 +93,8 @@ pub fn allocate_zeroed(layout: Layout) -> Result<Allocation, OutOfMemory> {
     log::trace!("Allocate zeroed {:?}", layout);
     let guard = PHYS_ALLOCATOR.lock();
     let inner = unsafe { guard.assume_init_ref() };
-    Ok(_to_allocation(
-        undo_offset(inner.allocate_zeroed(layout).map_err(|_| OutOfMemory)?),
-        layout,
-    ))
+    let ia = inner.allocate_zeroed(layout).map_err(|_| OutOfMemory)?;
+    Ok(_to_allocation(undo_offset(ia), layout))
 }
 
 /// # Safety

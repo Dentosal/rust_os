@@ -20,7 +20,7 @@ pub struct Allocation {
 
 impl Drop for Allocation {
     fn drop(&mut self) {
-        log::debug!("drop-deallocate {:?}", self);
+        log::trace!("Drop-deallocate {:?}", self);
 
         // Safety: will only be called once
         unsafe {

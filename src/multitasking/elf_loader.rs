@@ -21,7 +21,7 @@ pub struct ElfImage {
 /// Requires that the kernel page tables are active.
 pub fn load_elf(image: &[u8]) -> Result<ElfImage, OutOfMemory> {
     let elf = unsafe {
-        parse_elf(image.as_ptr()).expect("Invalid ELF image") // TODO: return error
+        parse_elf(image).expect("Invalid ELF image") // TODO: return error
     };
 
     let mut frames = Vec::new();

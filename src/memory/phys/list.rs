@@ -109,7 +109,9 @@ impl<T> AllocationSet<T> {
         while let Some(item) = cursor {
             // Read next entry link
             let p: *mut Option<ptr::NonNull<u8>> = item.as_ptr().cast();
-            cursor = unsafe { ptr::read(p) };
+            let next_entry = unsafe { ptr::read(p) };
+            debug_assert_ne!(cursor, next_entry);
+            cursor = next_entry;
 
             // Skip over allocation info
             let p: *mut Allocation = unsafe { p.add(1).cast() };

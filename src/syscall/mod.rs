@@ -130,7 +130,7 @@ fn syscall(sched: &mut Scheduler, process: &mut Process, rsc: RawSyscall) -> Sys
 
                 let str_ptr = VirtAddr::new(str_ptr);
                 let str_len = try_len!(str_len);
-                let (area, slice) = unsafe {
+                let (_area, slice) = unsafe {
                     match process.memory_slice(str_ptr, str_len) {
                         Some(v) => v,
                         None => {
@@ -154,7 +154,7 @@ fn syscall(sched: &mut Scheduler, process: &mut Process, rsc: RawSyscall) -> Sys
                 // TODO: maybe the system call should take args in some other format?
                 let mut args: Vec<String> = Vec::new();
                 let args_ptr = VirtAddr::new(args_ptr);
-                if let Some((area, slice)) = unsafe { process.memory_slice(args_ptr, args_size) } {
+                if let Some((_area, slice)) = unsafe { process.memory_slice(args_ptr, args_size) } {
                     let mut buf = [0u8; 8];
                     buf.copy_from_slice(&slice[..8]);
                     let argc = u64::from_le_bytes(buf) as usize;
@@ -178,12 +178,15 @@ fn syscall(sched: &mut Scheduler, process: &mut Process, rsc: RawSyscall) -> Sys
                 }
 
                 let image_ptr = VirtAddr::new(image_ptr);
-                if let Some((area, slice)) = unsafe { process.memory_slice(image_ptr, image_len) } {
+                if let Some((_area, slice)) = unsafe { process.memory_slice(image_ptr, image_len) }
+                {
                     log::debug!("[pid={:2}] exec len={:?} args={:?}", pid, slice.len(), args);
 
                     let Ok(elfimage) = crate::multitasking::load_elf(slice) else {
                         return SyscallResult::Continue(Err(ErrorCode::out_of_memory.into()));
                     };
+
+                    log::debug!("[pid={:2}] exec elf ok", pid);
 
                     match sched.spawn(args.as_slice(), elfimage) {
                         Ok(pid) => SyscallResult::Continue(Ok(unsafe { pid.as_u64() })),
@@ -230,7 +233,8 @@ fn syscall(sched: &mut Scheduler, process: &mut Process, rsc: RawSyscall) -> Sys
 
                 let filter_len = try_len!(filter_len);
                 let filter_ptr = VirtAddr::new(filter_ptr);
-                if let Some((area, slice)) = unsafe { process.memory_slice(filter_ptr, filter_len) }
+                if let Some((_area, slice)) =
+                    unsafe { process.memory_slice(filter_ptr, filter_len) }
                 {
                     let filter_str = try_str!(slice);
                     let filter = try_ipc!(ipc::TopicFilter::try_new(
@@ -238,7 +242,7 @@ fn syscall(sched: &mut Scheduler, process: &mut Process, rsc: RawSyscall) -> Sys
                         !flags.contains(SubscriptionFlags::PREFIX)
                     ));
 
-                    log::trace!("[pid={:2}] ipc_subscribe {:?} {:?}", pid, filter, flags);
+                    log::debug!("[pid={:2}] ipc_subscribe {:?} {:?}", pid, filter, flags);
 
                     let mut ipc_manager = ipc::IPC.try_lock().expect("IPC LOCKED");
                     let sub_id = try_ipc!(ipc_manager.subscribe(
@@ -259,7 +263,7 @@ fn syscall(sched: &mut Scheduler, process: &mut Process, rsc: RawSyscall) -> Sys
                 let (sub_id, _, _, _) = rsc.args;
                 let sub_id = ipc::SubscriptionId::from_u64(sub_id);
 
-                log::trace!("[pid={:2}] ipc_unsubscribe {:?}", pid, sub_id);
+                log::debug!("[pid={:2}] ipc_unsubscribe {:?}", pid, sub_id);
 
                 let mut ipc_manager = ipc::IPC.try_lock().expect("IPC LOCKED");
                 try_ipc!(ipc_manager.unsubscribe(pid, sub_id).consume_events(sched));
@@ -273,7 +277,7 @@ fn syscall(sched: &mut Scheduler, process: &mut Process, rsc: RawSyscall) -> Sys
                 let data_len = try_len!(data_len);
                 let data_ptr = VirtAddr::new(data_ptr);
 
-                let topic = if let Some((topic_area, topic_slice)) =
+                let topic = if let Some((_area, topic_slice)) =
                     unsafe { process.memory_slice(topic_ptr, topic_len) }
                 {
                     let topic_str = try_str!(topic_slice);
@@ -291,7 +295,7 @@ fn syscall(sched: &mut Scheduler, process: &mut Process, rsc: RawSyscall) -> Sys
                     data_len
                 );
 
-                if let Some((data_area, data_slice)) =
+                if let Some((_area, data_slice)) =
                     unsafe { process.memory_slice(data_ptr, data_len) }
                 {
                     let mut ipc_manager = ipc::IPC.try_lock().expect("IPC LOCKED");
@@ -321,7 +325,7 @@ fn syscall(sched: &mut Scheduler, process: &mut Process, rsc: RawSyscall) -> Sys
                     return SyscallResult::Continue(Ok(0));
                 }
 
-                let topic = if let Some((topic_area, topic_slice)) =
+                let topic = if let Some((_area, topic_slice)) =
                     unsafe { process.memory_slice(topic_ptr, topic_len) }
                 {
                     let topic_str = try_str!(topic_slice);
@@ -339,7 +343,7 @@ fn syscall(sched: &mut Scheduler, process: &mut Process, rsc: RawSyscall) -> Sys
                     data_len
                 );
 
-                if let Some((data_area, data_slice)) =
+                if let Some((_area, data_slice)) =
                     unsafe { process.memory_slice(data_ptr, data_len) }
                 {
                     let deliver = try_ipc!(
@@ -369,7 +373,7 @@ fn syscall(sched: &mut Scheduler, process: &mut Process, rsc: RawSyscall) -> Sys
 
                 let mut ipc_manager = ipc::IPC.try_lock().expect("IPC LOCKED");
 
-                let topic = if let Some((topic_area, topic_slice)) =
+                let topic = if let Some((_area, topic_slice)) =
                     unsafe { process.memory_slice(topic_ptr, topic_len) }
                 {
                     let topic_str = try_str!(topic_slice);
@@ -387,7 +391,7 @@ fn syscall(sched: &mut Scheduler, process: &mut Process, rsc: RawSyscall) -> Sys
                     data_len
                 );
 
-                if let Some((data_area, data_slice)) =
+                if let Some((_area, data_slice)) =
                     unsafe { process.memory_slice(data_ptr, data_len) }
                 {
                     let result = ipc_manager
@@ -407,7 +411,8 @@ fn syscall(sched: &mut Scheduler, process: &mut Process, rsc: RawSyscall) -> Sys
                 let sub_id = ipc::SubscriptionId::from_u64(sub_id);
                 let buf_len = try_len!(buf_len);
                 let buf_ptr = VirtAddr::new(buf_ptr);
-                if let Some((area, slice)) = unsafe { process.memory_slice_mut(buf_ptr, buf_len) } {
+                if let Some((_area, slice)) = unsafe { process.memory_slice_mut(buf_ptr, buf_len) }
+                {
                     log::trace!(
                         "[pid={:2}] ipc_receive sub={:?} len={:?}",
                         pid,
@@ -482,7 +487,7 @@ fn syscall(sched: &mut Scheduler, process: &mut Process, rsc: RawSyscall) -> Sys
 
                 log::trace!("ipc_select n={} blocking={}", subs_len, blocking);
 
-                if let Some((area, subs_slice)) =
+                if let Some((_area, subs_slice)) =
                     unsafe { process.memory_slice(subs, try_len!(subs_len * size)) }
                 {
                     let mut conditions = Vec::new();
@@ -515,7 +520,8 @@ fn syscall(sched: &mut Scheduler, process: &mut Process, rsc: RawSyscall) -> Sys
                 let (buf_len, buf_ptr, _, _) = rsc.args;
                 let buf_len = try_len!(buf_len);
                 let buf_ptr = VirtAddr::new(buf_ptr);
-                if let Some((area, slice)) = unsafe { process.memory_slice_mut(buf_ptr, buf_len) } {
+                if let Some((_area, slice)) = unsafe { process.memory_slice_mut(buf_ptr, buf_len) }
+                {
                     let count = crate::syslog::syscall_read(slice);
                     SyscallResult::Continue(Ok(count as u64))
                 } else {
@@ -525,11 +531,11 @@ fn syscall(sched: &mut Scheduler, process: &mut Process, rsc: RawSyscall) -> Sys
                 }
             },
             SC::irq_set_handler => {
-                let (ird, image_len, image_ptr, _) = rsc.args;
+                let (_ird, _image_len, _image_ptr, _) = rsc.args;
                 todo!();
                 // let image_len = try_len!(image_len);
                 // let image_ptr = VirtAddr::new(image_ptr);
-                // if let Some((area, slice)) =
+                // if let Some((_area, slice)) =
                 //     unsafe { process.memory_slice( image_len, image_ptr) }
                 // {
                 //     log::debug!("[pid={:2}] exec len={:?}", pid, slice.len());

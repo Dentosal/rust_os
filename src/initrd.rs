@@ -27,15 +27,10 @@ pub fn init(elf_data: ELFData) {
         let start_addr = PhysAddr::from_u64(page_align_up(elf_data.last_addr()));
         let header = phys_to_virt(start_addr);
 
-        log::trace!("initrd: A");
-
         let hptr: *const u8 = header.as_ptr();
         let magic = *(hptr.add(0) as *const u32);
         let size_flist = *(hptr.add(4) as *const u32);
         let size_total = *(hptr.add(8) as *const u64);
-        let size_pages = to_pages_round_up(size_total);
-
-        log::trace!("initrd: B");
 
         assert_eq!(magic, HEADER_MAGIC, "InitRD magic mismatch");
         assert!(size_flist as u64 > 0, "InitRD header empty");
@@ -44,20 +39,10 @@ pub fn init(elf_data: ELFData) {
             "InitRD header too large"
         );
 
-        log::trace!("initrd: C {}", size_flist);
-
         let header_bytes: &[u8] = core::slice::from_raw_parts(hptr.add(16), size_flist as usize);
 
-        log::trace!("initrd: D {:?}", header_bytes);
-
         let file_list: Result<Vec<FileEntry>, _> = pinecone::from_bytes(&header_bytes[..]);
-
-        log::trace!("initrd: E {:?}", file_list.is_ok());
-
         let file_list = file_list.expect("Could not deserialize staticfs file list");
-
-        log::trace!("initrd: F {:?}", file_list.len());
-
         log::trace!("Files {:?}", file_list);
 
         // Initialize

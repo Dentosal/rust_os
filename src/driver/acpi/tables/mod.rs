@@ -7,7 +7,6 @@ use crate::memory::{self, prelude::*};
 pub mod fadt;
 pub mod madt;
 mod rsdt;
-mod xsdt;
 
 #[derive(Debug, Copy, Clone)]
 #[repr(C, packed)]

@@ -96,7 +96,7 @@ impl Queues {
             WaitFor::None => {
                 panic!("WaitFor::None inside of WaitFor::FirstOf");
             },
-            WaitFor::FirstOf(targets) => {
+            WaitFor::FirstOf(_targets) => {
                 // Possible to support (simply recurse), but these
                 // imply ineffiency or more serious issues elsewhere
                 panic!("Nested WaitFor::FirstOf");

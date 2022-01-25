@@ -91,7 +91,7 @@ fn call_cpuid(a: u32) -> [u32; 4] {
 pub fn cpu_brand() -> String {
     let mut result = String::new();
 
-    'outer: for index in 0x80000002u32..=0x80000004u32 {
+    'outer: for _ in 0x80000002u32..=0x80000004u32 {
         for v in call_cpuid(0).iter() {
             for i in 0..=3 {
                 let bytepos = i * 8;
@@ -108,7 +108,6 @@ pub fn cpu_brand() -> String {
 
 /// Returns tuple (max_standard_level, max_extended_level)
 fn get_max_levels() -> (u32, u32) {
-    let max_standard_level: u32;
     let [max_standard_level, _, _, _] = call_cpuid(0);
     let [max_extended_level, _, _, _] = call_cpuid(0x8000_0000u32);
     (max_standard_level, max_extended_level)
@@ -140,7 +139,6 @@ fn run_feature_checks() {
     let [_, _, ecx, edx] = call_cpuid(1);
     log::debug!("CPU: FEATURE BITS: {:b} {:b}", ecx, edx);
 
-    let f_ecx = FlagsECX::from_bits_truncate(ecx);
     let f_edx = FlagsEDX::from_bits_truncate(edx);
 
     assert_feature!(f_edx, FlagsEDX::TSC);

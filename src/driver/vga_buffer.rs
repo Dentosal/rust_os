@@ -97,9 +97,8 @@ impl Cursor {
         overflow
     }
 
-    /// Previous character
-    /// if row is true, goes to previous line if needed
-    pub fn prev(&self, row: bool) {
+    /// Previous character, goes to previous line if needed
+    pub fn prev(&self) {
         self.update_position(|mut row, mut col| {
             if col > 0 {
                 col -= 1;
@@ -248,9 +247,9 @@ impl Terminal<'static> {
 
     /// Backspace
     pub fn backspace(&self) {
-        self.cursor.prev(true);
+        self.cursor.prev();
         self.write_byte(b' ', CellColor::new(Color::White, Color::Black));
-        self.cursor.prev(true);
+        self.cursor.prev();
     }
 
     /// Scroll up one line

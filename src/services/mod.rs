@@ -57,7 +57,7 @@ pub fn incoming(
         .get_mut(&sub)
         .expect("No such subscription for the kernel services");
 
-    let ack_id = message
+    let _ack_id = message
         .ack_id
         .take()
         .expect("Incoming messages must be reliable");

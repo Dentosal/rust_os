@@ -43,7 +43,7 @@ pub struct RedirectEntryFlags(u8);
 impl RedirectEntryFlags {
     fn new(
         delivery_mode: DeliveryMode, destination_logical: bool, pending: bool,
-        pin_polarity_low: bool, remote_irr: bool, trigger_mode_level: bool,
+        pin_polarity_low: bool, remote_irr: bool, _trigger_mode_level: bool,
     ) -> Self {
         Self(
             (delivery_mode as u8)

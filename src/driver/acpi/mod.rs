@@ -118,35 +118,35 @@ impl aml::Handler for AmlHandler {
         unsafe { cpuio::UnsafePort::new(port).write(value) }
     }
 
-    fn read_pci_u8(&self, segment: u16, bus: u8, device: u8, function: u8, offset: u16) -> u8 {
+    fn read_pci_u8(&self, _segment: u16, bus: u8, device: u8, function: u8, offset: u16) -> u8 {
         let base_offset = offset - offset % 4;
         let base_value = unsafe { pci_read_u32(bus, device, function, base_offset as u8) };
         let shift = 24 - 8 * (offset % 4);
         (base_value >> shift) as u8
     }
-    fn read_pci_u16(&self, segment: u16, bus: u8, device: u8, function: u8, offset: u16) -> u16 {
+    fn read_pci_u16(&self, _segment: u16, bus: u8, device: u8, function: u8, offset: u16) -> u16 {
         assert!(offset % 2 == 0);
         let base_offset = offset - offset % 4;
         let base_value = unsafe { pci_read_u32(bus, device, function, base_offset as u8) };
         let shift = 16 - 8 * (offset % 4);
         (base_value >> shift) as u16
     }
-    fn read_pci_u32(&self, segment: u16, bus: u8, device: u8, function: u8, offset: u16) -> u32 {
+    fn read_pci_u32(&self, _segment: u16, bus: u8, device: u8, function: u8, offset: u16) -> u32 {
         unsafe { pci_read_u32(bus, device, function, offset as u8) }
     }
 
     fn write_pci_u8(
-        &self, segment: u16, bus: u8, device: u8, function: u8, offset: u16, value: u8,
+        &self, _segment: u16, _bus: u8, _device: u8, _function: u8, _offset: u16, _value: u8,
     ) {
         todo!("write_pci_u8")
     }
     fn write_pci_u16(
-        &self, segment: u16, bus: u8, device: u8, function: u8, offset: u16, value: u16,
+        &self, _segment: u16, _bus: u8, _device: u8, _function: u8, _offset: u16, _value: u16,
     ) {
         todo!("write_pci_u16")
     }
     fn write_pci_u32(
-        &self, segment: u16, bus: u8, device: u8, function: u8, offset: u16, value: u32,
+        &self, _segment: u16, _bus: u8, _device: u8, _function: u8, _offset: u16, _value: u32,
     ) {
         todo!("write_pci_u32")
     }
@@ -208,8 +208,6 @@ pub fn init() {
         let tables = ACPI_TABLES.call_once(|| {
             AcpiTables::from_validated_rsdp(HANDLER, rsdp_address).expect("acpi parse error")
         });
-
-        let tables = ACPI_TABLES.poll().unwrap();
 
         let plinfo = tables.platform_info().expect("platform_info");
         log::debug!("plinfo.power_profile {:?}", plinfo.power_profile);

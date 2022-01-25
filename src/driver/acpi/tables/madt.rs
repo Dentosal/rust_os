@@ -74,7 +74,7 @@ pub fn init() {
 
     let local_apic_addr_u32: u32 = unsafe { *(ptr as *const _) };
     ptr += 4;
-    let flags: u32 = unsafe { *(ptr as *const _) };
+    let _flags: u32 = unsafe { *(ptr as *const _) };
     ptr += 4;
 
     let local_apic_addr = PhysAddr::new(local_apic_addr_u32 as u64);

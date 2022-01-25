@@ -60,7 +60,7 @@ impl Allocator {
         panic!("Out of DMA memory");
     }
 
-    pub fn free(&mut self, region: DMARegion) {
+    pub fn free(&mut self, _region: DMARegion) {
         todo!()
     }
 }

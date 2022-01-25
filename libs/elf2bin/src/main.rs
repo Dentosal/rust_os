@@ -3,7 +3,7 @@
 #![deny(unused_assignments)]
 // Safety
 #![deny(overflowing_literals)]
-#![deny(safe_packed_borrows)]
+#![deny(unaligned_references)]
 #![deny(unused_must_use)]
 // Clippy
 #![warn(clippy::all)]
@@ -68,6 +68,7 @@ fn check_elf(f: &mut File) {
     check_at_eq(f, 54, &[0x38], "program header size");
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Copy, Clone)]
 struct ProgramHeader {
     segment_type: u32,

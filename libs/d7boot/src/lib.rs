@@ -8,7 +8,7 @@
 #![cfg_attr(not(test), no_std)]
 // Safety
 #![deny(overflowing_literals)]
-#![deny(safe_packed_borrows)]
+#![deny(unaligned_references)]
 #![deny(unused_must_use)]
 // Unstable features
 #![feature(lang_items)]
@@ -95,7 +95,6 @@ unsafe fn check_elf() {
     }
 }
 
-#[naked]
 #[no_mangle]
 pub unsafe extern "C" fn d7boot() {
     // Location info

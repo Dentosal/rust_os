@@ -48,7 +48,7 @@ jobs:
           repository: Dentosal/constcodegen
           path: ./constcodegen
 
-      - uses: actions/cache@v2
+      - uses: actions/cache@v3
         id: cache-constcodegen
         with:
           path: ~/.cargo/bin/constcodegen

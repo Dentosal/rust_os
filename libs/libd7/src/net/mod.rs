@@ -38,6 +38,8 @@ pub enum NetworkError {
     NoArpEntry,
     /// No IP address configured for the interface
     NoIpAddr,
+    /// Error occurred during name resolution (usually DNS error)
+    NameResolution,
     /// Socket address was not valid, or did not resolve to any address
     InvalidSocketAddr,
 }
@@ -98,7 +100,16 @@ impl ToSocketAddrs for (&str, u16) {
             // Resolve address
             // TODO: ipv6 support
             let r: Result<Vec<dns::QueryResult>, dns::NxDomain> =
-                ipc::request("netd/dns/resolve", (host, dns::QueryType::A)).expect("Resolve error");
+                match ipc::request("netd/dns/resolve", (host, dns::QueryType::A)) {
+                    Ok(ok) => ok,
+                    Err(syscall_error) => match syscall_error {
+                        d7abi::SyscallErrorCode::ipc_delivery_target_nack => {
+                            return Err(NetworkError::NameResolution);
+                        },
+                        other => panic!("Syscall error {:?}", other),
+                    },
+                };
+
             #[nested]
             match r {
                 Ok(v) => Ok(v.into_iter().map(move |a| match a {

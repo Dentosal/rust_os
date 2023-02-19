@@ -2,7 +2,6 @@
 
 #![cfg_attr(not(test), no_std)]
 #![feature(default_free_fn, duration_constants)]
-#![feature(let_else)]
 // Lints
 #![allow(incomplete_features)]
 

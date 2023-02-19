@@ -3,7 +3,6 @@
 #![forbid(tyvar_behind_raw_pointer)]
 // Safety
 #![deny(overflowing_literals)]
-#![deny(unaligned_references)]
 #![deny(unused_must_use)]
 // Workarounds
 #![allow(named_asm_labels)]
@@ -23,13 +22,14 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::needless_range_loop)]
 #![allow(clippy::unreadable_literal)]
-// No-std when not running tests
+// No stdlib or mainfn when not running tests
 #![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(test), no_main)]
 // Unstable features
 #![feature(abi_x86_interrupt)]
 #![feature(alloc_error_handler)]
 #![feature(allocator_api)]
-#![feature(asm_const, asm_sym)]
+#![feature(asm_const)]
 #![feature(box_syntax, box_patterns)]
 #![feature(core_intrinsics)]
 #![feature(integer_atomics)]
@@ -39,7 +39,6 @@
 #![feature(ptr_internals, ptr_metadata)]
 #![feature(stmt_expr_attributes)]
 #![feature(trait_alias)]
-#![feature(let_else)]
 #![feature(inline_const)]
 #![feature(drain_filter)]
 #![feature(int_roundings)]
@@ -180,6 +179,20 @@ use core::sync::atomic::{AtomicBool, Ordering};
 /// if panic printing itself panics, it can be skipped
 static PANIC_ACTIVE: AtomicBool = AtomicBool::new(false);
 
+core::arch::global_asm!(
+    "
+.global panic_stop
+.section .text
+
+panic_stop:
+    mov rax, 0x4f214f214f214f21 // !!!!
+    mov [0xb8000], rax
+    cli
+    hlt
+    .lp: jmp .lp
+"
+);
+
 #[panic_handler]
 #[cfg(not(test))]
 #[allow(unused_variables)]
@@ -209,6 +222,9 @@ extern "C" fn panic(info: &PanicInfo) -> ! {
                 log::error!("  Info unavailable");
             }
 
+            // Attempt to print backtrace as well
+            // stack_trace();
+
             // Stop other cores as well
             driver::ioapic::broadcast_ipi(false, 0xdd);
 
@@ -218,6 +234,39 @@ extern "C" fn panic(info: &PanicInfo) -> ! {
         }
     }
     loop {}
+}
+
+#[inline(never)]
+pub unsafe fn stack_trace() {
+    let mut rbp: usize;
+    core::arch::asm!("mov {}, rbp", out(reg) rbp);
+
+    log::error!("TRACE: {:>016X}", rbp);
+    //Maximum 64 frames
+    for _frame in 0..64 {
+        if let Some(rip_rbp) = rbp.checked_add(core::mem::size_of::<usize>()) {
+            if let Ok(_rbp_virt) = x86_64::VirtAddr::try_new(rbp as u64) {
+                if let Ok(_rip_rbp_virt) = x86_64::VirtAddr::try_new(rip_rbp as u64) {
+                    // TODO: check that rbp, rip_rbp are canonical and map to an addr
+                    let rip = *(rip_rbp as *const usize);
+                    if rip == 0 {
+                        log::error!(" {:>016X}: EMPTY RETURN", rbp);
+                        break;
+                    }
+                    log::error!("  {:>016X}: {:>016X}", rbp, rip);
+                    rbp = *(rbp as *const usize);
+                    // TODO: resolve symbol by rip if the symbol map is available
+                } else {
+                    log::error!("  {:>016X}: GP", rip_rbp);
+                    break;
+                }
+            } else {
+                log::error!("  {:>016X}: GUARD PAGE", rbp);
+                break;
+            }
+        }
+    }
+    log::error!("TRACE OVER");
 }
 
 // Static assert assumptions

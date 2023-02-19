@@ -6,8 +6,9 @@
   "target-c-int-width": "32",
   "arch": "x86_64",
   "os": "none",
-  "linker": "ld.lld",
-  "linker-flavor": "ld",
+  "executables": true,
+  "linker-flavor": "ld.lld",
+  "linker": "rust-lld",
   "features": "-mmx,-sse,+soft-float",
   "disable-redzone": true,
   "panic-strategy": "abort"

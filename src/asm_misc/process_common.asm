@@ -1,6 +1,6 @@
 ; Process trampoline, available from both kernel and process page tables
 
-%include "src/asm_routines/constants.asm"
+%include "build/constants.asm"
 
 [BITS 64]
 [ORG 0x200000]

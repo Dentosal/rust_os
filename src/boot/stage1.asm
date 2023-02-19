@@ -1,7 +1,7 @@
 ; RUSTOS LOADER
 ; STAGE 1
 
-%include "src/asm_routines/constants.asm"
+%include "build/constants.asm"
 
 [BITS 32]
 [ORG 0x7e00]

@@ -10,19 +10,24 @@ SECTIONS {
     as that is the correct huge-page boundary alignment.
     */
 
-    .text : ALIGN(0x200000) {
+    . = ALIGN(0x200000);
+    .text : {
         *(.text .text.*)
     }
 
-    .rodata : ALIGN(0x200000) {
+    . = ALIGN(0x200000);
+    .rodata : {
         KEEP(*(.rodata .rodata.*))
     }
 
-    .data : ALIGN(0x200000) {
+    . = ALIGN(0x200000);
+    .bss (NOLOAD) : {
+        *(.bss .bss.*)
+    }
+
+    . = ALIGN(0x200000);
+    .data : {
         *(.data .data.*)
     }
 
-    .bss : ALIGN(0x200000) {
-        *(.bss .bss.*)
-    }
 }

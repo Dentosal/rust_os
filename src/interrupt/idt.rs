@@ -1,7 +1,7 @@
 use x86_64::PrivilegeLevel::{self, Ring0};
 use x86_64::VirtAddr;
 
-// These constants MUST have defined with same values as those in src/asm_routines/constants.asm
+// These constants MUST have defined with same values as those in build/constants.asm
 // They also MUST match the ones in plan.md
 // If a constant defined here doesn't exists in that file, then it's also fine
 const GDT_SELECTOR_CODE: u16 = 0x08;

@@ -1,7 +1,7 @@
 ; MASTER BOOT RECORD
 ; STAGE 0
 
-%include "src/asm_routines/constants.asm"
+%include "build/constants.asm"
 
 ; locate stage1 at 0x7e00->
 %define stage1_loadpoint 0x7e00

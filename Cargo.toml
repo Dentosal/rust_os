@@ -8,9 +8,6 @@ edition = "2018"
 # https://doc.rust-lang.org/nightly/cargo/reference/features.html#feature-resolver-version-2
 resolver = "2"
 
-[lib]
-crate-type = ["staticlib"]
-
 [profile.dev]
 panic = "abort"
 

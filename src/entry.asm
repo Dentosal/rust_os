@@ -1,15 +1,15 @@
 [BITS 64]
 
-%include "src/asm_routines/constants.asm"
+%include "build/constants.asm"
 
-global start
+global _start
 global endlabel
 extern rust_main
 extern rust_ap_get_stack
 extern rust_ap_main
 
 section .entry
-start:
+_start:
     ; clear segment registers
     xor ax, ax
     mov ss, ax

@@ -55,7 +55,6 @@ CREATE_DIRS = [
     ROOT_DIR / "build",
     ROOT_DIR / "build/boot",
     ROOT_DIR / "build/modules",
-    ROOT_DIR / "build/asm_routines",
 ]
 
 CCGEN_FILES = sort_paths(dir_files(ROOT_DIR / "build_config/constants/", ".toml", True))
@@ -99,10 +98,7 @@ def cmd_stripped_copy(original: Path, stripped: Path) -> Command:
     return Rule(
         "strip",
         description=f"strip {original.stem} to {stripped}",
-        command=[
-            f"cp {original} {stripped}",
-            f"strip {stripped}",
-        ],
+        command=[f"strip {original} -o {stripped}"],
         outputs=[stripped],
     ).extend_to_command(inputs=[original])
 
@@ -136,20 +132,40 @@ def cmd_cargo_bin(pdir: Path, binary: str) -> Command:
     ).extend_to_command()
 
 
-def cmd_cargo_cross(
+def cmd_cargo_cross_bin(
     pdir: Path, target_json: Path, features: Optional[str] = None
 ) -> Command:
     with (pdir / "Cargo.toml").open("r") as f:
         cratename = toml.load(f)["package"]["name"]
 
     return Rule(
-        "cargo_cross",
+        "cargo_cross_bin",
+        description=f"Invoke cargo in cross-compiler mode for {pdir.stem or 'kernel'}",
+        outputs=[pdir / "target" / target_json.stem / "release" / cratename],
+        command=[
+            f"cd {pdir.resolve(strict=True)}",
+            f"cargo build --target {target_json.resolve(strict=True)} --color=always --release"
+            + " -Z build-std=core,alloc  -Z build-std-features=compiler-builtins-mem"
+            + (f" --features {features}" if features else ""),
+            "cd -",
+        ],
+        depfile=pdir / f"target/{target_json.stem}/release/{cratename}.d",
+    ).extend_to_command()
+
+
+def cmd_cargo_cross_lib(
+    pdir: Path, target_json: Path, features: Optional[str] = None
+) -> Command:
+    with (pdir / "Cargo.toml").open("r") as f:
+        cratename = toml.load(f)["package"]["name"]
+
+    return Rule(
+        "cargo_cross_lib",
         description=f"Invoke cargo in cross-compiler mode for {pdir.stem or 'kernel'}",
         outputs=[pdir / "target" / target_json.stem / "release" / f"lib{cratename}.a"],
         command=[
             f"cd {pdir.resolve(strict=True)}",
-            "RUSFLAGS='-g -C opt-level=2'"
-            + f" cargo build --target {target_json.resolve(strict=True)} --color=always --release"
+            f"cargo build --target {target_json.resolve(strict=True)} --color=always --release"
             + " -Z build-std=core,alloc  -Z build-std-features=compiler-builtins-mem"
             + (f" --features {features}" if features else ""),
             "cd -",
@@ -202,7 +218,7 @@ with open(OUTPUT_FILE, "w") as f:
                     [
                         str(ROOT_DIR / "libs/d7initrd/target/debug/mkimg"),
                         str(files.DISK_IMG),
-                        "$$(python -c 'import os; print(os.stat(\""
+                        "$$(python3 -c 'import os; print(os.stat(\""
                         + str(files.KERNEL_STRIPPED)
                         + '").st_size // 0x200 + 8)'
                         "')",
@@ -261,7 +277,7 @@ with open(OUTPUT_FILE, "w") as f:
     )
 
     w.command(
-        cmd_cargo_cross(
+        cmd_cargo_cross_lib(
             pdir=ROOT_DIR / "libs/d7boot/",
             target_json=ROOT_DIR / "d7os.json",
         )
@@ -326,43 +342,21 @@ with open(OUTPUT_FILE, "w") as f:
         ).add_input(ROOT_DIR / "build/constants.asm")
     )
 
-    asm_routines = []
-    for path in dir_files(ROOT_DIR / "src/asm_routines", ".asm"):
-        w.command(
-            cmd_nasm(
-                format="elf64",
-                output=ROOT_DIR / "build/asm_routines" / (path.stem + ".o"),
-                inputs=[path],
-            ).add_input(ROOT_DIR / "build/constants.asm")
-        )
-        asm_routines.append(ROOT_DIR / "build/asm_routines" / (path.stem + ".o"))
-
-    w.command(
-        cmd_linker(
-            linker_script=files.KERNEL_LINKER_SCRIPT,
-            output=files.KERNEL_ORIGINAL,
-            inputs=[
-                ROOT_DIR / "build/kernel_entry.o",
-                ROOT_DIR / "target/d7os/release/libd7os.a",
-            ]
-            + asm_routines,
-        )
-    )
-
     # Kernel
     w.command(
-        cmd_cargo_cross(
+        cmd_cargo_cross_bin(
             pdir=ROOT_DIR,
             target_json=ROOT_DIR / "d7os.json",
             features=KERNEL_FEATURES,
         )
         .add_input(ROOT_DIR / "build/constants.rs")
         .add_input(ROOT_DIR / "build/smp_ap_startup.bin")
+        .add_input(ROOT_DIR / "build/kernel_entry.o")
     )
 
     w.command(
         cmd_stripped_copy(
-            files.KERNEL_ORIGINAL,
+            ROOT_DIR / "target/d7os/release/d7os",
             files.KERNEL_STRIPPED,
         )
     )
@@ -382,7 +376,9 @@ with open(OUTPUT_FILE, "w") as f:
         w.comment(f"Module {cratename} at {path}")
 
         w.command(
-            cmd_cargo_cross(pdir=path, target_json=ROOT_DIR / "libs/d7abi/d7abi.json")
+            cmd_cargo_cross_lib(
+                pdir=path, target_json=ROOT_DIR / "libs/d7abi/d7abi.json"
+            )
         )
 
         w.command(

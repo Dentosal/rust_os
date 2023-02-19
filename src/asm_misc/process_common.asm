@@ -101,7 +101,7 @@ switch_to:
 ; 2. Call the process interrupt handler
 ; 3. Switch back to process page tables and stack
 process_interrupt:
-.table_start:
+.table_start:       ; Keep in sync with write_process_dts
     %rep 0x100
     call .common    ; Each call is 5 bytes
     %endrep

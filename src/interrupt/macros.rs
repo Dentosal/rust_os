@@ -49,27 +49,31 @@ macro_rules! asm_restore_scratch_registers {
 // (p4_physical_address, stack_pointer)
 // If no switch should be done then function must return `(0, 0)`.
 macro_rules! irq_handler_switch {
-    ($name:ident, $ist:expr) => {{
+    ($name:ident, $ist:expr, $arg:expr) => {{
         use crate::memory::process_common_code::COMMON_ADDRESS_VIRT;
 
         #[naked]
         unsafe extern "sysv64" fn wrapper(_: &mut InterruptStackFrame) {
             ::core::arch::asm!(concat!(
                     asm_save_scratch_registers!(), "
-                    push rcx            // Save COMMON_ADDRESS_VIRT
-                    //sub rsp, 8        // Align the stack pointer
-                    call {handler}      // Call the exception handler
-                    //add rsp, 8        // Undo stack pointer alignment
-                    pop rcx             // Restore COMMON_ADDRESS_VIRT
-                    test rax, rax       // Check whether a process switch is required
-                    jz .noswitch        // Jump to process switch routine, if required
-                    mov rcx, [{cav}]    // Get procedure offset
-                    jmp rcx             // Jump into the procedure
-                    .noswitch:",
+                    push rcx                // Save COMMON_ADDRESS_VIRT
+                    push rdi                // Save rdi
+                    sub rsp, 8              // Align the stack pointer
+                    mov rdi, {arg}          // Pass the argument to the handler
+                    call {handler}          // Call the exception handler
+                    add rsp, 8              // Undo stack pointer alignment
+                    pop rdi                 // Restore rdi
+                    pop rcx                 // Restore COMMON_ADDRESS_VIRT
+                    test rax, rax           // Check whether a process switch is required
+                    jz .noswitch_", $arg, " // Jump to process switch routine, if required
+                    mov rcx, [{cav}]        // Get procedure offset
+                    jmp rcx                 // Jump into the procedure
+                    .noswitch_", $arg, ":",
                     asm_restore_scratch_registers!(),
                     "iretq"
                 ),
                 handler = sym $name,
+                arg = const $arg,
                 cav = const COMMON_ADDRESS_VIRT,
                 options(noreturn)
             );

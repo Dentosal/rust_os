@@ -99,7 +99,7 @@ pub(super) unsafe fn exception_snp(stack_frame: &InterruptStackFrame, error_code
 }
 
 /// LAPIC TSC-deadline timer ticked
-pub(super) unsafe extern "sysv64" fn exception_tsc_deadline() -> u128 {
+pub(super) unsafe extern "sysv64" fn exception_tsc_deadline(_: u64) -> u128 {
     // Interrupt timing
     crate::random::insert_entropy(0);
 
@@ -210,11 +210,30 @@ pub(super) unsafe fn exception_irq15() {
     }
 }
 
-pub(super) unsafe fn irq_dynamic(interrupt: u8) {
-    let mut sched = SCHEDULER.try_lock().unwrap();
-    let irq = interrupt - 0x30;
-    crate::ipc::kernel_publish(&mut sched, &format!("irq/{}", irq), &());
-    crate::driver::ioapic::lapic::write_eoi();
+pub(super) unsafe extern "sysv64" fn irq_dynamic(interrupt: u64) -> u128 {
+    let interrupt = interrupt as u8;
+
+    let next_process = {
+        let mut sched = SCHEDULER.try_lock().unwrap();
+        let irq = interrupt - 0x30;
+        crate::ipc::kernel_publish(&mut sched, &format!("irq/{}", irq), &());
+        crate::driver::ioapic::lapic::write_eoi();
+
+        sched.switch_current_or_next()
+    };
+
+    log::trace!("irq_dynamic: Switching to {:?}", next_process);
+    match next_process {
+        ProcessSwitch::Continue | ProcessSwitch::Idle => 0,
+        ProcessSwitch::Switch(process) => return_process(process),
+        ProcessSwitch::RepeatSyscall(process) => {
+            if let Some(inner_process) = handle_repeat_syscall(process) {
+                return_process(inner_process)
+            } else {
+                0
+            }
+        },
+    }
 }
 
 /// Some other core paniced, stopping the system
@@ -226,7 +245,7 @@ pub(super) unsafe fn ipi_panic(_: &InterruptStackFrame) {
     }
 }
 
-/// Interrupt from a process
+/// Interrupt while a process tables were active
 /// Called from `src/asm_misc/process_common.asm`, process_interrupt
 /// Input registers:
 /// * `rax` Interrupt vector number
@@ -310,6 +329,7 @@ unsafe extern "C" fn process_interrupt_inner(
     if interrupt != 0xd7 && interrupt != 0xd8 && interrupt != 0x3e {
         log::debug!("Handling interrupt {:#02x} while in process", interrupt);
     }
+    log::trace!("Interrupt {:#02x}", interrupt);
 
     match interrupt {
         0xd7 => {
@@ -343,6 +363,7 @@ unsafe extern "C" fn process_interrupt_inner(
                 let switch_target = {
                     let mut sched = SCHEDULER.try_lock().expect("SCHEDUELR LOCKED");
                     let target = sched.tick();
+                    log::trace!("TSC_DEADLINE tick => {target:?}");
                     if let Some(deadline) = sched.next_tick() {
                         crate::smp::sleep::set_deadline(deadline).expect("TODO: Deadline too soon");
                     }
@@ -377,6 +398,7 @@ unsafe extern "C" fn process_interrupt_inner(
             let irq = interrupt - 0x30;
             crate::ipc::kernel_publish(&mut sched, &format!("irq/{}", irq), &());
             crate::driver::ioapic::lapic::write_eoi();
+            handle_switch!(sched.switch_current_or_next());
         },
         0x00 => fail(pid, process::Error::DivideByZero(stack_frame)),
         0x0e => {
@@ -476,6 +498,7 @@ fn immediate_switch_to(process: ProcessSwitchInfo) -> ! {
 #[must_use]
 unsafe fn handle_repeat_syscall(p: ProcessSwitchInfo) -> Option<ProcessSwitchInfo> {
     use crate::syscall::{handle_syscall, SyscallResult, SyscallResultAction};
+    log::trace!("handle_repeat_syscall {p:?}");
     match handle_syscall(p.pid) {
         SyscallResultAction::Terminate(status) => terminate(p.pid, status),
         SyscallResultAction::Continue => Some(p),

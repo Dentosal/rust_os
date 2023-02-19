@@ -163,7 +163,7 @@ impl Scheduler {
             if is_current {
                 self.switch(None)
             } else {
-                self.switch_current()
+                self.switch_current_or_next()
             }
         }
     }
@@ -213,10 +213,15 @@ impl Scheduler {
         }
     }
 
-    /// Prepare switch to the current process if any.
+    /// Prepare a "switch" to the current te process, if any.
+    /// If no process is currently running, the next process queued to run
+    /// is activated instead. If there is no active processes, simply idles.
     /// This is used when a concrete switch to current process is required.
-    /// If there is no active process, simply idles.
-    pub unsafe fn switch_current(&mut self) -> ProcessSwitch {
+    pub unsafe fn switch_current_or_next(&mut self) -> ProcessSwitch {
+        if self.running.is_none() {
+            self.running = self.queues.take();
+        }
+
         if let Some(pid) = self.running {
             let process = self
                 .processes

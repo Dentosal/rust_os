@@ -2,17 +2,12 @@
 #![feature(allocator_api)]
 #![deny(unused_must_use)]
 
-#[macro_use]
 extern crate alloc;
-
-#[macro_use]
 extern crate libd7;
 
-use alloc::vec::Vec;
 use core::arch::asm;
-use hashbrown::HashMap;
 
-use libd7::{ipc, process::ProcessId, select, syscall};
+use libd7::{ipc, select, syscall};
 
 mod keyboard;
 mod state;

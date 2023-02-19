@@ -17,7 +17,6 @@
 #![feature(trait_alias, type_alias_impl_trait)]
 #![feature(stmt_expr_attributes)]
 #![feature(never_type)]
-#![feature(let_else)]
 #![feature(int_roundings)]
 
 mod allocator;
@@ -51,15 +50,18 @@ use log::{Level, LevelFilter, Metadata, Record};
 
 struct SimpleLogger;
 
+const LOG_LEVEL: Level = Level::Debug;
+
 impl log::Log for SimpleLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
-        metadata.level() <= Level::Trace
+        metadata.level() <= LOG_LEVEL
     }
 
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
             let t = record.target();
             let target_module = t.split_once("::").map(|(a, _)| a).unwrap_or(t);
+
             println!(
                 "{:20} {} - {}",
                 target_module,

@@ -1,10 +1,6 @@
-use alloc::collections::VecDeque;
 use cpuio::UnsafePort;
 
-use libd7::{
-    ipc::{self, protocol::keyboard::KeyboardEvent},
-    syscall,
-};
+use libd7::ipc::protocol::keyboard::KeyboardEvent;
 
 use crate::state::KeyboardState;
 
@@ -16,10 +12,6 @@ pub fn io_wait() {
 const PS2_DATA: u16 = 0x60; // rw
 const PS2_STATUS: u16 = 0x64; // r-
 const PS2_COMMAND: u16 = 0x64; // -w
-
-// PIC commands
-const PIC_CMD_EOI: u8 = 0x20;
-const PIC_CMD_INIT: u8 = 0x11;
 
 // Sensible timeout
 const IO_WAIT_TIMEOUT: usize = 1000;

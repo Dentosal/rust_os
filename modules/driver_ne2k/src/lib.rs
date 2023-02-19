@@ -1,6 +1,6 @@
 #![no_std]
 #![feature(allocator_api)]
-#![feature(no_more_cas)]
+#![allow(dead_code)]
 #![deny(unused_must_use)]
 
 #[macro_use]
@@ -10,10 +10,9 @@ extern crate alloc;
 extern crate libd7;
 
 use alloc::vec::Vec;
-use hashbrown::HashMap;
 
 use libd7::net::d7net::MacAddr;
-use libd7::{ipc, process::ProcessId, select, syscall};
+use libd7::{ipc, select, syscall};
 
 mod ne2k;
 
@@ -51,7 +50,7 @@ fn main() -> ! {
     // Inform serviced that we are running.
     libd7::service::register("driver_ne2k", false);
 
-    println!("rtl Ready");
+    println!("ne2k Ready");
 
     loop {
         select! {

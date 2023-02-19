@@ -232,6 +232,13 @@ impl RTL8139 {
             // Turn on multicast
             r_mar0.write(0xffffffff);
             r_mar4.write(0xffffffff);
+            // FIXME: for some reason the line above, specifically mar4, gives
+            // the following error on Qemu:
+            // > Misaligned i/o to address 00000012 with size 4 for memory region rtl8139
+            // For some reason, I wan't able to find this text from Qemu source.
+            // Other drivers seem to be doing this as well, for instance Linux and u-boot
+            // https://github.com/TritonDataCenter/syslinux/blob/master/gpxe/src/drivers/net/rtl8139.c#L346
+            // https://elixir.bootlin.com/u-boot/latest/source/drivers/net/rtl8139.c#L299
 
             // Enable rx/tx
             r_command.write(command::RX_ENABLE | command::TX_ENABLE);

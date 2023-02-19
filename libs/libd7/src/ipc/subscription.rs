@@ -105,7 +105,7 @@ impl<T: DeserializeOwned> ReliableSubscription<T> {
             sub_id: self.id,
             ack_id: msg.ack_id,
         };
-        let data: T = pinecone::from_bytes(&msg.data).expect("Invalid message");
+        let data: T = pinecone::from_bytes(&msg.data).expect("Invalid message payload");
         Ok((ack_ctx, data, msg.topic))
     }
 
@@ -170,7 +170,7 @@ impl Drop for AcknowledgeContext {
     /// if not manually acknowledged
     fn drop(&mut self) {
         if let Some(ack_id) = self.ack_id {
-            log::trace!("Dropped AckCtx NACK");
+            log::debug!("Dropped AckCtx NACK");
             syscall::ipc_acknowledge(self.sub_id, ack_id, false)
                 .expect("Failed to negative-acknowledge in drop");
         }

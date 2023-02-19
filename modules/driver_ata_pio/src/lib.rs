@@ -5,13 +5,11 @@
 #[macro_use]
 extern crate alloc;
 
-#[macro_use]
 extern crate libd7;
 
 use alloc::vec::Vec;
-use hashbrown::HashMap;
 use libd7::ipc::InternalSubscription;
-use libd7::{ipc, select, syscall};
+use libd7::{ipc, select};
 
 mod ata_pio;
 

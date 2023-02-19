@@ -1,6 +1,6 @@
 #![no_std]
 #![feature(allocator_api)]
-#![feature(no_more_cas)]
+#![allow(unused_imports, dead_code)]
 #![deny(unused_must_use)]
 
 #[macro_use]
@@ -54,7 +54,6 @@ fn main() -> ! {
                 println!("rtl: IRQ NOTIFY");
                 let received_packets = device.notify_irq();
                 for packet in received_packets {
-                    let s = alloc::string::String::from_utf8_lossy(&packet);
                     ipc::deliver("netd/received", &packet).unwrap();
                 }
             },

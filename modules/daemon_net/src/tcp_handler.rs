@@ -265,15 +265,18 @@ impl TcpHandler {
 
         log::trace!("User request (socket={:?}): {:?}", socket_id, request);
 
-        self.user_socket_event_inner(socket_id, request, reply_ctx);
+        let check_events = self.user_socket_event_inner(socket_id, request, reply_ctx);
 
-        self.process_events(socket_id);
+        if check_events {
+            self.process_events(socket_id);
+        }
     }
 
+    #[must_use = "Event processing"]
     fn user_socket_event_inner(
         &mut self, socket_id: SocketId, request: Request,
         reply_ctx: ipc::ReplyCtx<Result<Reply, Error>>,
-    ) {
+    ) -> bool {
         let mut accepted_new_socket = None;
 
         let reply = {
@@ -291,13 +294,24 @@ impl TcpHandler {
                         reply_ctx
                             .reply(Err(err.into()))
                             .expect("TODO: disconnected");
-                        return;
+                        return true;
                     },
                 }
             }
 
+            log::debug!("User request {:?}", &request);
+
             match request.clone() {
-                Request::Remove => todo!(),
+                Request::Remove => {
+                    let mut s = self
+                        .sockets
+                        .remove(&socket_id)
+                        .expect("Socket has been removed incorrectly");
+                    let _ = self.bindings.drain_filter(|_, b| *b == socket_id);
+                    let r = s.call_abort().map(|()| Reply::NoData).map_err(|e| e.into());
+                    let _ = reply_ctx.reply(r); // Ignore client errors after remove
+                    return false;
+                },
                 Request::Accept => {
                     match socket.call_accept(|parent| SocketData {
                         handler: new_user_handler(),
@@ -376,6 +390,8 @@ impl TcpHandler {
                     .expect("TODO: handle disconnection(?)");
             },
         }
+
+        true
     }
 
     fn socket_for(&self, mut binding: Binding) -> Option<SocketId> {
@@ -428,7 +444,7 @@ impl TcpHandler {
             log::warn!("No TCP handlers assigned for {}:{}", ip_header.dst_ip, tcp_segment.header.dst_port);
             log::trace!("Bindings {:?}", self.bindings);
             if let Some(reply) = tcp::state::response_to_closed(seg) {
-                todo!("RR {:?}", reply);
+                // TODO: send reply
             }
             return;
         };
@@ -483,7 +499,8 @@ impl TcpHandler {
                             })
                             .expect("TODO: disconnection");
                     } else {
-                        self.user_socket_event_inner(socket_id, request, reply_ctx);
+                        // There is never need to check_events after retry
+                        let _ = self.user_socket_event_inner(socket_id, request, reply_ctx);
                     }
                 },
                 SuspendMode::Continue => {

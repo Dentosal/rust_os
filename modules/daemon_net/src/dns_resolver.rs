@@ -17,7 +17,7 @@ pub type Answer = Result<Vec<dns::QueryResult>, dns::NxDomain>;
 
 pub struct DnsResolver {
     servers: Vec<IpAddr>,
-    /// TODO: cache
+    /// TODO: cache?
     /// TODO: timeout and retrying
     pending_requests: Vec<(u16, Query, ipc::ReplyCtx<Answer>)>,
 }
@@ -63,6 +63,7 @@ impl DnsResolver {
                 self.pending_requests.push((req_id, query, rctx));
             },
             Err(SendError) => {
+                log::warn!("Send failed");
                 let _ = rctx.nack(); // Ignore caller errors
             },
         }

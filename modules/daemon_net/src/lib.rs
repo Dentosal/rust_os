@@ -5,7 +5,7 @@
 //! TOOD: offer APIs to query interfaces
 
 #![no_std]
-#![feature(let_else, drain_filter)]
+#![feature(drain_filter)]
 #![deny(unused_must_use)]
 
 #[macro_use]

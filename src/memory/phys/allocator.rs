@@ -83,10 +83,9 @@ pub fn allocate(layout: Layout) -> Result<Allocation, OutOfMemory> {
     log::trace!("Allocate {:?}", layout);
     let guard = PHYS_ALLOCATOR.lock();
     let inner = unsafe { guard.assume_init_ref() };
-    Ok(_to_allocation(
-        undo_offset(inner.allocate(layout).map_err(|_| OutOfMemory)?),
-        layout,
-    ))
+    let ia = inner.allocate(layout).map_err(|_| OutOfMemory)?;
+    log::trace!("Allocated at {:p} {:?}", ia, layout);
+    Ok(_to_allocation(undo_offset(ia), layout))
 }
 
 pub fn allocate_zeroed(layout: Layout) -> Result<Allocation, OutOfMemory> {
@@ -94,6 +93,7 @@ pub fn allocate_zeroed(layout: Layout) -> Result<Allocation, OutOfMemory> {
     let guard = PHYS_ALLOCATOR.lock();
     let inner = unsafe { guard.assume_init_ref() };
     let ia = inner.allocate_zeroed(layout).map_err(|_| OutOfMemory)?;
+    log::trace!("Allocated at {:p} {:?}", ia, layout);
     Ok(_to_allocation(undo_offset(ia), layout))
 }
 

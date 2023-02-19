@@ -289,6 +289,7 @@ unsafe extern "C" fn process_interrupt_inner(
 
     macro_rules! handle_switch {
         ($next_process:expr) => {{
+            log::trace!("Switching to {:?}", $next_process);
             match $next_process {
                 ProcessSwitch::Continue => {},
                 ProcessSwitch::Idle => {
@@ -412,6 +413,12 @@ fn terminate(pid: ProcessId, result: process::ProcessResult) -> ! {
         let mut sched = SCHEDULER.try_lock().expect("Sched unlock");
         sched.terminate_and_switch(pid, result)
     };
+
+    log::debug!(
+        "Switching to {:?} after {} did terminate",
+        next_process,
+        pid
+    );
 
     match next_process {
         ProcessSwitch::Continue => unreachable!(),

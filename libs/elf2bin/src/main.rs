@@ -3,7 +3,6 @@
 #![deny(unused_assignments)]
 // Safety
 #![deny(overflowing_literals)]
-#![deny(unaligned_references)]
 #![deny(unused_must_use)]
 // Clippy
 #![warn(clippy::all)]

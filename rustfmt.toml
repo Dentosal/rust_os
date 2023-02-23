@@ -5,4 +5,4 @@ use_field_init_shorthand = true
 where_single_line = true
 use_try_shorthand = true
 overflow_delimited_expr = true
-fn_args_layout = "Compressed"
+fn_params_layout = "Compressed"

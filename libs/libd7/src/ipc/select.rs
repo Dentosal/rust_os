@@ -13,7 +13,7 @@ macro_rules! select_inner {
             $(subs.push($sub.sub_id());)*
             $(subs.extend($any.iter().map(|v| v.sub_id()));)*
             match $crate::syscall::ipc_select(&subs, $nonblocking) {
-                Ok(index) => 'select: loop { // TODO: remove "loop" when block labels are stabilized
+                Ok(index) => 'select: {
                     let mut i = 0;
                     $(
                         if index == i {

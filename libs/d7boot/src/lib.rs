@@ -8,7 +8,6 @@
 #![cfg_attr(not(test), no_std)]
 // Safety
 #![deny(overflowing_literals)]
-#![deny(unaligned_references)]
 #![deny(unused_must_use)]
 // Unstable features
 #![feature(lang_items)]

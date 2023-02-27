@@ -79,7 +79,8 @@ pub fn write_u32(offset: reg::LapicReg, value: u32) {
 
 /// Get APIC ID of the current CPU
 pub fn processor_id() -> ProcessorId {
-    ProcessorId((read_u32(reg::LAPIC_ID) >> 24) as u8)
+    let raw_id = (read_u32(reg::LAPIC_ID) >> 24) as u8;
+    unsafe { ProcessorId::new(raw_id) }
 }
 
 /// Tell LAPIC that the interrupt has been processed

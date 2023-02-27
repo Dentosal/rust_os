@@ -3,7 +3,7 @@ use alloc::string::String;
 use hashbrown::{HashMap, HashSet};
 
 use crate::multitasking::ProcessId;
-use crate::time::BSPInstant;
+use crate::time::TscInstant;
 
 use super::{ExplicitEventId, WaitFor};
 
@@ -37,7 +37,7 @@ pub struct Queues {
     /// Processes which are sleeping until specified time
     /// Must be kept sorted by the wake-up time
     /// TODO: Switch to a proper priority queue for faster insert time
-    wait_sleeping: VecDeque<(BSPInstant, WaitId)>,
+    wait_sleeping: VecDeque<(TscInstant, WaitId)>,
     /// Waiting for a process to complete.
     wait_process: HashMap<ProcessId, HashSet<WaitId>>,
     /// Waiting for an explict event
@@ -132,8 +132,13 @@ impl Queues {
         self.running.pop_front()
     }
 
+    /// The amount of available to run right now
+    pub fn ready_count(&self) -> usize {
+        self.running.len()
+    }
+
     /// Update when clock ticks
-    pub fn on_tick(&mut self, now: &BSPInstant) {
+    pub fn on_tick(&mut self, now: &TscInstant) {
         while let Some((wakeup, _)) = self.wait_sleeping.front() {
             if now >= wakeup {
                 let (_, wait_id) = self.wait_sleeping.pop_front().unwrap();
@@ -145,7 +150,7 @@ impl Queues {
     }
 
     /// Next process wakeup from sleep
-    pub fn next_wakeup(&self) -> Option<BSPInstant> {
+    pub fn next_wakeup(&self) -> Option<TscInstant> {
         self.wait_sleeping.front().map(|(time, _)| *time)
     }
 

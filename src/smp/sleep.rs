@@ -1,7 +1,7 @@
 use core::arch::asm;
 use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
-use crate::time::BSPInstant;
+use crate::time::TscInstant;
 
 use crate::driver::ioapic::lapic;
 use crate::driver::pit;
@@ -73,8 +73,8 @@ pub fn lapic_freq_hz() -> u64 {
 pub struct AlreadyExpired;
 
 #[must_use]
-pub fn set_deadline(instant: BSPInstant) -> Result<(), AlreadyExpired> {
-    let now = BSPInstant::now();
+pub fn set_deadline(instant: TscInstant) -> Result<(), AlreadyExpired> {
+    let now = TscInstant::now();
     log::trace!("Setting sleep deadline to {:?} (now={:?}", instant, now);
     if crate::cpuid::tsc_supports_deadline_mode() {
         tsc::set_deadline(instant.tsc_value());
@@ -99,13 +99,13 @@ pub fn clear_deadline() {
 }
 
 /// Interrupts must be disabled before calling this
-pub fn sleep_until(deadline: BSPInstant) {
+pub fn sleep_until(deadline: TscInstant) {
     let r = set_deadline(deadline);
     if r == Err(AlreadyExpired) {
         return;
     }
     unsafe {
-        while BSPInstant::now() < deadline {
+        while TscInstant::now() < deadline {
             // This hlt is executed before the first interrupt is processed.
             // Other exceptions are processed during the sleep as well.
             // The processor wakes up from hlt on every interrupt, and
@@ -119,7 +119,7 @@ pub fn sleep_until(deadline: BSPInstant) {
 
 /// Interrupts must be disabled before calling this
 pub fn sleep_ns(ns: u64) {
-    sleep_until(BSPInstant::now().add_ticks(crate::smp::sleep::ns_to_ticks(ns)));
+    sleep_until(TscInstant::now().add_ticks(crate::smp::sleep::ns_to_ticks(ns)));
 }
 
 fn measure_with_pit() {

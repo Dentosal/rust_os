@@ -207,14 +207,17 @@ pub fn ipc_select(sub_ids: &[SubscriptionId], nonblocking: bool) -> SyscallResul
         panic!("Cannot ipc_select from an empty list");
     }
 
-    unsafe {
+    log::debug!("ipc_select {sub_ids:?} {nonblocking}");
+    let x = unsafe {
         Ok(syscall!(
             SyscallNumber::ipc_select;
             sub_ids.len() as u64,
             sub_ids.as_ptr() as u64,
             nonblocking as u64
         )? as usize)
-    }
+    };
+    log::debug!("ipc_select => {x:?}");
+    x
 }
 
 /// Read (and clear) kernel log buffer. Nonblocking.

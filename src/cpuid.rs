@@ -151,6 +151,7 @@ fn run_feature_checks() {
     if !tsc_invariant {
         log::warn!("CPUID: invariant TSC not supported");
     }
+    // We still pretend that the TSC is invariant, because that makes things way easier
 }
 
 pub fn tsc_supports_deadline_mode() -> bool {

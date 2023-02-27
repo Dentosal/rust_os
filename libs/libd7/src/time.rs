@@ -14,35 +14,27 @@ impl Instant {
     pub fn now() -> Instant {
         let rdx: u64;
         let rax: u64;
-        let tsc_offset: u64;
         unsafe {
-            // Read TSC value and processor_id
+            // Read TSC value
             let rcx: u64;
             asm!(
                 "rdtscp",
                 out("rdx") rdx,
                 out("rax") rax,
-                out("rcx") rcx,
+                out("rcx") _,
                 options(nomem, nostack)
             );
-            // Retrieve info is for the cpu that gave us the timestamp,
-            // even if a process switch occurs during this function.
-            tsc_offset = d7abi::processor_info::read(rcx as u32).tsc_offset;
         }
 
         let tsc_timestamp = (rdx << 32) | (rax & 0xffff_ffff);
-        Self(tsc_timestamp.wrapping_add(tsc_offset))
+        log::debug!("tsc_timestamp = {}", tsc_timestamp);
+        Self(tsc_timestamp)
     }
 
-    /// Returns current frequency in Hz. Process switch can occur
-    /// immediately after this operation making the result somewhat invalid.
-    /// However, this is not currently a big issue since:
-    /// * Process switches are relatively rare
-    /// * All CPU cores likely have same TSC frequency anyway.
-    /// * We do no support multi-socket systems yet.
+    /// Reads TSC frequency in Hz. All CPU core TSCs are synchronized.
     fn freq_hz() -> u64 {
         // Safety: Safe, this is in userspace
-        unsafe { d7abi::processor_info::read_current().tsc_freq_hz }
+        unsafe { d7abi::process::ConstInfo::read().tsc_freq_hz }
     }
 
     #[inline]

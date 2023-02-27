@@ -123,9 +123,8 @@ pub extern "C" fn rust_main() -> ! {
     // Hand over to the process scheduler
     multitasking::SCHEDULER_ENABLED.store(true, Ordering::SeqCst);
     unsafe {
-        asm!("int 0xd8");
-    }
-    panic!("Returned from the scheduler");
+        asm!("int 0xd8", options(noreturn));
+    };
 }
 
 /// Used by new AP core for setting up a stack
@@ -151,10 +150,12 @@ pub extern "C" fn rust_ap_main() -> ! {
     smp::ap_mark_ready();
     log::info!("AP core {} ready", processor_id);
 
-    log::trace!("INTO @ {}", self::driver::ioapic::lapic::processor_id());
-    loop {
-        crate::smp::sleep::sleep_ns(1_000_000_000);
-        // log::info!("TICK @ {}", self::driver::ioapic::lapic::processor_id());
+    // Halt until the scheduler takes over
+    unsafe {
+        asm!("sti");
+        loop {
+            asm!("hlt");
+        }
     }
 }
 
@@ -173,11 +174,11 @@ fn out_of_memory(_: Layout) -> ! {
     loop {}
 }
 
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{AtomicUsize, Ordering};
 
 /// Tracks wheter a panic is already active, so that
 /// if panic printing itself panics, it can be skipped
-static PANIC_ACTIVE: AtomicBool = AtomicBool::new(false);
+static PANIC_ACTIVE: AtomicUsize = AtomicUsize::new(0);
 
 core::arch::global_asm!(
     "
@@ -203,8 +204,8 @@ extern "C" fn panic(info: &PanicInfo) -> ! {
         asm!("cli");
         panic_indicator!(0x4f214f21); // !!
 
-        if !PANIC_ACTIVE.load(Ordering::SeqCst) {
-            PANIC_ACTIVE.store(true, Ordering::SeqCst);
+        let depth = PANIC_ACTIVE.fetch_add(1, Ordering::SeqCst);
+        if depth < 10 {
             panic_indicator!(0x4f234f21); // !#
 
             if let Some(location) = info.location() {

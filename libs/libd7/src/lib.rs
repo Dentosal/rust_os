@@ -34,6 +34,7 @@ pub mod time;
 use core::alloc::Layout;
 use core::arch::asm;
 use core::panic::PanicInfo;
+use core::sync::atomic::{AtomicBool, Ordering};
 
 pub use d7abi;
 pub use pinecone;
@@ -86,10 +87,18 @@ pub extern "C" fn _start() {
     self::syscall::exit(return_code);
 }
 
+/// Tracks wheter a panic is already active, so that
+/// if panic printing itself panics, it can be skipped
+static PANIC_ACTIVE: AtomicBool = AtomicBool::new(false);
+
 #[panic_handler]
 #[no_mangle]
 extern "C" fn panic(info: &PanicInfo) -> ! {
     use self::syscall::debug_print;
+
+    if PANIC_ACTIVE.fetch_or(true, Ordering::SeqCst) {
+        syscall::exit(2);
+    }
 
     let _ = debug_print("Panic! (attempting allocation to show error the message)");
 

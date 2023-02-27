@@ -1,4 +1,6 @@
 //! Symmetric multiprocessing synchronization
+//!
+//! TODO: many parts of the code assume that available cpus are numbered 0..n
 
 use alloc::vec::Vec;
 use core::fmt;
@@ -11,6 +13,7 @@ use crate::driver::ioapic;
 use crate::memory::{self, phys_to_virt};
 use crate::smp::sleep::tsc_freq_hz;
 
+pub mod command;
 pub mod data;
 pub mod sleep;
 
@@ -34,10 +37,20 @@ pub fn is_bsp() -> bool {
 /// Processor (ACPI) id
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[repr(transparent)]
-pub struct ProcessorId(pub u8);
+pub struct ProcessorId(u8);
 impl fmt::Display for ProcessorId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+impl ProcessorId {
+    /// Safety: the argument must be correct
+    pub unsafe fn new(raw: u8) -> Self {
+        Self(raw)
+    }
+
+    pub fn acpi_id(&self) -> u8 {
+        self.0
     }
 }
 
@@ -72,6 +85,9 @@ unsafe fn start_one(acpi_id: ProcessorId) {
     log::debug!("STACKSETUP {:x}", stack.top.as_u64());
 
     AP_FREE_STACK.store(stack.top.as_u64(), Ordering::SeqCst);
+    assert_eq!(AP_FREE_STACK.load(Ordering::SeqCst), stack.top.as_u64());
+
+    let count_before = AP_READY_COUNT.load(Ordering::SeqCst);
 
     // Senc init signal
     ioapic::apic_wakeup_processor(acpi_id.0);
@@ -82,9 +98,13 @@ unsafe fn start_one(acpi_id: ProcessorId) {
     let mut is_online = false;
     for _ in 0..50_000 {
         sleep::sleep_ns(200_000);
-        if AP_FREE_STACK.load(Ordering::SeqCst) == 0 {
+        let ready = AP_READY_COUNT.load(Ordering::SeqCst);
+        if count_before + 1 == ready {
+            assert_eq!(AP_FREE_STACK.load(Ordering::SeqCst), 0);
             is_online = true;
             break;
+        } else {
+            assert_eq!(count_before, ready);
         }
     }
     if !is_online {
@@ -120,41 +140,46 @@ pub fn start_all() {
     log::info!("All CPU cores ready");
 }
 
+pub fn available_cpu_count() -> usize {
+    let acpi_data = acpi::ACPI_DATA.poll().expect("acpi::init not called");
+    acpi_data.cpus.len()
+}
+
 /// Not to be used before start_all has been called.
-pub fn cpu_count() -> u64 {
+/// TODO: check for disabled CPUs
+pub fn iter_active_cpus() -> impl Iterator<Item = ProcessorId> {
+    (0..(active_cpu_count() as u8)).map(|i| ProcessorId(i))
+}
+
+/// Not to be used before start_all has been called.
+pub fn active_cpu_count() -> u64 {
     AP_READY_COUNT.load(Ordering::SeqCst)
 }
 
-fn init_processor_info() {
+fn init_const_process_info() {
     use crate::memory::process_common_code::PROCESS_IDT_PHYS_ADDR;
     use crate::memory::PROCESS_PROCESSOR_INFO_TABLE;
-    use d7abi::processor_info::ProcessorInfo;
+    use d7abi::process::ConstInfo;
 
     // Write processor info structure
     let paddr = unsafe { PROCESS_IDT_PHYS_ADDR };
     assert!(paddr != 0);
-    let table_start: *mut ProcessorInfo = unsafe {
+    let const_info_ptr: *mut ConstInfo = unsafe {
         let start_addr = phys_to_virt(PhysAddr::new(paddr));
         let ptr: *mut u8 = start_addr.as_mut_ptr();
-        ptr.add(PROCESS_PROCESSOR_INFO_TABLE.as_u64() as usize) as *mut ProcessorInfo
+        ptr.add(PROCESS_PROCESSOR_INFO_TABLE.as_u64() as usize) as *mut ConstInfo
     };
 
-    let tsc_freq_hz = tsc_freq_hz();
-
     let acpi_data = acpi::ACPI_DATA.poll().expect("acpi::init not called");
-    for cpu in acpi_data.cpus.iter() {
-        let info = ProcessorInfo {
-            tsc_freq_hz,
-            tsc_offset: 0,
+    unsafe {
+        *const_info_ptr = ConstInfo {
+            tsc_freq_hz: tsc_freq_hz(),
+            cpu_count: acpi_data.cpus.len() as u64,
         };
-        log::debug!("Setting {:?} for cpu {}", info, cpu.acpi_id);
-        unsafe {
-            *table_start.add(cpu.acpi_id as usize) = info;
-        }
     }
 }
 
 pub fn init() {
     self::sleep::init();
-    init_processor_info();
+    init_const_process_info();
 }

@@ -5,11 +5,13 @@ use hashbrown::HashMap;
 use spin::Mutex;
 use x86_64::{PhysAddr, VirtAddr};
 
-use crate::memory;
 use crate::memory::phys::OutOfMemory;
 use crate::multitasking::ExplicitEventId;
+use crate::smp::command::Command;
 use crate::smp::sleep::ns_to_ticks;
-use crate::time::BSPInstant;
+use crate::smp::{current_processor_id, ProcessorId};
+use crate::time::TscInstant;
+use crate::{memory, smp};
 
 use super::process::{Process, ProcessResult, ProcessSwitchInfo};
 use super::queues::Queues;
@@ -38,16 +40,20 @@ pub enum ProcessSwitch {
     RepeatSyscall(ProcessSwitchInfo),
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct RunningProcess {
+    pid: ProcessId,
+    timeslice_end: TscInstant,
+}
+
 #[derive(Debug)]
 pub struct Scheduler {
     /// Processes by id
     processes: HashMap<ProcessId, Process>,
     /// Queues for different types of scheduling
     queues: Queues,
-    /// Id of the currently running process
-    running: Option<ProcessId>,
-    /// End of the timeslice of the currently running process
-    running_timeslice_end: Option<BSPInstant>,
+    /// Id of the currently running process, for each CPU core
+    running: HashMap<ProcessorId, RunningProcess>,
     /// Next available process id
     next_pid: ProcessId,
 }
@@ -56,15 +62,14 @@ impl Scheduler {
         Self {
             processes: HashMap::new(),
             queues: Queues::new(),
-            running: None,
-            running_timeslice_end: None,
+            running: HashMap::new(),
             next_pid: ProcessId::first(),
         }
     }
 
-    /// Get id of the current process
-    pub fn get_running_pid(&self) -> Option<ProcessId> {
-        self.running
+    /// Get id of the process running on a given cpu core
+    pub fn get_running_pid(&self, processor: ProcessorId) -> Option<ProcessId> {
+        self.running.get(&processor).map(|rp| rp.pid)
     }
 
     /// Used for swapping out the process
@@ -112,12 +117,35 @@ impl Scheduler {
     /// Terminates process if it's alive.
     /// Doesn't attempt to switch to a new process.
     /// Used to terminate processes when e.g. their owner process dies.
+    /// Silently ignores nonexistent processes.
     pub fn terminate(&mut self, target: ProcessId, status: ProcessResult) {
         if let Some(process) = self.processes.remove(&target) {
             log::info!("Stopping pid {} with status {:?}", target, status);
 
             if process.repeat_syscall {
                 log::info!(" [system call was pending]");
+            }
+
+            let running_on_cpu = self
+                .running
+                .iter()
+                .find_map(|(cpu, rp)| if rp.pid == target { Some(*cpu) } else { None });
+            if let Some(cpu) = running_on_cpu {
+                log::debug!(" [currently running on {cpu:?}]");
+            } else {
+                log::debug!(" [not currently running]");
+            }
+
+            if let Some(cpu) = running_on_cpu {
+                // If the process is running on a different core, send an IPI
+                // to terminate it immediately.
+                let current_cpu = current_processor_id();
+                if cpu == current_cpu {
+                    let old = self.running.remove(&current_cpu).unwrap();
+                    assert!(old.pid == target);
+                } else {
+                    smp::command::send(cpu, Command::StopTerminatedProcess(target));
+                }
             }
 
             // Do not schedule this process again, and wake up all
@@ -143,29 +171,6 @@ impl Scheduler {
             // TODO: Remove process data:
             // * Free stack frames, etc.
         }
-
-        if self.running == Some(target) {
-            self.running = None;
-            self.running_timeslice_end = None;
-        }
-    }
-
-    /// Terminates process if it's alive.
-    /// Returns the data for the process to switch to, if any.
-    /// Will never return `ProcessSwitch::Continue`.
-    pub fn terminate_and_switch(
-        &mut self, target: ProcessId, status: ProcessResult,
-    ) -> ProcessSwitch {
-        let is_current = self.running == Some(target);
-        self.terminate(target, status);
-
-        unsafe {
-            if is_current {
-                self.switch(None)
-            } else {
-                self.switch_current_or_next()
-            }
-        }
     }
 
     /// Store process information before switching to other process.
@@ -180,52 +185,36 @@ impl Scheduler {
         }
     }
 
-    /// Prepare switch to the next process
-    /// Returns the data for the process to switch to, if any.
-    /// If `schedule` is None, the current process will not be scheduled again.
-    pub unsafe fn switch(&mut self, schedule: Option<WaitFor>) -> ProcessSwitch {
-        if let Some(s) = schedule {
-            if let Some(running_pid) = self.running {
-                self.queues.give(running_pid, s);
+    /// Gets the process that the current processor should continue running,
+    /// switching to a process if the cpu was idle and any processses are available.
+    pub fn continuation(&mut self, signal_wakeup: bool) -> ProcessSwitch {
+        let cpu = current_processor_id();
+
+        if !self.running.contains_key(&cpu) {
+            if let Some(pid) = self.queues.take() {
+                log::debug!("Continuing running of {pid:?}");
+                let old = self.running.insert(current_processor_id(), RunningProcess {
+                    pid,
+                    timeslice_end: TscInstant::now().add_ticks(ns_to_ticks(TIME_SLICE_NS)),
+                });
+                assert!(old.is_none());
             }
         }
 
-        if let Some(pid) = self.queues.take() {
-            self.running = Some(pid);
-            self.running_timeslice_end =
-                Some(BSPInstant::now().add_ticks(ns_to_ticks(TIME_SLICE_NS)));
-            let process = self
-                .processes
-                .get_mut(&pid)
-                .expect("Process from queue not running");
-            if process.repeat_syscall {
-                log::trace!("Repeat syscall");
-                ProcessSwitch::RepeatSyscall(process.switch_info())
-            } else {
-                log::trace!("Switch to {}", pid);
-                ProcessSwitch::Switch(process.switch_info())
+        // If we have queued processes and idle cpus, wake them up
+        if signal_wakeup && self.queues.ready_count() > 0 {
+            let mut idle_cpus = smp::iter_active_cpus().filter(|c| !self.running.contains_key(c));
+            if let Some(idle_cpu) = idle_cpus.next() {
+                assert_ne!(idle_cpu, current_processor_id());
+                log::debug!("Waking up an idle cpu to match load");
+                smp::command::send(idle_cpu, Command::ProcessAvailable);
             }
-        } else {
-            log::trace!("Switch to idle");
-            self.running = None;
-            self.running_timeslice_end = None;
-            ProcessSwitch::Idle
-        }
-    }
-
-    /// Prepare a "switch" to the current te process, if any.
-    /// If no process is currently running, the next process queued to run
-    /// is activated instead. If there is no active processes, simply idles.
-    /// This is used when a concrete switch to current process is required.
-    pub unsafe fn switch_current_or_next(&mut self) -> ProcessSwitch {
-        if self.running.is_none() {
-            self.running = self.queues.take();
         }
 
-        if let Some(pid) = self.running {
+        if let Some(rp) = self.running.get(&cpu) {
             let process = self
                 .processes
-                .get_mut(&pid)
+                .get_mut(&rp.pid)
                 .expect("self.running does not exist anymore");
             if process.repeat_syscall {
                 ProcessSwitch::RepeatSyscall(process.switch_info())
@@ -237,29 +226,49 @@ impl Scheduler {
         }
     }
 
+    /// Yield the current process, ending it's remaining timeslice immediately.
+    /// If `schedule` is None, the current process will not be scheduled again.
+    pub fn yield_current(&mut self, schedule: Option<WaitFor>) {
+        if let Some(running) = self.running.remove(&current_processor_id()) {
+            if let Some(s) = schedule {
+                self.queues.give(running.pid, s);
+            }
+        }
+    }
+
+    pub fn switch_current_or_next(&mut self) -> ProcessSwitch {
+        if self.running.contains_key(&current_processor_id()) {
+            ProcessSwitch::Continue
+        } else {
+            self.continuation(true)
+        }
+    }
+
     /// Returns process to switch to, if any, and deadline for the next tick
     pub fn tick(&mut self) -> ProcessSwitch {
-        let now = BSPInstant::now();
+        let now = TscInstant::now();
         self.queues.on_tick(&now);
-        let target = unsafe { self.switch(Some(WaitFor::None)) };
 
-        target
+        if let Some(running) = self.running.get(&current_processor_id()) {
+            if now >= running.timeslice_end {
+                self.yield_current(Some(WaitFor::None));
+            } else {
+                return ProcessSwitch::Continue;
+            }
+        }
+
+        self.continuation(true)
     }
 
-    /// When `tick()` should be called again
-    pub fn next_tick(&self) -> Option<BSPInstant> {
+    /// When, if ever, `tick()` should be called again on this cpu
+    pub fn next_tick(&self) -> Option<TscInstant> {
         let mut wakeup = self.queues.next_wakeup();
 
-        if let Some(slice_end) = self.running_timeslice_end {
-            wakeup = Some(wakeup.map(|w| w.min(slice_end)).unwrap_or(slice_end));
-        };
+        if let Some(rp) = self.running.get(&current_processor_id()) {
+            wakeup = Some(wakeup.unwrap_or(rp.timeslice_end).min(rp.timeslice_end));
+        }
 
-        wakeup.map(|w| w.min(BSPInstant::now().add_ns(MIN_EXEC_TIME_NS)))
-    }
-
-    /// Tries to resolve a WaitFor in the current context
-    pub fn try_resolve_waitfor(&self, waitfor: WaitFor) -> Result<ProcessId, WaitFor> {
-        waitfor.try_resolve_immediate(&self.queues, self.running.expect("No process running"))
+        wakeup.map(|w| w.min(TscInstant::now().add_ns(MIN_EXEC_TIME_NS)))
     }
 
     /// Relay events to queues
@@ -270,7 +279,7 @@ impl Scheduler {
     /// Full-screen view of the current scheduler status
     pub fn debug_view_string(&self) -> String {
         let mut lines = format!(
-            "## SCHEDULER OVERVIEW ##  Currently running {:?}\n",
+            "## SCHEDULER OVERVIEW ##\nCurrently running {:?}\n",
             self.running
         );
         lines.push_str(&self.queues.debug_view_string());

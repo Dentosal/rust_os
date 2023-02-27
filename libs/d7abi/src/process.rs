@@ -66,3 +66,19 @@ pub enum Error {
     /// Owner process died
     ChainedTermination,
 }
+
+/// Shared constant system configuration table for all processes
+#[repr(C)]
+pub struct ConstInfo {
+    /// TSC frequency
+    pub tsc_freq_hz: u64,
+    /// Available cpu count
+    pub cpu_count: u64,
+}
+impl ConstInfo {
+    pub unsafe fn read() -> &'static ConstInfo {
+        let ptr: *const ConstInfo = crate::kernel_constants::PROCESS_PROCESSOR_INFO_TABLE.as_ptr();
+        &*ptr
+    }
+}
+

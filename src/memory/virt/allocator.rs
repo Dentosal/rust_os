@@ -12,9 +12,9 @@ const SIZE: u64 = END_ADDR.as_u64() - START_ADDR.as_u64();
 
 lazy_static::lazy_static! {
     static ref FREE_LIST: Mutex<Vec<Block>> = Mutex::new(vec![Block {
-                start: START_ADDR,
-                end: END_ADDR,
-            }]);
+        start: START_ADDR,
+        end: END_ADDR,
+    }]);
 }
 
 /// Allocate contiguous virtual address block

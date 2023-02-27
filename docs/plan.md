@@ -60,7 +60,7 @@ Begin       | Size    |rwx| Content
      20_0000| 20_0000 |r-x| Common code for process switching
     100_0000|       ? |+++| Kernel (ELF image)
    1000_0000| 20_0000 |rw-| Kernel page tables, identity mapped
-   1100_0000| 20_0000 |rw-| System call kernel stack (grows downwards)
+   1100_0000|20_0000*n|rw-| System call kernel stacks, one per cpu core (grows downwards)
  1_0000_0000|       ? |???| Allocated virtual memory for processes
 HIGHER_HALF | ?       |rw-| Physical memory mapped here for fast and convenient access
 
@@ -81,6 +81,7 @@ Numbers     | Description
 0x20..=0x2f | PIC interrupts
 0xd7        | System call
 0xd8        | LAPIC timer
+0xda        | Interprocess scheduler wakeup (IPI)
 0xdd        | System panic (IPI)
 0xff        | IOAPIC spurious interrupt
 
@@ -100,7 +101,7 @@ Begin         | Size    | Content
 --------------|---------|---------
              0|    1000 | IDT
           1000|    ? 10 | GDT
-          8000|       ? | Per-processor info table
+          8000|       ? | Constant system info table
 
 
 IDT, GDT, static kernel data

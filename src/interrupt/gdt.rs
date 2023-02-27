@@ -9,7 +9,8 @@ pub use x86_64::structures::gdt::Descriptor;
 
 use crate::memory::constants::GDT_ADDR;
 
-pub const DOUBLE_FAULT_IST_INDEX: usize = 0;
+pub const NORMAL_IST_INDEX: usize = 0;
+pub const DOUBLE_FAULT_IST_INDEX: usize = 1;
 
 /// Max size is fixed so we can have an array of these
 const GDT_MAX_SIZE: usize = 8;

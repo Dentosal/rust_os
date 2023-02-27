@@ -1,9 +1,9 @@
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, Ordering};
-use hashbrown::HashSet;
 
 use crate::multitasking::ProcessId;
-use crate::time::BSPInstant;
+use crate::smp::ProcessorId;
+use crate::time::TscInstant;
 
 use super::queues::Queues;
 
@@ -13,7 +13,7 @@ pub enum WaitFor {
     /// Run again on the next free slot
     None,
     /// Run after specified moment
-    Time(BSPInstant),
+    Time(TscInstant),
     /// Process completed
     Process(ProcessId),
     /// An explicitly-triggered event
@@ -23,30 +23,6 @@ pub enum WaitFor {
     FirstOf(Vec<WaitFor>),
 }
 impl WaitFor {
-    /// Resolve the condition immediately, if possible
-    pub fn try_resolve_immediate(self, qs: &Queues, current: ProcessId) -> Result<ProcessId, Self> {
-        use WaitFor::*;
-
-        let process_done = |p| current != p && !qs.process_exists(p);
-        match &self {
-            Process(p) if process_done(*p) => {
-                return Ok(*p);
-            },
-            FirstOf(subevents) => {
-                for e in subevents.iter() {
-                    if let Process(p) = e {
-                        if process_done(*p) {
-                            return Ok(*p);
-                        }
-                    }
-                }
-            },
-            _ => {},
-        }
-
-        Err(self)
-    }
-
     /// Minimize based on current conditions.
     /// Used by scheduler queues to make sure that
     /// completed processes are not waited for.
@@ -80,7 +56,7 @@ impl WaitFor {
         match self {
             FirstOf(mut subevents) => {
                 let mut new_se = Vec::new();
-                let mut earliest: Option<BSPInstant> = Option::None;
+                let mut earliest: Option<TscInstant> = Option::None;
                 for e in subevents.into_iter() {
                     match e {
                         None => {

@@ -60,7 +60,7 @@ pub(super) unsafe fn exception_gpf(stack_frame: &InterruptStackFrame, error_code
 /// Page Fault handler
 pub(super) unsafe fn exception_pf(stack_frame: &InterruptStackFrame, error_code: u64) {
     panic!(
-        "Exception: Page Fault with error code {:?} ({:?}) at {:#x} (cpu {})\n{:#?}",
+        "Exception: Page Fault with error code {:#x} ({:?}) at {:#x} (cpu {})\n{:#?}",
         error_code,
         PageFaultErrorCode::from_bits(error_code).expect("#PF code invalid"),
         x86_64::registers::control::Cr2::read().as_u64(),
@@ -99,6 +99,8 @@ pub(super) unsafe fn exception_snp(stack_frame: &InterruptStackFrame, error_code
 }
 
 /// LAPIC TSC-deadline timer ticked
+/// The kernel main and ap_main use this to start scheduling as well.
+/// TODO: this shouldn't be added into idt at all before scheduling is enabled
 pub(super) unsafe extern "sysv64" fn exception_tsc_deadline(_: u64) -> u128 {
     // Interrupt timing
     crate::random::insert_entropy(0);
@@ -106,15 +108,17 @@ pub(super) unsafe extern "sysv64" fn exception_tsc_deadline(_: u64) -> u128 {
     log::trace!("Deadline");
     crate::driver::ioapic::lapic::write_eoi();
 
-    if crate::smp::is_bsp() && SCHEDULER_ENABLED.load(Ordering::SeqCst) {
+    if SCHEDULER_ENABLED.load(Ordering::SeqCst) {
         let next_process = {
-            let mut sched = SCHEDULER.try_lock().expect("SCHEDUELR LOCKED");
+            let mut sched = SCHEDULER.lock();
             let target = sched.tick();
             if let Some(deadline) = sched.next_tick() {
                 crate::smp::sleep::set_deadline(deadline).expect("TODO: Deadline too soon");
             }
             target
         };
+
+        log::trace!("Deadline -> {next_process:?}");
 
         match next_process {
             ProcessSwitch::Switch(p) => return_process(p),
@@ -129,6 +133,7 @@ pub(super) unsafe extern "sysv64" fn exception_tsc_deadline(_: u64) -> u128 {
             ProcessSwitch::Idle => 0,
         }
     } else {
+        log::trace!("Deadline -> no scheduling yet");
         0
     }
 }
@@ -162,7 +167,7 @@ pub(super) unsafe fn exception_irq1() {
     let byte = port_ps2_data.read();
 
     // Send to driver
-    let mut sched = SCHEDULER.try_lock().unwrap();
+    let mut sched = SCHEDULER.lock();
     crate::ipc::kernel_publish(&mut sched, "irq/keyboard", &byte);
 
     // Interrupt over
@@ -199,7 +204,7 @@ pub(super) unsafe fn exception_irq15() {
     if !pic::is_enabled() {
         panic!("Stop! reached 15");
     }
-    let mut pics = pic::PICS.try_lock().unwrap();
+    let mut pics = pic::PICS.lock();
     // Check if this is a real IRQ
     let is_real = pics.read_isr() & (1 << 15) != 0;
     if is_real {
@@ -214,7 +219,7 @@ pub(super) unsafe extern "sysv64" fn irq_dynamic(interrupt: u64) -> u128 {
     let interrupt = interrupt as u8;
 
     let next_process = {
-        let mut sched = SCHEDULER.try_lock().unwrap();
+        let mut sched = SCHEDULER.lock();
         let irq = interrupt - 0x30;
         crate::ipc::kernel_publish(&mut sched, &format!("irq/{}", irq), &());
         crate::driver::ioapic::lapic::write_eoi();
@@ -242,6 +247,23 @@ pub(super) unsafe fn ipi_panic(_: &InterruptStackFrame) {
     log::error!("Kernel panic IPI received, halting core");
     loop {
         asm!("cli; hlt");
+    }
+}
+
+/// There is a pending command (see [`smp::command`]).
+pub(super) unsafe extern "sysv64" fn ipi_command(_interrupt: u64) -> u128 {
+    crate::driver::ioapic::lapic::write_eoi();
+    log::debug!("IPI command received");
+    match smp::command::on_receive() {
+        ProcessSwitch::Continue | ProcessSwitch::Idle => 0,
+        ProcessSwitch::Switch(process) => return_process(process),
+        ProcessSwitch::RepeatSyscall(process) => {
+            if let Some(inner_process) = handle_repeat_syscall(process) {
+                return_process(inner_process)
+            } else {
+                0
+            }
+        },
     }
 }
 
@@ -287,20 +309,26 @@ pub(super) unsafe extern "C" fn process_interrupt() {
 
 #[no_mangle]
 unsafe extern "C" fn process_interrupt_inner(
-    interrupt: u8, process_rsp: u64, page_table: u64,
-    stack_frame_ptr: *const InterruptStackFrameValue, error_code: u32,
+    interrupt: u8,
+    process_rsp: u64,
+    page_table: u64,
+    stack_frame_ptr: *const InterruptStackFrameValue,
+    error_code: u32,
 ) -> u128 {
     use x86_64::registers::control::Cr2;
 
     let stack_frame: InterruptStackFrameValue = (*stack_frame_ptr).clone();
     let page_table = PhysAddr::new_unchecked(page_table);
     let process_rsp = VirtAddr::new_unsafe(process_rsp);
+    let processor_id = smp::current_processor_id();
 
     let pid = {
-        let mut sched = SCHEDULER.try_lock().unwrap();
-        let pid = sched.get_running_pid().expect("No process running?");
-        sched.store_state(pid, page_table, process_rsp);
-        pid
+        let mut sched = SCHEDULER.lock();
+        let opt_pid = sched.get_running_pid(processor_id);
+        if let Some(pid) = opt_pid {
+            sched.store_state(pid, page_table, process_rsp);
+        }
+        opt_pid
     };
 
     // Interrupt timing and number
@@ -334,19 +362,20 @@ unsafe extern "C" fn process_interrupt_inner(
     match interrupt {
         0xd7 => {
             use crate::syscall::{handle_syscall, SyscallResultAction};
+            let pid = pid.expect("Syscall interrupt (0xd7) but we are not in a process");
             match handle_syscall(pid) {
                 SyscallResultAction::Terminate(status) => terminate(pid, status),
                 SyscallResultAction::Continue => {},
                 SyscallResultAction::Switch(schedule) => {
                     // get the next process
                     let next_process = {
-                        let mut sched = SCHEDULER.try_lock().unwrap();
-                        let target = sched.switch(Some(schedule));
+                        let mut sched = SCHEDULER.lock();
+                        sched.yield_current(Some(schedule));
                         if let Some(deadline) = sched.next_tick() {
                             crate::smp::sleep::set_deadline(deadline)
                                 .expect("TODO: Deadline too soon");
                         }
-                        target
+                        sched.continuation(true)
                     };
                     handle_switch!(next_process);
                 },
@@ -355,24 +384,20 @@ unsafe extern "C" fn process_interrupt_inner(
         0xd8 => {
             // TSC deadline
 
-            // log::trace!("TSC_DEADLINE");
+            log::trace!("TSC_DEADLINE");
             crate::driver::ioapic::lapic::write_eoi();
 
             assert!(SCHEDULER_ENABLED.load(Ordering::SeqCst)); // TODO: remove
-            if crate::smp::is_bsp() {
-                let switch_target = {
-                    let mut sched = SCHEDULER.try_lock().expect("SCHEDUELR LOCKED");
-                    let target = sched.tick();
-                    log::trace!("TSC_DEADLINE tick => {target:?}");
-                    if let Some(deadline) = sched.next_tick() {
-                        crate::smp::sleep::set_deadline(deadline).expect("TODO: Deadline too soon");
-                    }
-                    target
-                };
-                handle_switch!(switch_target);
-            } else {
-                handle_switch!(ProcessSwitch::Idle);
-            }
+            let switch_target = {
+                let mut sched = SCHEDULER.lock();
+                let target = sched.tick();
+                log::trace!("TSC_DEADLINE tick => {target:?}");
+                if let Some(deadline) = sched.next_tick() {
+                    crate::smp::sleep::set_deadline(deadline).expect("TODO: Deadline too soon");
+                }
+                target
+            };
+            handle_switch!(switch_target);
         },
         0x20 => {
             // PIT timer ticked
@@ -394,18 +419,21 @@ unsafe extern "C" fn process_interrupt_inner(
         },
         0x30..=0x9f => {
             // Dynamic range
-            let mut sched = SCHEDULER.try_lock().unwrap();
+            let mut sched = SCHEDULER.lock();
             let irq = interrupt - 0x30;
             crate::ipc::kernel_publish(&mut sched, &format!("irq/{}", irq), &());
             crate::driver::ioapic::lapic::write_eoi();
             handle_switch!(sched.switch_current_or_next());
         },
-        0x00 => fail(pid, process::Error::DivideByZero(stack_frame)),
+        0x00 => fail(
+            pid.expect("Process interrupt (0x00) but we are not in a process"),
+            process::Error::DivideByZero(stack_frame),
+        ),
         0x0e => {
             // TODO:
             // * Error code, if any, must be removed from the stack before returning
             fail(
-                pid,
+                pid.expect("Process interrupt (0x0e) but we are not in a process"),
                 process::Error::PageFault(
                     stack_frame,
                     Cr2::read(),
@@ -415,10 +443,13 @@ unsafe extern "C" fn process_interrupt_inner(
             )
         },
         0x08 | 0x0a | 0x0b | 0x0c | 0x0d | 0x11 | 0x1e => fail(
-            pid,
+            pid.expect("Process interrupt but we are not in a process"),
             process::Error::InterruptWithCode(interrupt, stack_frame, error_code),
         ),
-        _ => fail(pid, process::Error::Interrupt(interrupt, stack_frame)),
+        _ => fail(
+            pid.expect("Process interrupt (0x00) but we are not in a process"),
+            process::Error::Interrupt(interrupt, stack_frame),
+        ),
     }
 
     // Continue current process
@@ -432,8 +463,9 @@ fn fail(pid: ProcessId, error: process::Error) -> ! {
 /// Terminate the give process and switch to the next one
 fn terminate(pid: ProcessId, result: process::ProcessResult) -> ! {
     let next_process = unsafe {
-        let mut sched = SCHEDULER.try_lock().expect("Sched unlock");
-        sched.terminate_and_switch(pid, result)
+        let mut sched = SCHEDULER.lock();
+        sched.terminate(pid, result);
+        sched.continuation(true)
     };
 
     log::debug!(
@@ -443,7 +475,7 @@ fn terminate(pid: ProcessId, result: process::ProcessResult) -> ! {
     );
 
     match next_process {
-        ProcessSwitch::Continue => unreachable!(),
+        ProcessSwitch::Continue => unreachable!("Process cannot be continued after termination"),
         ProcessSwitch::Idle => {
             idle();
         },
@@ -493,6 +525,8 @@ fn immediate_switch_to(process: ProcessSwitchInfo) -> ! {
     }
 }
 
+/// The process was put to sleep by a blocking system call. Now the
+/// system call will not block anymore, and must be repeated.
 /// Returns process to switch to, if any.
 /// On `None` the system should switch to idle state.
 #[must_use]
@@ -504,10 +538,9 @@ unsafe fn handle_repeat_syscall(p: ProcessSwitchInfo) -> Option<ProcessSwitchInf
         SyscallResultAction::Continue => Some(p),
         SyscallResultAction::Switch(schedule) => {
             let next_process = {
-                SCHEDULER
-                    .try_lock()
-                    .expect("Scheduler locked")
-                    .switch(Some(schedule))
+                let mut sched = SCHEDULER.lock();
+                sched.yield_current(Some(schedule));
+                sched.continuation(true)
             };
             match next_process {
                 ProcessSwitch::Continue => None,

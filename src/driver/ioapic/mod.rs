@@ -113,7 +113,11 @@ pub fn send_ipi(acpi_id: u8, int_vector: u8, synchronous: bool) {
     let field_hi = (addr.as_u64() + 0x310) as *mut u32;
 
     unsafe {
-        log::trace!("Sending IPI to core {} (vector {})", acpi_id, int_vector);
+        log::trace!(
+            "Sending IPI to core {} (vector {:#02x})",
+            acpi_id,
+            int_vector
+        );
         ptr::write_volatile(field_hi, (acpi_id as u32) << 24);
         ptr::write_volatile(field_lo, int_vector as u32);
 
@@ -137,7 +141,7 @@ pub fn broadcast_ipi(include_self: bool, int_vector: u8) {
 
     unsafe {
         log::trace!(
-            "Broadcasting IPI (self: {}) (vector {})",
+            "Broadcasting IPI (self: {}) (vector {:#02x})",
             include_self,
             int_vector
         );

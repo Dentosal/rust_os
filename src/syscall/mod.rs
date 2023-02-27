@@ -15,7 +15,8 @@ use crate::ipc;
 use crate::memory::phys::OutOfMemory;
 use crate::memory::{self, phys_to_virt, prelude::*};
 use crate::multitasking::{process, Process, ProcessId, Scheduler, WaitFor, SCHEDULER};
-use crate::time::BSPInstant;
+use crate::smp::ProcessorId;
+use crate::time::TscInstant;
 
 /// Separate module to get distinct logging path
 #[allow(non_snake_case)]
@@ -89,7 +90,7 @@ macro_rules! try_len {
 macro_rules! try_str {
     ($slice:expr) => {{
         // Sanity check
-        assert!($slice.len() < 10000, "String length sanity check"); // TODO: client error
+        assert!($slice.len() < 100000, "String length sanity check"); // TODO: client error
         match ::core::str::from_utf8($slice) {
             Ok(value) => value,
             Err(_) => {
@@ -217,11 +218,7 @@ fn syscall(sched: &mut Scheduler, process: &mut Process, rsc: RawSyscall) -> Sys
                     time_ns,
                     time_ns / 1_000_000
                 );
-                if crate::smp::is_bsp() {
-                    SyscallResult::Switch(Ok(0), WaitFor::Time(BSPInstant::now().add_ns(time_ns)))
-                } else {
-                    todo!(); // If core != BSP, push into a set-to-sleep queue
-                }
+                SyscallResult::Switch(Ok(0), WaitFor::Time(TscInstant::now().add_ns(time_ns)))
             },
             SC::ipc_subscribe => {
                 let (filter_len, filter_ptr, flags, _) = rsc.args;
@@ -482,16 +479,21 @@ fn syscall(sched: &mut Scheduler, process: &mut Process, rsc: RawSyscall) -> Sys
                 let subs = VirtAddr::new(subs);
 
                 let mut ipc_manager = ipc::IPC.try_lock().expect("IPC LOCKED");
-                let size = mem::size_of::<ipc::SubscriptionId>() as u64;
+                let size = mem::size_of::<ipc::SubscriptionId>();
                 let blocking = nonblocking == 0;
 
-                log::trace!("ipc_select n={} blocking={}", subs_len, blocking);
+                log::debug!(
+                    "[pid={:2}] ipc_select n={} blocking={}",
+                    pid,
+                    subs_len,
+                    blocking
+                );
 
                 if let Some((_area, subs_slice)) =
-                    unsafe { process.memory_slice(subs, try_len!(subs_len * size)) }
+                    unsafe { process.memory_slice(subs, try_len!(subs_len * (size as u64))) }
                 {
                     let mut conditions = Vec::new();
-                    for (index, sub_bytes) in subs_slice.chunks_exact(8).enumerate() {
+                    for (index, sub_bytes) in subs_slice.chunks_exact(size).enumerate() {
                         let sub_id = ipc::SubscriptionId::from_u64(u64::from_le_bytes(
                             sub_bytes.try_into().unwrap(),
                         ));
@@ -705,13 +707,7 @@ pub enum SyscallResultAction {
 
 #[must_use]
 pub fn handle_syscall(pid: ProcessId) -> SyscallResultAction {
-    if !crate::smp::is_bsp() {
-        todo!("Cannot do syscalls with non-BSP cores yet");
-    };
-
-    let mut sched = SCHEDULER
-        .try_lock()
-        .expect("SCHEDULER LOCKED at start of handle_syscall");
+    let mut sched = SCHEDULER.lock();
 
     // Take process from the scheduler
     // Safety: we must give this back before returning

@@ -75,7 +75,7 @@ pub(super) fn undo_offset_ptr(p: *mut u8) -> *mut u8 {
 
 fn undo_offset(nn: NonNull<[u8]>) -> NonNull<[u8]> {
     let (p, metadata) = nn.to_raw_parts();
-    let inverted = unsafe { NonNull::new_unchecked(undo_offset_ptr(p.cast().as_ptr())).cast() };
+    let inverted: NonNull<u8> = unsafe { NonNull::new_unchecked(undo_offset_ptr(p.cast().as_ptr())) };
     NonNull::from_raw_parts(inverted, metadata)
 }
 

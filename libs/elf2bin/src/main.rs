@@ -1,5 +1,4 @@
 // Code style
-#![forbid(private_in_public)]
 #![deny(unused_assignments)]
 // Safety
 #![deny(overflowing_literals)]

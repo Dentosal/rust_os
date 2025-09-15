@@ -1,5 +1,4 @@
 // Lints
-#![forbid(private_in_public)]
 #![warn(bare_trait_objects)]
 #![deny(unused_must_use)]
 #![deny(unused_assignments)]
@@ -8,7 +7,6 @@
 // no_std
 #![no_std]
 // Unstable features
-#![feature(integer_atomics)]
 #![feature(allocator_api)]
 
 #[macro_use]

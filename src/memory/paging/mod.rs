@@ -35,7 +35,6 @@ pub unsafe fn set_active_table(p4_addr: PhysAddr) {
 }
 
 /// Remap kernel and other necessary memory areas
-#[must_use]
 pub unsafe fn init(elf_metadata: ELFData) {
     log::debug!("Remapping kernel...");
 

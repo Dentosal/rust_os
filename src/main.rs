@@ -1,5 +1,4 @@
 // Code style
-#![forbid(private_in_public)]
 #![forbid(tyvar_behind_raw_pointer)]
 // Safety
 #![deny(overflowing_literals)]
@@ -29,18 +28,13 @@
 #![feature(abi_x86_interrupt)]
 #![feature(alloc_error_handler)]
 #![feature(allocator_api)]
-#![feature(asm_const)]
-#![feature(box_syntax, box_patterns)]
+#![feature(box_patterns)]
 #![feature(core_intrinsics)]
-#![feature(integer_atomics)]
 #![feature(lang_items)]
-#![feature(naked_functions)]
-#![feature(panic_info_message)]
 #![feature(ptr_internals, ptr_metadata)]
 #![feature(stmt_expr_attributes)]
 #![feature(trait_alias)]
 #![feature(inline_const)]
-#![feature(drain_filter)]
 #![feature(int_roundings)]
 
 use core::alloc::Layout;
@@ -195,9 +189,7 @@ panic_stop:
 
 #[panic_handler]
 #[cfg(not(test))]
-#[allow(unused_variables)]
-#[no_mangle]
-extern "C" fn panic(info: &PanicInfo) -> ! {
+fn panic(info: &PanicInfo) -> ! {
     unsafe {
         bochs_magic_bp!();
         asm!("cli");
@@ -216,11 +208,7 @@ extern "C" fn panic(info: &PanicInfo) -> ! {
             } else {
                 log::error!("Kernel Panic: Location unavailable");
             }
-            if let Some(msg) = info.message() {
-                log::error!("  {:?}", msg);
-            } else {
-                log::error!("  Info unavailable");
-            }
+            log::error!("  {:?}", info.message());
 
             // Attempt to print backtrace as well
             // stack_trace();

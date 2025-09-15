@@ -7,6 +7,7 @@ from typing import (
 
 from pathlib import Path
 from os import environ
+from shutil import which
 
 from natsort import natsorted
 import toml
@@ -95,20 +96,29 @@ def cmd_nasm(format: str, output: Path, inputs: List[Path]) -> Command:
 
 
 def cmd_stripped_copy(original: Path, stripped: Path) -> Command:
+    if which("x86_64-elf-ld") is not None:
+        strip = "x86_64-elf-strip"
+    else:
+        strip = "strip"
+
     return Rule(
         "strip",
         description=f"strip {original.stem} to {stripped}",
-        command=[f"strip {original} -o {stripped}"],
+        command=[f"{strip} {original} -o {stripped}"],
         outputs=[stripped],
     ).extend_to_command(inputs=[original])
 
 
 def cmd_linker(linker_script: Path, output: Path, inputs: List[Path]) -> Command:
+    if which("x86_64-elf-ld") is not None:
+        ld = "x86_64-elf-ld"
+    else:
+        ld = "ld"
     return Rule(
         "linker",
         description="Invoke linker",
         command=[
-            f"ld -z max-page-size=0x1000 --gc-sections -T {linker_script} -o {output} "
+            f"{ld} -z max-page-size=0x1000 --gc-sections -T {linker_script} -o {output} "
             + " ".join(map(str, inputs)),
         ],
         outputs=[output],

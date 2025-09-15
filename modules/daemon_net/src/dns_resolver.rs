@@ -35,7 +35,7 @@ impl DnsResolver {
             Ok(reply) => {
                 // Resolve user requests
                 self.pending_requests
-                    .drain_filter(|(req_id, q, _)| (*req_id, &*q) == (reply.req_id, &reply.query))
+                    .extract_if(.., |(req_id, q, _)| (*req_id, &*q) == (reply.req_id, &reply.query))
                     .for_each(|(_, _, rctx)| {
                         let _ = rctx.reply(
                             reply

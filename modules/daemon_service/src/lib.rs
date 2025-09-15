@@ -5,7 +5,6 @@
 //! * Service registration/discovery
 
 #![no_std]
-#![feature(drain_filter)]
 #![deny(unused_must_use)]
 
 #[macro_use]

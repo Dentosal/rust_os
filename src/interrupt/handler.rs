@@ -1,4 +1,4 @@
-use core::arch::asm;
+use core::arch::{asm, naked_asm};
 use core::sync::atomic::Ordering;
 use x86_64::structures::idt::{InterruptStackFrame, InterruptStackFrameValue, PageFaultErrorCode};
 use x86_64::{PhysAddr, VirtAddr};
@@ -252,9 +252,9 @@ pub(super) unsafe fn ipi_panic(_: &InterruptStackFrame) {
 /// * `rbx` Process stack pointer
 ///
 /// Process registers `rax`, `rbx` and `rcx` are already stored in its stack.
-#[naked]
+#[unsafe(naked)]
 pub(super) unsafe extern "C" fn process_interrupt() {
-    asm!(
+    naked_asm!(
         "
         // Recreate interrupt stack frame from r10..=r14
         push r14
@@ -280,8 +280,7 @@ pub(super) unsafe extern "C" fn process_interrupt() {
 
         // Return to trampoline
         ret
-    ",
-        options(noreturn)
+    "
     );
 }
 

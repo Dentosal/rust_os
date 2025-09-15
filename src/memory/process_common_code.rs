@@ -1,4 +1,4 @@
-use core::intrinsics::copy_nonoverlapping;
+use core::ptr::copy_nonoverlapping;
 use core::ptr;
 use x86_64::structures::paging::PageTableFlags as Flags;
 

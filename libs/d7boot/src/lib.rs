@@ -1,5 +1,4 @@
 // Code style
-#![forbid(private_in_public)]
 #![forbid(bare_trait_objects)]
 // #![deny(unused_assignments)]
 // Code style (development time)
@@ -11,10 +10,9 @@
 #![deny(unused_must_use)]
 // Unstable features
 #![feature(lang_items)]
-#![feature(naked_functions)]
 
 use core::arch::asm;
-use core::intrinsics::copy_nonoverlapping;
+use core::ptr::copy_nonoverlapping;
 use core::{panic::PanicInfo, ptr};
 
 mod ata_pio;
@@ -168,9 +166,7 @@ pub unsafe extern "C" fn d7boot() {
 
 #[cfg(not(test))]
 #[panic_handler]
-#[allow(unused_variables)]
-#[no_mangle]
-extern "C" fn panic(info: &PanicInfo) -> ! {
+fn panic(_info: &PanicInfo) -> ! {
     unsafe {
         panic_indicator!(0x4f214f45); // E!
         loop {

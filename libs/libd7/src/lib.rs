@@ -1,5 +1,4 @@
 // Lints
-#![forbid(private_in_public)]
 #![forbid(bare_trait_objects)]
 #![deny(unused_must_use)]
 #![deny(unused_assignments)]
@@ -11,9 +10,7 @@
 #![feature(alloc_error_handler)]
 #![feature(allocator_api)]
 #![feature(slice_ptr_get)]
-#![feature(nonnull_slice_from_raw_parts)]
-#![feature(integer_atomics)]
-#![feature(panic_info_message)]
+#![feature(impl_trait_in_assoc_type)]
 #![feature(trait_alias, type_alias_impl_trait)]
 #![feature(stmt_expr_attributes)]
 #![feature(never_type)]
@@ -87,8 +84,7 @@ pub extern "C" fn _start() {
 }
 
 #[panic_handler]
-#[no_mangle]
-extern "C" fn panic(info: &PanicInfo) -> ! {
+fn panic(info: &PanicInfo) -> ! {
     use self::syscall::debug_print;
 
     let _ = debug_print("Panic! (attempting allocation to show error the message)");
@@ -99,8 +95,7 @@ extern "C" fn panic(info: &PanicInfo) -> ! {
         .map(|l| format!("file '{}', line {}", l.file(), l.line()))
         .unwrap_or(no_location);
 
-    let no_args = format_args!("(message unavailable)");
-    let message = format!("  {:?}", info.message().unwrap_or(&no_args));
+    let message = format!("  {:?}", info.message());
 
     let _ = debug_print(&format!("Error: {}\n  {}", location, message));
 

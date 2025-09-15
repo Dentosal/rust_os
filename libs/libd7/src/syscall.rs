@@ -20,7 +20,6 @@ macro_rules! syscall {
     ($n:expr) => {syscall!($n; 0, 0, 0, 0)};
 }
 
-#[must_use]
 pub type SyscallResult<T> = Result<T, SyscallErrorCode>;
 
 /// # Safety

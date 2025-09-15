@@ -1,7 +1,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::alloc::Layout;
-use core::intrinsics::copy_nonoverlapping;
+use core::ptr::copy_nonoverlapping;
 use core::ptr;
 use d7abi::{MemoryProtectionFlags, SyscallErrorCode};
 use x86_64::structures::idt::{InterruptStackFrameValue, PageFaultErrorCode};
@@ -346,7 +346,7 @@ impl Process {
                 // This also deallocates the region by dropping it.
                 let is_dynamic = self
                     .dynamic_memory
-                    .drain_filter(|b| phys_start == unsafe { b.phys_start() })
+                    .extract_if(.., |b| phys_start == unsafe { b.phys_start() })
                     .next()
                     .is_some();
 

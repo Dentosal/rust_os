@@ -52,9 +52,9 @@ macro_rules! irq_handler_switch {
     ($name:ident, $ist:expr, $arg:expr) => {{
         use crate::memory::process_common_code::COMMON_ADDRESS_VIRT;
 
-        #[naked]
+        #[unsafe(naked)]
         unsafe extern "sysv64" fn wrapper(_: &mut InterruptStackFrame) {
-            ::core::arch::asm!(concat!(
+            ::core::arch::naked_asm!(concat!(
                     asm_save_scratch_registers!(), "
                     push rcx                // Save COMMON_ADDRESS_VIRT
                     push rdi                // Save rdi
@@ -74,8 +74,7 @@ macro_rules! irq_handler_switch {
                 ),
                 handler = sym $name,
                 arg = const $arg,
-                cav = const COMMON_ADDRESS_VIRT,
-                options(noreturn)
+                cav = const COMMON_ADDRESS_VIRT
             );
         }
         idt::Descriptor::new(true, wrapper as u64, PrivilegeLevel::Ring0, $ist)
